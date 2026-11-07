@@ -11,10 +11,12 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 ' ---------- recommended models in pull order (with approximate sizes) ----------
 Dim modelList, modelSize
 modelList = Array("llama3.2:3b", "llama3.2:1b", "qwen2.5:14b", "qwen2.5-coder:14b", _
-                  "mistral:7b", "phi3:mini", "gemma2:9b", "deepseek-coder:6.7b", _
+                  "qwen2.5-coder:7b", "mistral:7b", "phi3:mini", "gemma2:9b", _
+                  "deepseek-coder:6.7b", "deepseek-coder-v2:16b", "deepseek-r1:14b", _
                   "nomic-embed-text", "moondream")
 modelSize = Array("~2.0 GB", "~1.3 GB", "~9.0 GB", "~9.0 GB", _
-                  "~4.1 GB", "~2.3 GB", "~5.4 GB", "~3.8 GB", _
+                  "~4.7 GB", "~4.1 GB", "~2.3 GB", "~5.4 GB", _
+                  "~3.8 GB", "~8.9 GB", "~9.0 GB", _
                   "~0.3 GB", "~1.7 GB")
 
 ' ---------- helpers ----------
@@ -162,7 +164,7 @@ modelPrompt = "Pull all recommended AI models now?" & vbCrLf & vbCrLf & _
 For mi = 0 To UBound(modelList)
   modelPrompt = modelPrompt & "  " & (mi + 1) & ". " & modelList(mi) & "  (" & modelSize(mi) & ")" & vbCrLf
 Next
-modelPrompt = modelPrompt & vbCrLf & "Total: ~38 GB. Models are pulled in the recommended order." & vbCrLf & _
+modelPrompt = modelPrompt & vbCrLf & "Total: ~59 GB. Models are pulled in the recommended order." & vbCrLf & _
               "This may take a while." & vbCrLf & vbCrLf & "Pull now?"
 
 pullModels = (MsgBox(modelPrompt, vbYesNo + vbQuestion, "Model pull") = vbYes)

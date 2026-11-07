@@ -100,7 +100,7 @@ wscript.exe install.vbs
 
 The launcher itself is **`launcher.vbs`** (Windows Script Host / standard Windows shell) and is portable — it resolves all paths relative to its own location and starts Ollama, the web UI, and the Edge app window. Desktop shortcuts created by the installer point at `launcher.vbs`.
 
-> Note: `launch-gui.ps1`, `tray.ps1` and `start.bat` are kept for backwards compatibility, but the recommended path for novice users is `install.vbs` + `launcher.vbs`.
+> Note: `tray.ps1` is retained (used by `tray.vbs` for the system-tray icon). The legacy `launch-gui.ps1` and `start.bat` have been removed in favor of `install.vbs` + `launcher.vbs`.
 
 ## Troubleshooting (Windows)
 
