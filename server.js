@@ -1296,6 +1296,75 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url === '/api/version' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      let current = 'unknown';
+      try { current = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
+      // check if git repo
+      const isGit = fs.existsSync(path.join(__dirname, '.git'));
+      json(res, 200, { version: current, isGit });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/check-update' && req.method === 'GET') {
+    try {
+      const https = require('https');
+      const fs = require('fs');
+      const path = require('path');
+      let current = 'unknown';
+      try { current = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
+      const data = await new Promise((resolve, reject) => {
+        https.get('https://api.github.com/repos/user6811992/LocalAI/releases/latest', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+          let buf = '';
+          r.on('data', (c) => (buf += c));
+          r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+        }).on('error', reject);
+      });
+      json(res, 200, { current, latest: data.tag_name, url: data.html_url, hasUpdate: data.tag_name && data.tag_name.replace(/^v/, '') !== current });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/update' && req.method === 'POST') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const { exec } = require('child_process');
+      const isGit = fs.existsSync(path.join(__dirname, '.git'));
+      let output = '';
+      if (isGit) {
+        output += 'Running git pull...\\n';
+        const pullRes = await new Promise((resolve) => {
+          exec('git pull origin master', { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+            resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+          });
+        });
+        output += pullRes.out + '\\n';
+        if (!pullRes.ok) { json(res, 500, { ok: false, message: 'git pull failed: ' + (pullRes.err || pullRes.out) }); return; }
+      } else {
+        json(res, 400, { ok: false, message: 'Not a git repository. Please re-install from the latest release zip.' });
+        return;
+      }
+      // npm install
+      output += 'Running npm install...\\n';
+      const npmRes = await new Promise((resolve) => {
+        exec('npm install', { cwd: __dirname, timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+        });
+      });
+      output += npmRes.out + '\\n';
+      if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed: ' + (npmRes.err || npmRes.out), output }); return; }
+      // read new version
+      let newVersion = 'unknown';
+      try { newVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
+      json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Restart the server to apply.', version: newVersion, output });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     try {
       const body = await readBody(req);
