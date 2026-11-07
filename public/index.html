@@ -43,7 +43,8 @@
   button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
-  header, footer, .controls, button { -webkit-user-select: none; user-select: none; }
+  header, .controls, button { -webkit-user-select: none; user-select: none; }
+  textarea, input { -webkit-user-select: text; user-select: text; }
   .msg {
     max-width: 85%; padding: 12px 14px; border-radius: 12px;
     white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;
@@ -63,7 +64,15 @@
     background: var(--panel); border-top: 1px solid var(--border);
     -webkit-overflow-scrolling: touch;
   }
-  .input-row { display: flex; gap: 8px; }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .attach-preview, .queue-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+  .attach-chip, .queue-chip {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 8px; font-size: 12px; display: flex; align-items: center; gap: 6px;
+  }
+  .attach-chip img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; }
+  .chip-remove { cursor: pointer; color: var(--muted); font-weight: bold; }
+  .chip-remove:hover { color: var(--danger, #f87171); }
   textarea {
     flex: 1; resize: none; min-height: 44px; max-height: 160px;
     background: var(--panel2); color: var(--text); border: 1px solid var(--border);
@@ -109,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.4.0</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.0</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -133,8 +142,13 @@
 </header>
 <main id="chat"></main>
 <footer>
+  <div id="queueList" class="queue-list"></div>
+  <div id="attachPreview" class="attach-preview"></div>
   <div class="input-row">
-    <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+    <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />
+    <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">📎</button>
+    <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
+    <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
     <button id="send" class="primary">Send</button>
   </div>
   <div id="status" class="status"></div>
@@ -160,7 +174,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI — About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.4.0</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.5.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">—</span></div>
@@ -218,6 +232,95 @@
 
   let messages = [];
   let generating = false;
+  let attachments = [];
+  let messageQueue = [];
+
+  function renderAttachments() {
+    const el = document.getElementById('attachPreview');
+    el.innerHTML = '';
+    attachments.forEach((a, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'attach-chip';
+      if (a.type && a.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = a.preview;
+        chip.appendChild(img);
+      }
+      const name = document.createElement('span');
+      name.textContent = a.name;
+      chip.appendChild(name);
+      const rm = document.createElement('span');
+      rm.className = 'chip-remove';
+      rm.textContent = '×';
+      rm.addEventListener('click', () => { attachments.splice(idx, 1); renderAttachments(); });
+      chip.appendChild(rm);
+      el.appendChild(chip);
+    });
+  }
+
+  function renderQueue() {
+    const el = document.getElementById('queueList');
+    el.innerHTML = '';
+    messageQueue.forEach((q, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'queue-chip';
+      const t = document.createElement('span');
+      t.textContent = 'Queued: ' + q.text.slice(0, 60);
+      chip.appendChild(t);
+      const rm = document.createElement('span');
+      rm.className = 'chip-remove';
+      rm.textContent = '×';
+      rm.addEventListener('click', () => { messageQueue.splice(idx, 1); renderQueue(); });
+      chip.appendChild(rm);
+      el.appendChild(chip);
+    });
+  }
+
+  function addAttachment(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const a = { name: file.name, type: file.type, size: file.size };
+      if (file.type.startsWith('image/')) {
+        a.preview = e.target.result;
+        a.dataUrl = e.target.result;
+      } else {
+        a.text = e.target.result;
+      }
+      attachments.push(a);
+      renderAttachments();
+    };
+    if (file.type.startsWith('image/')) reader.readAsDataURL(file);
+    else reader.readAsText(file);
+  }
+
+  const attachInput = document.getElementById('attachInput');
+  const attachBtn = document.getElementById('attachBtn');
+  attachBtn.addEventListener('click', () => attachInput.click());
+  attachInput.addEventListener('change', () => {
+    Array.from(attachInput.files || []).forEach(addAttachment);
+    attachInput.value = '';
+  });
+
+  // Paste support (text + images)
+  input.addEventListener('paste', (e) => {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    // images
+    const items = cd.items || [];
+    let hasImage = false;
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) { addAttachment(f); hasImage = true; }
+      }
+    }
+    if (hasImage) e.preventDefault();
+    // text: let default paste happen, but also capture if no text
+    const txt = cd.getData('text/plain');
+    if (txt && !hasImage) {
+      // default paste inserts; nothing extra needed
+    }
+  });
 
   function addMsg(role, content, thinking) {
     const div = document.createElement('div');
@@ -276,14 +379,42 @@
     }
   }
 
+  function buildMessageText(text, atts) {
+    let out = text || '';
+    (atts || []).forEach(a => {
+      if (a.text) out += '\\n\\n--- ' + a.name + ' ---\\n' + a.text;
+      else if (a.type && a.type.startsWith('image/')) out += '\\n\\n[Image attached: ' + a.name + ']';
+      else out += '\\n\\n[File attached: ' + a.name + ']';
+    });
+    return out.trim();
+  }
+
   async function send() {
-    if (generating) return;
-    const text = input.value.trim();
-    if (!text) return;
+    if (generating) {
+      // queue instead of dropping
+      const t = input.value.trim();
+      if (!t && attachments.length === 0) return;
+      const queuedText = buildMessageText(t);
+      messageQueue.push({ text: queuedText, attachments: attachments.slice() });
+      input.value = '';
+      attachments = [];
+      renderAttachments();
+      renderQueue();
+      input.style.height = 'auto';
+      return;
+    }
+    const rawText = input.value.trim();
+    if (!rawText && attachments.length === 0) return;
+    const atts = attachments.slice();
+    const text = buildMessageText(rawText, atts);
     input.value = '';
+    attachments = [];
+    renderAttachments();
     input.style.height = 'auto';
     messages.push({ role: 'user', content: text });
-    addMsg('user', text);
+    let display = rawText;
+    if (atts.length) display += '\\n\\n[Attachments: ' + atts.map(a=>a.name).join(', ') + ']';
+    addMsg('user', display);
 
     const model = modelSel.value;
     const useAgent = document.getElementById('codingMode').checked || document.getElementById('reMode').checked;
@@ -388,10 +519,30 @@
       generating = false;
       sendBtn.disabled = false;
       input.focus();
+      // process queued messages
+      if (messageQueue.length > 0) {
+        const next = messageQueue.shift();
+        renderQueue();
+        input.value = next.text;
+        attachments = [];
+        renderAttachments();
+        setTimeout(() => send(), 50);
+      }
     }
   }
 
   sendBtn.addEventListener('click', send);
+  document.getElementById('queueBtn').addEventListener('click', () => {
+    const t = input.value.trim();
+    if (!t && attachments.length === 0) return;
+    const queuedText = buildMessageText(t);
+    messageQueue.push({ text: queuedText, attachments: attachments.slice() });
+    input.value = '';
+    attachments = [];
+    renderAttachments();
+    renderQueue();
+    input.style.height = 'auto';
+  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
