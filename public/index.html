@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.1</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.2</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
@@ -153,6 +153,7 @@
     <button id="modelsBtn">Models</button>
     <button id="codeBtn">Code</button>
     <button id="ragBtn">Docs</button>
+    <button id="reWorkspaceBtn">RE</button>
     <button id="chatsBtn">Chats</button>
     <button id="componentsBtn">Components</button>
     <button id="aboutBtn" onclick="openAbout()">About</button>
@@ -206,7 +207,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.9.1</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.9.2</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -291,18 +292,30 @@
 </div>
 
 <div id="ragBackdrop" class="modal-backdrop">
-  <div class="modal">
+  <div class="modal" style="max-width:600px;">
     <button class="close-btn" id="ragClose">&times;</button>
     <h2>Document RAG</h2>
     <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label style="font-size:12px;">Collection:
+          <select id="ragCollection" style="font-size:12px;"></select>
+        </label>
+        <button id="ragNewCollBtn" style="font-size:11px;padding:2px 6px;">New</button>
+        <button id="ragDelCollBtn" style="font-size:11px;padding:2px 6px;">Delete</button>
+      </div>
       <label>Upload a document (txt, md, json, pdf):
         <input type="file" id="ragFile" accept=".txt,.md,.json,.pdf,.js,.py,.csv" />
       </label>
       <button id="ragUploadBtn" class="primary" style="font-size:12px;">Upload & index</button>
       <div id="ragStatus" class="status"></div>
       <div style="font-size:13px;font-weight:600;margin-top:8px;">Indexed documents:</div>
-      <div id="ragDocs" style="font-size:12px;color:var(--muted);max-height:160px;overflow:auto;"></div>
-      <button id="ragClearBtn" style="font-size:12px;padding:4px 8px;">Clear all</button>
+      <div id="ragDocs" style="font-size:12px;color:var(--muted);max-height:120px;overflow:auto;"></div>
+      <div style="font-size:13px;font-weight:600;margin-top:8px;">Chunks (click to view):</div>
+      <div id="ragChunks" style="font-size:11px;color:var(--muted);max-height:120px;overflow:auto;font-family:monospace;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="ragClearBtn" style="font-size:12px;padding:4px 8px;">Clear collection</button>
+        <button id="ragViewChunksBtn" style="font-size:12px;padding:4px 8px;">View chunks</button>
+      </div>
     </div>
   </div>
 </div>
@@ -356,6 +369,22 @@
       <button id="saveChatBtn" style="font-size:12px;">Save current</button>
     </div>
     <div id="chatsList" style="max-height:300px;overflow:auto;font-size:12px;"></div>
+  </div>
+</div>
+
+<div id="reWorkspaceBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:600px;">
+    <button class="close-btn" id="reWorkspaceClose">&times;</button>
+    <h2>RE Workspace</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <label>Upload a binary for analysis:
+        <input type="file" id="reFile" />
+      </label>
+      <button id="reUploadBtn" class="primary" style="font-size:12px;">Upload & analyze</button>
+      <div id="reStatus" class="status"></div>
+      <div style="font-size:13px;font-weight:600;margin-top:8px;">Uploaded binaries:</div>
+      <div id="reFiles" style="font-size:12px;color:var(--muted);max-height:200px;overflow:auto;"></div>
+    </div>
   </div>
 </div>
 
@@ -758,10 +787,12 @@
     const atts = attachments.slice();
     // RAG: fetch relevant chunks from indexed docs
     let ragContext = '';
+    let ragCitations = [];
     try {
-      const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4 }) });
+      const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4, collection: currentRagCollection }) });
       const rd = await rr.json();
       if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
+      if (rd.citations) ragCitations = rd.citations;
     } catch (e) {}
     const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
     input.value = '';
@@ -854,6 +885,14 @@
         }
         // update messages with final assistant
         messages.push({ role: 'assistant', content: finalText });
+        if (ragCitations.length) {
+          const citDiv = document.createElement('div');
+          citDiv.style.marginTop = '8px';
+          citDiv.style.fontSize = '11px';
+          citDiv.style.color = 'var(--muted)';
+          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + (c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
+          assistantDiv.appendChild(citDiv);
+        }
         if (!data.toolsDisabled) {
           status.textContent = 'Done (agent).';
           status.className = 'status';
@@ -900,6 +939,14 @@
           } catch (e) {}
         }
         messages.push({ role: 'assistant', content: accumulated });
+        if (ragCitations.length) {
+          const citDiv = document.createElement('div');
+          citDiv.style.marginTop = '8px';
+          citDiv.style.fontSize = '11px';
+          citDiv.style.color = 'var(--muted)';
+          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + (c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
+          assistantDiv.appendChild(citDiv);
+        }
         status.textContent = 'Done.';
         status.className = 'status';
       }
@@ -1921,10 +1968,27 @@
     }
   });
 
-  // RAG handlers
+  // RAG handlers with collections, chunk viewer, citations
+  let currentRagCollection = 'default';
+  async function loadRagCollections() {
+    try {
+      const r = await fetch('/api/rag-collections');
+      const d = await r.json();
+      const sel = document.getElementById('ragCollection');
+      if (!sel) return;
+      sel.innerHTML = '';
+      (d.collections || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        if (c === d.active) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      currentRagCollection = d.active || 'default';
+    } catch (e) {}
+  }
   async function loadRagDocs() {
     try {
-      const r = await fetch('/api/rag-docs');
+      const r = await fetch('/api/rag-docs?collection=' + encodeURIComponent(currentRagCollection));
       const d = await r.json();
       const el = document.getElementById('ragDocs');
       el.innerHTML = '';
@@ -1936,11 +2000,28 @@
       if (!d.docs || d.docs.length === 0) el.textContent = '(none)';
     } catch (e) {}
   }
+  async function loadRagChunks() {
+    try {
+      const r = await fetch('/api/rag-chunks?collection=' + encodeURIComponent(currentRagCollection));
+      const d = await r.json();
+      const el = document.getElementById('ragChunks');
+      el.innerHTML = '';
+      (d.chunks || []).forEach(c => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '6px';
+        div.style.padding = '4px';
+        div.style.borderBottom = '1px solid var(--border)';
+        div.textContent = '[' + c.idx + '] ' + c.text.slice(0, 200) + (c.text.length > 200 ? '...' : '');
+        el.appendChild(div);
+      });
+      if (!d.chunks || d.chunks.length === 0) el.textContent = '(no chunks)';
+    } catch (e) {}
+  }
   const ragBtn = document.getElementById('ragBtn');
   if (ragBtn) {
     ragBtn.addEventListener('click', () => {
       document.getElementById('ragBackdrop').classList.add('open');
-      loadRagDocs();
+      loadRagCollections().then(() => { loadRagDocs(); });
     });
   }
   document.getElementById('ragClose').addEventListener('click', () => {
@@ -1949,6 +2030,36 @@
   document.getElementById('ragBackdrop').addEventListener('click', (e) => {
     if (e.target.id === 'ragBackdrop') document.getElementById('ragBackdrop').classList.remove('open');
   });
+  const ragCollection = document.getElementById('ragCollection');
+  if (ragCollection) {
+    ragCollection.addEventListener('change', () => {
+      currentRagCollection = ragCollection.value;
+      fetch('/api/rag-collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'switch', name: currentRagCollection }) });
+      loadRagDocs();
+    });
+  }
+  const ragNewCollBtn = document.getElementById('ragNewCollBtn');
+  if (ragNewCollBtn) {
+    ragNewCollBtn.addEventListener('click', async () => {
+      const name = prompt('New collection name:');
+      if (!name) return;
+      await fetch('/api/rag-collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name }) });
+      currentRagCollection = name;
+      await loadRagCollections();
+      loadRagDocs();
+    });
+  }
+  const ragDelCollBtn = document.getElementById('ragDelCollBtn');
+  if (ragDelCollBtn) {
+    ragDelCollBtn.addEventListener('click', async () => {
+      if (currentRagCollection === 'default') { alert('Cannot delete default collection.'); return; }
+      if (!confirm('Delete collection "' + currentRagCollection + '"?')) return;
+      await fetch('/api/rag-collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', name: currentRagCollection }) });
+      currentRagCollection = 'default';
+      await loadRagCollections();
+      loadRagDocs();
+    });
+  }
   const ragUploadBtn = document.getElementById('ragUploadBtn');
   if (ragUploadBtn) {
     ragUploadBtn.addEventListener('click', async () => {
@@ -1963,7 +2074,7 @@
         const isPdf = file.name.toLowerCase().endsWith('.pdf');
         const content = isPdf ? e.target.result.split(',')[1] : btoa(unescape(encodeURIComponent(e.target.result)));
         try {
-          const r = await fetch('/api/rag-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content, type: isPdf ? 'pdf' : 'text' }) });
+          const r = await fetch('/api/rag-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content, type: isPdf ? 'pdf' : 'text', collection: currentRagCollection }) });
           const d = await r.json();
           if (d.ok) { st.textContent = d.message; st.className = 'status'; loadRagDocs(); }
           else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
@@ -1976,10 +2087,18 @@
   const ragClearBtn = document.getElementById('ragClearBtn');
   if (ragClearBtn) {
     ragClearBtn.addEventListener('click', async () => {
-      await fetch('/api/rag-clear', { method: 'POST' });
+      await fetch('/api/rag-clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ collection: currentRagCollection }) });
       loadRagDocs();
       document.getElementById('ragStatus').textContent = 'Cleared.';
       document.getElementById('ragStatus').className = 'status';
+    });
+  }
+  const ragViewChunksBtn = document.getElementById('ragViewChunksBtn');
+  if (ragViewChunksBtn) {
+    ragViewChunksBtn.addEventListener('click', () => {
+      const el = document.getElementById('ragChunks');
+      if (el.style.display === 'none') { el.style.display = 'block'; loadRagChunks(); }
+      else { el.style.display = 'none'; }
     });
   }
 
@@ -2226,6 +2345,80 @@
         if (d.ok) { status.textContent = 'Saved: ' + title; status.className = 'status'; loadChatsList(); }
         else { status.textContent = 'Save failed.'; status.className = 'status err'; }
       } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+    });
+  }
+
+  // RE Workspace handlers
+  async function loadReFiles() {
+    const el = document.getElementById('reFiles');
+    if (!el) return;
+    try {
+      const r = await fetch('/api/re-files');
+      const d = await r.json();
+      el.innerHTML = '';
+      (d.files || []).forEach(f => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px;border-bottom:1px solid var(--border);';
+        const name = document.createElement('span');
+        name.style.flex = '1';
+        name.textContent = f.name + ' (' + (f.size / 1e6).toFixed(1) + ' MB)';
+        div.appendChild(name);
+        const analyzeBtn = document.createElement('button');
+        analyzeBtn.textContent = 'Analyze';
+        analyzeBtn.style.fontSize = '11px';
+        analyzeBtn.style.padding = '2px 6px';
+        analyzeBtn.addEventListener('click', () => {
+          document.getElementById('reWorkspaceBackdrop').classList.remove('open');
+          document.getElementById('reMode').checked = true;
+          const msg = 'Analyze this binary with RE tools: ' + f.path + '\\n\\nStart by opening it (open_binary) and listing functions, imports, and strings. Summarize findings.';
+          input.value = msg;
+          input.dispatchEvent(new Event('input'));
+          send();
+        });
+        div.appendChild(analyzeBtn);
+        el.appendChild(div);
+      });
+      if (!d.files || d.files.length === 0) el.textContent = '(none uploaded)';
+    } catch (e) { el.textContent = 'Error: ' + e.message; }
+  }
+  const reWorkspaceBtn = document.getElementById('reWorkspaceBtn');
+  if (reWorkspaceBtn) {
+    reWorkspaceBtn.addEventListener('click', () => {
+      document.getElementById('reWorkspaceBackdrop').classList.add('open');
+      loadReFiles();
+    });
+  }
+  const reWorkspaceClose = document.getElementById('reWorkspaceClose');
+  if (reWorkspaceClose) {
+    reWorkspaceClose.addEventListener('click', () => {
+      document.getElementById('reWorkspaceBackdrop').classList.remove('open');
+    });
+  }
+  const reWorkspaceBackdrop = document.getElementById('reWorkspaceBackdrop');
+  if (reWorkspaceBackdrop) {
+    reWorkspaceBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'reWorkspaceBackdrop') reWorkspaceBackdrop.classList.remove('open');
+    });
+  }
+  const reUploadBtn = document.getElementById('reUploadBtn');
+  if (reUploadBtn) {
+    reUploadBtn.addEventListener('click', async () => {
+      const fileInput = document.getElementById('reFile');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) { document.getElementById('reStatus').textContent = 'Select a file first.'; document.getElementById('reStatus').className = 'status err'; return; }
+      const st = document.getElementById('reStatus');
+      st.textContent = 'Uploading...';
+      st.className = 'status';
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const r = await fetch('/api/re-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content: e.target.result.split(',')[1] }) });
+          const d = await r.json();
+          if (d.ok) { st.textContent = d.message; st.className = 'status'; loadReFiles(); }
+          else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
+        } catch (err) { st.textContent = 'Error: ' + err.message; st.className = 'status err'; }
+      };
+      reader.readAsDataURL(file);
     });
   }
 

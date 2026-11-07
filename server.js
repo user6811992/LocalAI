@@ -1781,13 +1781,23 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ---------- RAG (document upload + retrieval) ----------
+  // ---------- RAG (document upload + retrieval) with collections ----------
   const RAG_FILE = path.join(__dirname, 'rag-store.json');
   function loadRag() {
-    try { return JSON.parse(fs.readFileSync(RAG_FILE, 'utf8')); } catch (e) { return { docs: [], chunks: [] }; }
+    try {
+      const d = JSON.parse(fs.readFileSync(RAG_FILE, 'utf8'));
+      if (!d.collections) d.collections = { default: { docs: d.docs || [], chunks: d.chunks || [] } };
+      if (!d.activeCollection) d.activeCollection = 'default';
+      return d;
+    } catch (e) { return { collections: { default: { docs: [], chunks: [] } }, activeCollection: 'default' }; }
   }
   function saveRag(store) {
     try { fs.writeFileSync(RAG_FILE, JSON.stringify(store)); } catch (e) {}
+  }
+  function getCollection(store, name) {
+    name = name || store.activeCollection || 'default';
+    if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+    return store.collections[name];
   }
   function cosine(a, b) {
     let dot = 0, na = 0, nb = 0;
@@ -1801,16 +1811,56 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return null; }
   }
 
-  if (req.url === '/api/rag-docs' && req.method === 'GET') {
+  if (req.url === '/api/rag-collections' && req.method === 'GET') {
     const store = loadRag();
-    json(res, 200, { docs: store.docs.map(d => ({ id: d.id, name: d.name, chunks: d.chunks })) });
+    const names = Object.keys(store.collections);
+    json(res, 200, { collections: names, active: store.activeCollection });
+    return;
+  }
+
+  if (req.url === '/api/rag-collections' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, action } = JSON.parse(body || '{}');
+      const store = loadRag();
+      if (action === 'create' && name) {
+        if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+        store.activeCollection = name;
+      } else if (action === 'switch' && name) {
+        if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+        store.activeCollection = name;
+      } else if (action === 'delete' && name && name !== 'default') {
+        delete store.collections[name];
+        if (store.activeCollection === name) store.activeCollection = 'default';
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, active: store.activeCollection, collections: Object.keys(store.collections) });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-docs' && req.method === 'GET') {
+    const u = new URL(req.url, 'http://localhost');
+    const coll = u.searchParams.get('collection') || null;
+    const store = loadRag();
+    const col = getCollection(store, coll);
+    json(res, 200, { collection: coll || store.activeCollection, docs: col.docs.map(d => ({ id: d.id, name: d.name, chunks: d.chunks })) });
+    return;
+  }
+
+  if (req.url === '/api/rag-chunks' && req.method === 'GET') {
+    const u = new URL(req.url, 'http://localhost');
+    const coll = u.searchParams.get('collection') || null;
+    const store = loadRag();
+    const col = getCollection(store, coll);
+    json(res, 200, { collection: coll || store.activeCollection, chunks: col.chunks.map((c, i) => ({ idx: i, docId: c.docId, text: c.text, hasEmbedding: !!c.embedding })) });
     return;
   }
 
   if (req.url === '/api/rag-upload' && req.method === 'POST') {
     try {
       const body = await readBody(req);
-      const { name, content, type } = JSON.parse(body || '{}');
+      const { name, content, type, collection } = JSON.parse(body || '{}');
       if (!name || !content) { json(res, 400, { ok: false, message: 'name and content required' }); return; }
       let text = '';
       if (type === 'pdf') {
@@ -1824,23 +1874,23 @@ const server = http.createServer(async (req, res) => {
         text = Buffer.from(content, 'base64').toString('utf8');
       }
       if (!text.trim()) { json(res, 400, { ok: false, message: 'No text extracted' }); return; }
-      // chunk
       const chunks = [];
       const size = 800;
       for (let i = 0; i < text.length; i += size) {
         chunks.push(text.slice(i, i + size));
       }
       const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      const col = getCollection(store, coll);
       const docId = 'doc_' + Date.now();
       const doc = { id: docId, name, chunks: chunks.length };
-      store.docs.push(doc);
-      // embed chunks
+      col.docs.push(doc);
       for (let i = 0; i < chunks.length; i++) {
         const emb = await embedText(chunks[i]);
-        store.chunks.push({ docId, idx: i, text: chunks[i], embedding: emb });
+        col.chunks.push({ docId, idx: i, text: chunks[i], embedding: emb });
       }
       saveRag(store);
-      json(res, 200, { ok: true, message: 'Indexed ' + chunks.length + ' chunks from ' + name, docId });
+      json(res, 200, { ok: true, message: 'Indexed ' + chunks.length + ' chunks from ' + name + ' into "' + coll + '"', docId, collection: coll });
     } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
@@ -1848,21 +1898,38 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/api/rag-query' && req.method === 'POST') {
     try {
       const body = await readBody(req);
-      const { query, topK } = JSON.parse(body || '{}');
+      const { query, topK, collection } = JSON.parse(body || '{}');
       const k = topK || 5;
       const store = loadRag();
-      if (!store.chunks.length) { json(res, 200, { chunks: [] }); return; }
+      const coll = collection || store.activeCollection || 'default';
+      const col = getCollection(store, coll);
+      if (!col.chunks.length) { json(res, 200, { chunks: [], collection: coll }); return; }
       const qEmb = await embedText(query || '');
-      let scored = store.chunks.map(c => ({ text: c.text, docId: c.docId, score: qEmb && c.embedding ? cosine(qEmb, c.embedding) : 0 }));
+      let scored = col.chunks.map(c => ({ text: c.text, docId: c.docId, score: qEmb && c.embedding ? cosine(qEmb, c.embedding) : 0 }));
       scored.sort((a, b) => b.score - a.score);
-      json(res, 200, { chunks: scored.slice(0, k).map(s => s.text) });
+      const topChunks = scored.slice(0, k);
+      // include doc names for citations
+      const citations = topChunks.map(c => {
+        const doc = col.docs.find(d => d.id === c.docId);
+        return { text: c.text, docName: doc ? doc.name : 'unknown', score: c.score };
+      });
+      json(res, 200, { chunks: topChunks.map(s => s.text), citations, collection: coll });
     } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
   if (req.url === '/api/rag-clear' && req.method === 'POST') {
-    saveRag({ docs: [], chunks: [] });
-    json(res, 200, { ok: true });
+    try {
+      const body = await readBody(req);
+      const { collection } = JSON.parse(body || '{}');
+      const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      if (store.collections[coll]) {
+        store.collections[coll] = { docs: [], chunks: [] };
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, collection: coll });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2027,6 +2094,38 @@ const server = http.createServer(async (req, res) => {
     const chat = loadChats().find(c => c.id === id);
     if (!chat) { json(res, 404, { error: 'not found' }); return; }
     json(res, 200, chat);
+    return;
+  }
+
+  // ---------- RE workspace: binary upload ----------
+  if (req.url === '/api/re-upload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, content } = JSON.parse(body || '{}');
+      if (!name || !content) { json(res, 400, { ok: false, message: 'name and content required' }); return; }
+      const fs = require('fs');
+      const path = require('path');
+      const wsDir = path.join(__dirname, 'workspace', 're');
+      if (!fs.existsSync(wsDir)) fs.mkdirSync(wsDir, { recursive: true });
+      const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(wsDir, safeName);
+      fs.writeFileSync(filePath, Buffer.from(content, 'base64'));
+      json(res, 200, { ok: true, path: filePath, message: 'Uploaded ' + safeName });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/re-files' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const wsDir = path.join(__dirname, 'workspace', 're');
+      if (!fs.existsSync(wsDir)) { json(res, 200, { files: [] }); return; }
+      const files = fs.readdirSync(wsDir).map(f => {
+        try { const st = fs.statSync(path.join(wsDir, f)); return { name: f, size: st.size, path: path.join(wsDir, f) }; } catch (e) { return null; }
+      }).filter(Boolean);
+      json(res, 200, { files });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
     return;
   }
 
