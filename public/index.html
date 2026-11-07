@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.3</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.4</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -175,7 +175,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.5.3</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.5.4</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -833,7 +833,19 @@
       items.push({ label: 'Cut', action: () => { document.execCommand('cut'); } });
       items.push({ label: 'Copy', action: () => { document.execCommand('copy'); } });
       items.push({ label: 'Paste', action: async () => {
-        try { const t = await navigator.clipboard.readText(); if (document.activeElement) document.activeElement.value = (document.activeElement.value || '') + t; } catch (err) { document.execCommand('paste'); }
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t && document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT')) {
+            const el = document.activeElement;
+            const start = el.selectionStart || 0;
+            const end = el.selectionEnd || 0;
+            const val = el.value || '';
+            el.value = val.slice(0, start) + t + val.slice(end);
+            const pos = start + t.length;
+            el.selectionStart = el.selectionEnd = pos;
+            el.dispatchEvent(new Event('input'));
+          }
+        } catch (err) { document.execCommand('paste'); }
       }});
       items.push('sep');
       items.push({ label: 'Select All', action: () => { target.select && target.select(); } });
