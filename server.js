@@ -784,14 +784,25 @@ async function runAgent(model, messages, maxIter, opts) {
   const systemMsg = { role: 'system', content: 'You are a local AI assistant with hands-on capabilities and persistent memory. You have CODING tools (files, shell, git, web, pdf, screenshots, memory, skills) and REVERSE ENGINEERING tools (REA). Use them to act, not just talk. You learn from past interactions (memories below) and from web searches. Save durable facts with memory_save. Save reusable procedures with skill_save, and reuse them with skill_run. Always explain what you did.' + memBlock };
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
+  let toolsSupported = true;
   for (let i = 0; i < maxIter; i++) {
-    const r = await ollamaRequest('/api/chat', {
+    let r = await ollamaRequest('/api/chat', {
       model,
       messages: msgs,
-      tools: tools.length ? tools : undefined,
+      tools: (toolsSupported && tools.length) ? tools : undefined,
       stream: false,
     });
-    if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
+    if (r.status !== 200) {
+      const errText = (r.data && r.data.error) ? String(r.data.error) : JSON.stringify(r.data);
+      if (/does not support tools/i.test(errText)) {
+        toolsSupported = false;
+        // retry without tools
+        r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false });
+        if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
+      } else {
+        throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
+      }
+    }
     const msg = r.data.message || {};
     let toolCalls = msg.tool_calls || [];
     // Fallback: parse function-call JSON emitted in text (some models)
@@ -815,7 +826,7 @@ async function runAgent(model, messages, maxIter, opts) {
     }
   if (!toolCalls.length) {
     msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
-    return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log };
+    return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
     }
     // append assistant with tool_calls
     if (msg.thinking) finalThinking += msg.thinking + '\n';
