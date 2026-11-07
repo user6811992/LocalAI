@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.11</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.12</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.11</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.12</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -937,6 +937,8 @@
               if (dd.latest) txt += ' (latest: ' + dd.latest + ')';
               if (dd.updateAvailable) txt += ' � update available';
               else if (dd.latest) txt += ' � up to date';
+              if (dd.homepage) txt += '\\nHomepage: ' + dd.homepage;
+              if (dd.installUrl && dd.installUrl !== dd.homepage) txt += '\\nInstall URL: ' + dd.installUrl;
               txt += (dd.detail ? '\\n\\nDetail: ' + dd.detail : '') + '\\nStatus: ' + dd.status;
               aboutDiv.textContent = txt;
             } catch (e) { aboutDiv.textContent = 'Error: ' + e.message; }
