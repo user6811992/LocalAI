@@ -1529,17 +1529,25 @@ const server = http.createServer(async (req, res) => {
       } else if (id === 'rea-repo') {
         const reaRepoPath = path.join(__dirname, 'repos', 'rea');
         const { exec } = require('child_process');
+        const fs = require('fs');
+        if (!fs.existsSync(reaRepoPath)) {
+          result = { ok: false, message: 'REA repo not cloned. Clone from https://github.com/morluto/rea into ' + reaRepoPath + ' or click Install.' };
+        } else {
+        // Stash local changes, fetch, reset to remote (handles diverging branches)
         result = await new Promise((resolve) => {
-          exec('git pull --ff-only', {
-            cwd: reaRepoPath,
-            timeout: 300000,
-            maxBuffer: 1024 * 1024,
-            env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }),
-          }, (err, stdout, stderr) => {
-            if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
-            else resolve({ ok: true, message: (stdout || stderr || 'Already up to date.').trim().slice(0, 500) });
+          const env = Object.assign({}, process.env, { PATH: (process.env.PATH || '') });
+          const opts = { cwd: reaRepoPath, timeout: 300000, maxBuffer: 1024 * 1024, env };
+          // detect default branch: try origin/main, then origin/master
+          exec('git rev-parse --verify origin/main', opts, (errMain) => {
+            const branch = errMain ? 'master' : 'main';
+            const cmd = 'git fetch origin && git reset --hard origin/' + branch;
+            exec(cmd, opts, (err2, stdout2, stderr2) => {
+              if (err2) resolve({ ok: false, message: (stderr2 || err2.message || '').slice(0, 500) });
+              else resolve({ ok: true, message: (stdout2 || stderr2 || 'Updated.').trim().slice(0, 500) });
+            });
           });
         });
+        }
       } else if (id === 'memory') {
         const mems = loadJsonFile(MEMORY_FILE);
         result = { ok: true, message: 'Memory OK. ' + mems.length + ' entries. (persistent; no update needed)' };
