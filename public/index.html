@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.5</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.6</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.9.5</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.9.6</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -334,11 +334,18 @@
         <option value="javascript">JavaScript</option>
         <option value="python">Python</option>
       </select>
-      <button id="runCodeBtn" class="primary" style="font-size:12px;">Run</button>
     </div>
     <textarea id="codeInput" style="width:100%;min-height:120px;font-family:monospace;font-size:13px;" placeholder="Enter code here..."></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button id="runCodeBtn" class="primary" style="font-size:12px;">Run</button>
+      <button id="previewCodeBtn" style="font-size:12px;">Preview HTML</button>
+    </div>
     <div style="font-size:13px;font-weight:600;margin-top:8px;">Output:</div>
     <pre id="codeOutput" style="background:var(--panel2);padding:8px;border-radius:6px;max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+    <div id="codePreview" style="margin-top:8px;display:none;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Preview:</div>
+      <iframe id="codePreviewFrame" style="width:100%;height:200px;border:1px solid var(--border);border-radius:6px;background:#fff;"></iframe>
+    </div>
   </div>
 </div>
 
@@ -2125,6 +2132,22 @@
       if (e.target.id === 'codeBackdrop') codeBackdrop.classList.remove('open');
     });
   }
+  const previewCodeBtn = document.getElementById('previewCodeBtn');
+  if (previewCodeBtn) {
+    previewCodeBtn.addEventListener('click', () => {
+      const code = document.getElementById('codeInput').value;
+      const frame = document.getElementById('codePreviewFrame');
+      const previewDiv = document.getElementById('codePreview');
+      if (previewDiv) previewDiv.style.display = 'block';
+      if (frame) {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        doc.open();
+        doc.write(code);
+        doc.close();
+      }
+    });
+  }
+
   const runCodeBtn = document.getElementById('runCodeBtn');
   if (runCodeBtn) {
     runCodeBtn.addEventListener('click', async () => {

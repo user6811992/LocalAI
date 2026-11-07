@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - name: Syntax check server.js
+        run: node --check server.js
+      - name: Syntax check public JS
+        run: |
+          node -e "const fs=require('fs'); const h=fs.readFileSync('public/index.html','utf8'); const s=h.indexOf('<script>'); const e=h.lastIndexOf('</script>'); const js=h.slice(s+8,e); fs.writeFileSync('/tmp/check.js', js);"
+          node --check /tmp/check.js
+      - name: Check for large files
+        run: |
+          find . -name '*.js' -size +500k -not -path './node_modules/*' -exec echo "Large file: {}" \;
