@@ -1,9 +1,9 @@
 {
   "name": "localai",
-  "version": "1.7.16",
+  "version": "1.7.17",
   "description": "Local AI web UI with Ollama backend",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^1.1.1"
   }
 }
