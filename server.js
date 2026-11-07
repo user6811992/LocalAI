@@ -1007,6 +1007,8 @@ async function getComponents() {
       version: ollamaVer || 'unknown',
       latest: ollamaLatest,
       updateAvailable: !!(ollamaVer && ollamaLatest && ollamaVer !== ollamaLatest),
+      installed: ollamaStatus === 'connected',
+      installUrl: 'https://ollama.com/download',
       about: 'Local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + (ollamaLatest ? ' (latest: ' + ollamaLatest + ')' : '') + '.',
     });
     for (const m of models) {
@@ -1032,6 +1034,8 @@ async function getComponents() {
       version: _cv.reaVer || 'unknown',
       latest: _cv.reaLatest,
       updateAvailable: !!(_cv.reaVer && _cv.reaLatest && _cv.reaVer !== _cv.reaLatest),
+      installed: mcpReady,
+      installUrl: 'https://www.npmjs.com/package/rea-agents',
       about: 'Reverse engineering toolset via REA MCP. Tools: ' + mcpTools.length + '. ' + (mcpError ? 'Error: ' + mcpError : '') + '\\nCurrent: ' + (_cv.reaVer || 'unknown') + ', latest (npm): ' + (_cv.reaLatest || 'unknown'),
     });
     // REA source repo
@@ -1063,6 +1067,8 @@ async function getComponents() {
       version: _rrv.current || (_rrv.remote ? 'remote: ' + _rrv.remote : 'unknown'),
       latest: _rrv.remote || null,
       updateAvailable: (_rrv.behind || 0) > 0,
+      installed: fs.existsSync(reaRepoPath),
+      installUrl: 'https://github.com/morluto/rea',
       about: reaRepoAbout + '\\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
     });
     // Coding tools
@@ -1659,6 +1665,45 @@ const server = http.createServer(async (req, res) => {
       });
       json(res, 200, result);
     } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/component/install' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const { exec } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+      let result = { ok: false, message: 'Unknown component' };
+      if (id === 're-tools') {
+        const r = await new Promise((resolve) => {
+          exec('npm install -g rea-agents@latest', { timeout: 300000, maxBuffer: 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
+            resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+          });
+        });
+        result = r.ok ? { ok: true, message: 'REA tools installed. Restart server to connect. ' + r.out.slice(0, 200) } : { ok: false, message: 'Install failed: ' + (r.err || r.out).slice(0, 300) };
+      } else if (id === 'rea-repo') {
+        const reaRepoPath = path.join(__dirname, 'repos', 'rea');
+        if (fs.existsSync(reaRepoPath)) {
+          result = { ok: true, message: 'Already cloned at ' + reaRepoPath };
+        } else {
+          fs.mkdirSync(path.join(__dirname, 'repos'), { recursive: true });
+          const r = await new Promise((resolve) => {
+            exec('git clone https://github.com/morluto/rea "' + reaRepoPath + '"', { timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+              resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+            });
+          });
+          result = r.ok ? { ok: true, message: 'Cloned REA repo. ' + r.out.slice(0, 200) } : { ok: false, message: 'Clone failed: ' + (r.err || r.out).slice(0, 300) };
+        }
+      } else if (id === 'ollama-backend') {
+        result = { ok: false, message: 'Install Ollama from https://ollama.com/download' };
+      } else {
+        result = { ok: false, message: 'No auto-installer for this component. See the About/Install URL.' };
+      }
+      invalidateVersionCache();
+      json(res, 200, result);
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
     return;
   }
 
