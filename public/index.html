@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.2</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.3</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -146,7 +146,8 @@
   <div id="attachPreview" class="attach-preview"></div>
   <div class="input-row">
     <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />
-    <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">??</button>
+    <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">+</button>
+    <button id="pasteBtn" title="Paste from clipboard" style="padding:6px 10px;">Paste</button>
     <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
     <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
     <button id="send" class="primary">Send</button>
@@ -174,7 +175,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.5.2</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.5.3</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -296,6 +297,30 @@
   const attachInput = document.getElementById('attachInput');
   const attachBtn = document.getElementById('attachBtn');
   attachBtn.addEventListener('click', () => attachInput.click());
+  const pasteBtn = document.getElementById('pasteBtn');
+  if (pasteBtn) {
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const txt = await navigator.clipboard.readText();
+          if (txt) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const val = input.value || '';
+            input.value = val.slice(0, start) + txt + val.slice(end);
+            const pos = start + txt.length;
+            input.selectionStart = input.selectionEnd = pos;
+            input.dispatchEvent(new Event('input'));
+          }
+        } else {
+          input.focus();
+        }
+      } catch (e) {
+        status.textContent = 'Clipboard read failed: ' + e.message;
+        status.className = 'status err';
+      }
+    });
+  }
   attachInput.addEventListener('change', () => {
     Array.from(attachInput.files || []).forEach(addAttachment);
     attachInput.value = '';
@@ -314,11 +339,18 @@
         if (f) { addAttachment(f); hasImage = true; }
       }
     }
-    if (hasImage) e.preventDefault();
-    // text: let default paste happen, but also capture if no text
     const txt = cd.getData('text/plain');
     if (txt && !hasImage) {
-      // default paste inserts; nothing extra needed
+      e.preventDefault();
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const val = input.value || '';
+      input.value = val.slice(0, start) + txt + val.slice(end);
+      const pos = start + txt.length;
+      input.selectionStart = input.selectionEnd = pos;
+      input.dispatchEvent(new Event('input'));
+    } else if (hasImage) {
+      e.preventDefault();
     }
   });
 

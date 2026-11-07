@@ -110,8 +110,24 @@ LogMsg logPath, "=== LocalAI install started ==="
 LogMsg logPath, "Source: " & srcBase
 LogMsg logPath, "Destination: " & destBase
 
+' ---------- update vs fresh install ----------
+Dim updateOnly
+updateOnly = False
+If fso.FileExists(destBase & "\server.js") Then
+  Dim updAns
+  updAns = MsgBox("An existing LocalAI installation was found in:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
+                  "Update core application files only (keep models & shortcuts)?" & vbCrLf & _
+                  "(Choose No for a full install.)", vbYesNoCancel + vbQuestion, "Update detected")
+  If updAns = vbCancel Then
+    MsgBox "Installation cancelled.", vbInformation, "LocalAI Installer"
+    WScript.Quit 0
+  End If
+  updateOnly = (updAns = vbYes)
+End If
+If updateOnly Then LogMsg logPath, "Mode: UPDATE (core files only)."
+
 ' ---------- copy app files if destination differs from source ----------
-If LCase(destBase) <> LCase(srcBase) Then
+If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
   MsgBox "Copying application files to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
          "Please wait...", vbInformation, "LocalAI Installer"
   On Error Resume Next
@@ -169,6 +185,7 @@ modelPrompt = modelPrompt & vbCrLf & "Total: ~59 GB. Models are pulled in the re
 
 pullModels = (MsgBox(modelPrompt, vbYesNo + vbQuestion, "Model pull") = vbYes)
 
+If updateOnly Then pullModels = False
 If pullModels Then
   If Not ollamaOk Then
     MsgBox "Ollama is not installed. Skipping model pull." & vbCrLf & _
@@ -197,7 +214,11 @@ If Not pullModels Then LogMsg logPath, "Model pull skipped."
 
 ' ---------- desktop shortcut selection ----------
 Dim createDesktop
-createDesktop = (MsgBox("Create a desktop shortcut for LocalAI?", vbYesNo + vbQuestion, "Desktop shortcut") = vbYes)
+If updateOnly Then
+  createDesktop = True
+Else
+  createDesktop = (MsgBox("Create a desktop shortcut for LocalAI?", vbYesNo + vbQuestion, "Desktop shortcut") = vbYes)
+End If
 
 If createDesktop Then
   On Error Resume Next
@@ -215,7 +236,11 @@ If Not createDesktop Then LogMsg logPath, "Desktop shortcut skipped."
 
 ' ---------- auto-start at login ----------
 Dim autoStart
-autoStart = (MsgBox("Start LocalAI automatically when Windows starts?", vbYesNo + vbQuestion, "Auto-start") = vbYes)
+If updateOnly Then
+  autoStart = False
+Else
+  autoStart = (MsgBox("Start LocalAI automatically when Windows starts?", vbYesNo + vbQuestion, "Auto-start") = vbYes)
+End If
 If autoStart Then
   On Error Resume Next
   CreateShortcut destBase, sh.SpecialFolders("Startup") & "\LocalAI.lnk", "LocalAI (auto-start)"
@@ -232,8 +257,12 @@ If Not autoStart Then LogMsg logPath, "Auto-start skipped."
 
 ' ---------- firewall rule for LAN access ----------
 Dim addFirewall
-addFirewall = (MsgBox("Allow other devices on your network to access LocalAI?" & vbCrLf & _
-                      "(Adds a Windows Firewall rule for port 8080.)", vbYesNo + vbQuestion, "LAN access") = vbYes)
+If updateOnly Then
+  addFirewall = False
+Else
+  addFirewall = (MsgBox("Allow other devices on your network to access LocalAI?" & vbCrLf & _
+                        "(Adds a Windows Firewall rule for port 8080.)", vbYesNo + vbQuestion, "LAN access") = vbYes)
+End If
 If addFirewall Then
   On Error Resume Next
   Dim fwRc
@@ -264,9 +293,17 @@ If launchNow Then
   On Error GoTo 0
 End If
 
-MsgBox "Installation complete." & vbCrLf & vbCrLf & _
-       "Installed to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
-       "You can run LocalAI anytime from the desktop shortcut " & _
-       "(or by double-clicking launcher.vbs).", vbInformation, "LocalAI Installer"
+If updateOnly Then
+  MsgBox "Update complete." & vbCrLf & vbCrLf & _
+         "Core application files updated in:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
+         "Models and shortcuts preserved." & vbCrLf & _
+         "You can run LocalAI anytime from the desktop shortcut " & _
+         "(or by double-clicking launcher.vbs).", vbInformation, "LocalAI Installer"
+Else
+  MsgBox "Installation complete." & vbCrLf & vbCrLf & _
+         "Installed to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
+         "You can run LocalAI anytime from the desktop shortcut " & _
+         "(or by double-clicking launcher.vbs).", vbInformation, "LocalAI Installer"
+End If
 
 LogMsg logPath, "=== Install complete ==="
