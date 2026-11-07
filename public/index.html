@@ -1627,6 +1627,15 @@
             document.getElementById('pullModelBtn').click();
           });
           div.appendChild(pullBtn);
+          const hfLink = document.createElement('a');
+          hfLink.href = 'https://huggingface.co/' + it.id;
+          hfLink.target = '_blank';
+          hfLink.rel = 'noopener';
+          hfLink.textContent = 'Open on HuggingFace';
+          hfLink.style.fontSize = '11px';
+          hfLink.style.marginLeft = '8px';
+          hfLink.style.color = 'var(--accent)';
+          div.appendChild(hfLink);
           res.appendChild(div);
         });
       } catch (e) {
