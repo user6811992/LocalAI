@@ -1,28 +1,73 @@
-Set WshShell = CreateObject("WScript.Shell")
-base = "C:\Users\Poonjab\Documents\LocalAI"
-ollamaDir = "C:\Users\Poonjab\AppData\Local\Programs\Ollama"
-ghidraDir = "C:\Ghidra\ghidra_12.1.4_PUBLIC"
-jdkDir = "C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot"
+' LocalAI launcher (Windows Script Host / standard Windows shell)
+' Portable: resolves paths relative to this script.
+Option Explicit
+On Error Resume Next
+
+Dim wshShell, fso, base, ollamaDir
+Set wshShell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+base = fso.GetParentFolderName(WScript.ScriptFullName)
+If base = "" Then base = wshShell.ExpandEnvironmentStrings("%USERPROFILE%") & "\Documents\LocalAI"
+
+' Discover Ollama
+ollamaDir = wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Ollama"
+If Not fso.FileExists(ollamaDir & "\ollama.exe") Then
+  Dim exec, out
+  Set exec = wshShell.Exec("cmd /c where ollama 2>nul")
+  out = exec.StdOut.ReadAll()
+  If Len(Trim(out)) > 0 Then
+    ollamaDir = fso.GetParentFolderName(Trim(Split(out, vbCrLf)(0)))
+  Else
+    ollamaDir = "C:\Program Files\Ollama"
+  End If
+End If
 
 ' Env vars
-WshShell.Environment("Process")("OLLAMA_HOST") = "0.0.0.0"
-WshShell.Environment("Process")("OLLAMA_ORIGINS") = "*"
-WshShell.Environment("Process")("OLLAMA_NO_ANALYTICS") = "1"
-WshShell.Environment("Process")("OLLAMA_NO_CLOUD") = "1"
-WshShell.Environment("Process")("OLLAMA_NO_UPDATE_CHECK") = "1"
-WshShell.Environment("Process")("DO_NOT_TRACK") = "1"
-WshShell.Environment("Process")("HF_HUB_DISABLE_TELEMETRY") = "1"
-WshShell.Environment("Process")("DISABLE_TELEMETRY") = "1"
-WshShell.Environment("Process")("OLLAMA_NOHISTORY") = "true"
-WshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = ghidraDir
-WshShell.Environment("Process")("JAVA_HOME") = jdkDir
-WshShell.Environment("Process")("REA_JADX_MCP_JAR") = "C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar"
-WshShell.Environment("Process")("PATH") = "C:\jadx\bin;" & ghidraDir & ";" & jdkDir & "\bin;" & ollamaDir & ";" & "C:\Program Files\nodejs;C:\Users\Poonjab\AppData\Roaming\npm;" & WshShell.Environment("Process")("PATH")
+wshShell.Environment("Process")("OLLAMA_HOST") = "0.0.0.0"
+wshShell.Environment("Process")("OLLAMA_ORIGINS") = "*"
+wshShell.Environment("Process")("OLLAMA_NO_ANALYTICS") = "1"
+wshShell.Environment("Process")("OLLAMA_NO_CLOUD") = "1"
+wshShell.Environment("Process")("OLLAMA_NO_UPDATE_CHECK") = "1"
+wshShell.Environment("Process")("DO_NOT_TRACK") = "1"
+wshShell.Environment("Process")("HF_HUB_DISABLE_TELEMETRY") = "1"
+wshShell.Environment("Process")("DISABLE_TELEMETRY") = "1"
+wshShell.Environment("Process")("OLLAMA_NOHISTORY") = "true"
+If wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = "" Then wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = "C:\Ghidra\ghidra_12.1.4_PUBLIC"
+If wshShell.Environment("Process")("JAVA_HOME") = "" Then wshShell.Environment("Process")("JAVA_HOME") = "C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot"
+wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar"
+wshShell.Environment("Process")("PATH") = "C:\jadx\bin;" & wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") & ";" & wshShell.Environment("Process")("JAVA_HOME") & "\bin;" & ollamaDir & ";" & "C:\Program Files\nodejs;" & wshShell.ExpandEnvironmentStrings("%APPDATA%") & "\npm;" & wshShell.Environment("Process")("PATH")
 
-' Start Ollama serve hidden
-WshShell.Run """" & ollamaDir & "\ollama.exe"" serve", 0, False
+' Start Ollama if not running
+Dim svcRunning
+svcRunning = False
+Dim wmi, col
+Set wmi = GetObject("winmgmts:\\.\root\cimv2")
+Set col = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='ollama.exe'")
+If col.Count > 0 Then svcRunning = True
 
-' Wait then start web UI
-WScript.Sleep 5000
-WshShell.Run "cmd /c cd /d """ & base & """ && node server.js", 0, False
-WScript.Sleep 1000
+If Not svcRunning Then
+  If fso.FileExists(ollamaDir & "\ollama.exe") Then
+    wshShell.Run """" & ollamaDir & "\ollama.exe"" serve", 0, False
+    WScript.Sleep 4000
+  End If
+End If
+
+' Start web UI if port closed
+Dim portOpen
+portOpen = False
+Dim http
+Set http = CreateObject("MSXML2.XMLHTTP")
+http.Open "GET", "http://127.0.0.1:8080/", False
+http.Send
+If http.Status = 200 Then portOpen = True
+
+If Not portOpen Then
+  wshShell.Run "cmd /c cd /d """ & base & """ && node server.js", 0, False
+  WScript.Sleep 3000
+End If
+
+' Launch app window in Edge
+wshShell.Run "msedge --app=http://127.0.0.1:8080 --window-size=1200,800", 1, False
+
+On Error GoTo 0
