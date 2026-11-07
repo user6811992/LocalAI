@@ -1,5 +1,5 @@
 // Local AI service worker — app-shell cache + network-first for API
-const CACHE = 'local-ai-v4';
+const CACHE = 'local-ai-v5';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
