@@ -1287,7 +1287,7 @@ const server = http.createServer(async (req, res) => {
         const modelName = id.slice('model:'.length);
         const { exec } = require('child_process');
         result = await new Promise((resolve) => {
-          exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
             if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
             else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
           });
@@ -1399,8 +1399,8 @@ const server = http.createServer(async (req, res) => {
       const modelName = name.trim();
       const { exec } = require('child_process');
       const result = await new Promise((resolve) => {
-        exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
-          if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
+        exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 1800000, maxBuffer: 10 * 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
+          if (err) resolve({ ok: false, message: (stderr || err.message || ('exit code ' + (err.code || '?'))).slice(0, 500) });
           else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
         });
       });

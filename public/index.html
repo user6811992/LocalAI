@@ -1471,7 +1471,7 @@
     const btn = document.getElementById('pullModelBtn');
     const st = document.getElementById('pullModelStatus');
     btn.disabled = true; btn.textContent = 'Pulling...';
-    st.textContent = 'Pulling ' + name + '... (this may take a while)';
+    st.textContent = 'Pulling ' + name + '... (this may take several minutes; keep this page open)';
     st.className = 'status';
     try {
       const r = await fetch('/api/pull-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
