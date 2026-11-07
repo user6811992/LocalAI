@@ -1009,6 +1009,7 @@ async function getComponents() {
       updateAvailable: !!(ollamaVer && ollamaLatest && ollamaVer !== ollamaLatest),
       installed: ollamaStatus === 'connected',
       installUrl: 'https://ollama.com/download',
+      homepage: 'https://ollama.com',
       about: 'Local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + (ollamaLatest ? ' (latest: ' + ollamaLatest + ')' : '') + '.',
     });
     for (const m of models) {
@@ -1021,6 +1022,9 @@ async function getComponents() {
         version: m.digest ? m.digest.slice(0, 12) : 'unknown',
         latest: null,
         updateAvailable: false,
+        installed: true,
+        installUrl: 'https://ollama.com/library/' + (m.name.split(':')[0]),
+        homepage: 'https://ollama.com/library/' + (m.name.split(':')[0]),
         about: 'Ollama model. Family: ' + (m.details && m.details.family || '?') + ', params: ' + (m.details && m.details.parameter_size || '?') + ', quant: ' + (m.details && m.details.quantization_level || '?') + '.',
       });
     }
@@ -1036,6 +1040,7 @@ async function getComponents() {
       updateAvailable: !!(_cv.reaVer && _cv.reaLatest && _cv.reaVer !== _cv.reaLatest),
       installed: mcpReady,
       installUrl: 'https://www.npmjs.com/package/rea-agents',
+      homepage: 'https://github.com/morluto/rea',
       about: 'Reverse engineering toolset via REA MCP. Tools: ' + mcpTools.length + '. ' + (mcpError ? 'Error: ' + mcpError : '') + '\\nCurrent: ' + (_cv.reaVer || 'unknown') + ', latest (npm): ' + (_cv.reaLatest || 'unknown'),
     });
     // REA source repo
@@ -1069,6 +1074,7 @@ async function getComponents() {
       updateAvailable: (_rrv.behind || 0) > 0,
       installed: fs.existsSync(reaRepoPath),
       installUrl: 'https://github.com/morluto/rea',
+      homepage: 'https://github.com/morluto/rea',
       about: reaRepoAbout + '\\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
     });
     // Coding tools
@@ -1081,6 +1087,8 @@ async function getComponents() {
       version: 'built-in',
       latest: null,
       updateAvailable: false,
+      installed: true,
+      homepage: null,
       about: 'Built-in coding/agent tools: ' + codingToolsDef.map((t) => t.name).join(', ') + '.',
     });
     // Memory system
@@ -1094,6 +1102,8 @@ async function getComponents() {
       version: mems.length + ' entries',
       latest: null,
       updateAvailable: false,
+      installed: true,
+      homepage: null,
       about: 'Persistent semantic memory (embeddings via nomic-embed-text). Entries: ' + mems.length + '.',
     });
     // Web search
@@ -1106,6 +1116,8 @@ async function getComponents() {
       version: 'built-in',
       latest: null,
       updateAvailable: false,
+      installed: true,
+      homepage: null,
       about: 'Web search via DuckDuckGo instant answers + fetch_url for arbitrary pages.',
     });
     // Skills
@@ -1119,6 +1131,8 @@ async function getComponents() {
       version: skills.length + ' saved',
       latest: null,
       updateAvailable: false,
+      installed: true,
+      homepage: null,
       about: 'Reusable saved procedures. Count: ' + skills.length + '.',
     });
     return comps;
