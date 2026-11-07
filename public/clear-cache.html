@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Clear Cache</title></head>
+<body style="font-family:sans-serif;padding:40px;text-align:center;">
+<h2>Clearing cache...</h2>
+<p id="status">Please wait.</p>
+<script>
+(async function() {
+  const st = document.getElementById('status');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+      st.textContent = 'Unregistered ' + regs.length + ' service worker(s).';
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+      st.textContent += ' Cleared ' + keys.length + ' cache(s).';
+    }
+    localStorage.removeItem('localai_cachedVersion');
+    st.textContent += ' Done! Redirecting...';
+    setTimeout(() => { location.href = '/'; }, 1500);
+  } catch (e) {
+    st.textContent = 'Error: ' + e.message + '. Please manually clear via browser settings.';
+  }
+})();
+</script>
+</body>
+</html>
