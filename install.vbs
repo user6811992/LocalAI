@@ -8,11 +8,14 @@ Dim sh, fso
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' ---------- recommended models in pull order ----------
-Dim modelList
+' ---------- recommended models in pull order (with approximate sizes) ----------
+Dim modelList, modelSize
 modelList = Array("llama3.2:3b", "llama3.2:1b", "qwen2.5:14b", "qwen2.5-coder:14b", _
                   "mistral:7b", "phi3:mini", "gemma2:9b", "deepseek-coder:6.7b", _
                   "nomic-embed-text", "moondream")
+modelSize = Array("~2.0 GB", "~1.3 GB", "~9.0 GB", "~9.0 GB", _
+                  "~4.1 GB", "~2.3 GB", "~5.4 GB", "~3.8 GB", _
+                  "~0.3 GB", "~1.7 GB")
 
 ' ---------- helpers ----------
 Function ExeExists(name)
@@ -152,10 +155,17 @@ End If
 
 ' ---------- pull models in proper order ----------
 Dim pullModels
-pullModels = (MsgBox("Pull all recommended AI models now?" & vbCrLf & vbCrLf & _
-                     "This downloads ~20+ GB and may take a while." & vbCrLf & _
-                     "Models are pulled in the recommended order." & vbCrLf & vbCrLf & _
-                     "Pull now?", vbYesNo + vbQuestion, "Model pull") = vbYes)
+' Build model list with sizes for the prompt
+Dim modelPrompt, mi
+modelPrompt = "Pull all recommended AI models now?" & vbCrLf & vbCrLf & _
+              "Approximate download sizes:" & vbCrLf
+For mi = 0 To UBound(modelList)
+  modelPrompt = modelPrompt & "  " & (mi + 1) & ". " & modelList(mi) & "  (" & modelSize(mi) & ")" & vbCrLf
+Next
+modelPrompt = modelPrompt & vbCrLf & "Total: ~38 GB. Models are pulled in the recommended order." & vbCrLf & _
+              "This may take a while." & vbCrLf & vbCrLf & "Pull now?"
+
+pullModels = (MsgBox(modelPrompt, vbYesNo + vbQuestion, "Model pull") = vbYes)
 
 If pullModels Then
   If Not ollamaOk Then
@@ -165,7 +175,7 @@ If pullModels Then
     Dim i, m, rc
     For i = 0 To UBound(modelList)
       m = modelList(i)
-      MsgBox "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ":" & vbCrLf & m & vbCrLf & vbCrLf & _
+      MsgBox "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ":" & vbCrLf & m & "  (" & modelSize(i) & ")" & vbCrLf & vbCrLf & _
              "Please wait. This may take several minutes.", vbInformation, "Pulling models"
       On Error Resume Next
       rc = sh.Run("cmd /c ollama pull " & m, 1, True)
