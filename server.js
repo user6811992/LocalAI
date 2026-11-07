@@ -12,6 +12,35 @@ const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
 
+// Map model names to their proper homepage/source URLs
+function modelHomepage(name) {
+  const base = (name || '').split(':')[0].toLowerCase();
+  const map = {
+    'deepseek-r1:14b': 'https://huggingface.co/lmstudio-community/DeepSeek-R1-Distill-Qwen-14B-GGUF',
+    'deepseek-r1': 'https://huggingface.co/deepseek-ai/DeepSeek-R1',
+    'deepseek-coder-v2:16b': 'https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct',
+    'deepseek-coder': 'https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-instruct',
+    'qwen2.5-coder': 'https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct',
+    'qwen2.5': 'https://huggingface.co/Qwen/Qwen2.5-14B-Instruct',
+    'qwen3': 'https://huggingface.co/Qwen/Qwen3-8B',
+    'mistral': 'https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3',
+    'gemma2': 'https://huggingface.co/google/gemma-2-9b-it',
+    'gemma3': 'https://huggingface.co/google/gemma-3-4b-it',
+    'phi3': 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct',
+    'llama3.1': 'https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct',
+    'llama3.2': 'https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct',
+    'nomic-embed-text': 'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5',
+    'moondream': 'https://huggingface.co/vikhyatk/moondream2',
+    'dolphin3': 'https://huggingface.co/cognitivecomputations/dolphin-2.9-llama3-8b',
+  };
+  // exact match first
+  if (map[name.toLowerCase()]) return map[name.toLowerCase()];
+  // base match
+  if (map[base]) return map[base];
+  // fallback to ollama library
+  return 'https://ollama.com/library/' + (name.split(':')[0]);
+}
+
 // Resolve the ollama binary (may not be on PATH on Windows)
 function resolveOllamaBin() {
   if (process.env.OLLAMA_BIN && fs.existsSync(process.env.OLLAMA_BIN)) return process.env.OLLAMA_BIN;
@@ -1024,7 +1053,7 @@ async function getComponents() {
         updateAvailable: false,
         installed: true,
         installUrl: 'https://ollama.com/library/' + (m.name.split(':')[0]),
-        homepage: 'https://ollama.com/library/' + (m.name.split(':')[0]),
+        homepage: modelHomepage(m.name),
         about: 'Ollama model. Family: ' + (m.details && m.details.family || '?') + ', params: ' + (m.details && m.details.parameter_size || '?') + ', quant: ' + (m.details && m.details.quantization_level || '?') + '.',
       });
     }
