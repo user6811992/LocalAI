@@ -1,4 +1,4 @@
-' LocalAI launcher (Windows Script Host / standard Windows shell)
+' AegisAI launcher (Windows Script Host / standard Windows shell)
 ' Portable: resolves paths relative to this script.
 Option Explicit
 On Error Resume Next

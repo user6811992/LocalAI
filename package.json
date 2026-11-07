@@ -1,7 +1,7 @@
 {
-  "name": "localai",
-  "version": "1.9.9",
-  "description": "Local AI web UI with Ollama backend",
+  "name": "aegisai",
+  "version": "2.0.0",
+  "description": "AegisAI - local AI web UI with Ollama backend",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "pdf-parse": "^1.1.1"

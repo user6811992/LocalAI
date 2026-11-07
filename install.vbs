@@ -133,14 +133,14 @@ MsgBox scanReport, vbInformation, "Drive scan"
 MsgBox "Welcome to the LocalAI installer." & vbCrLf & vbCrLf & _
        "This will install LocalAI, pull recommended AI models in order, " & _
        "and create a desktop shortcut." & vbCrLf & vbCrLf & _
-       "Source folder:" & vbCrLf & srcBase, vbInformation, "LocalAI Installer"
+       "Source folder:" & vbCrLf & srcBase, vbInformation, "AegisAI Installer"
 
 ' ---------- choose install location ----------
 Dim destBase
 destBase = BrowseForFolder("Select the folder where LocalAI should be installed " & _
                            "(a new 'LocalAI' subfolder will be used if you pick a drive).", 0)
 If destBase = "" Then
-  MsgBox "Installation cancelled.", vbInformation, "LocalAI Installer"
+  MsgBox "Installation cancelled.", vbInformation, "AegisAI Installer"
   WScript.Quit 0
 End If
 ' If user picked a drive root or existing folder, append LocalAI unless server.js already there
@@ -153,7 +153,7 @@ Dim confirm
 confirm = MsgBox("Install to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
                  "Continue?", vbYesNo + vbQuestion, "Install location")
 If confirm <> vbYes Then
-  MsgBox "Installation cancelled.", vbInformation, "LocalAI Installer"
+  MsgBox "Installation cancelled.", vbInformation, "AegisAI Installer"
   WScript.Quit 0
 End If
 
@@ -177,7 +177,7 @@ If fso.FileExists(destBase & "\server.js") Then
                   "Update core application files only (keep models & shortcuts)?" & vbCrLf & _
                   "(Choose No for a full install.)", vbYesNoCancel + vbQuestion, "Update detected")
   If updAns = vbCancel Then
-    MsgBox "Installation cancelled.", vbInformation, "LocalAI Installer"
+    MsgBox "Installation cancelled.", vbInformation, "AegisAI Installer"
     WScript.Quit 0
   End If
   updateOnly = (updAns = vbYes)
@@ -187,7 +187,7 @@ If updateOnly Then LogMsg logPath, "Mode: UPDATE (core files only)."
 ' ---------- copy app files if destination differs from source ----------
 If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
   MsgBox "Copying application files to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
-         "Please wait...", vbInformation, "LocalAI Installer"
+         "Please wait...", vbInformation, "AegisAI Installer"
   On Error Resume Next
   ' Copy individual items to avoid overwriting issues
   Dim item
@@ -201,7 +201,7 @@ If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
     End If
   Next
   If Err.Number <> 0 Then
-    MsgBox "Warning while copying files: " & Err.Description, vbExclamation, "LocalAI Installer"
+    MsgBox "Warning while copying files: " & Err.Description, vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Copy warning: " & Err.Description
   Else
     LogMsg logPath, "Files copied successfully."
@@ -225,7 +225,7 @@ If Not nodeOk Or Not ollamaOk Then
   prereqMsg = prereqMsg & vbCrLf & vbCrLf & "Install missing prerequisites first:" & vbCrLf & _
               "  Node.js: https://nodejs.org" & vbCrLf & _
               "  Ollama:  https://ollama.com/download"
-  MsgBox prereqMsg, vbExclamation, "LocalAI Installer"
+  MsgBox prereqMsg, vbExclamation, "AegisAI Installer"
   ' Continue; user may install later
 End If
 
@@ -247,7 +247,7 @@ If updateOnly Then pullModels = False
 If pullModels Then
   If Not ollamaOk Then
     MsgBox "Ollama is not installed. Skipping model pull." & vbCrLf & _
-           "Install Ollama from https://ollama.com/download then re-run.", vbExclamation, "LocalAI Installer"
+           "Install Ollama from https://ollama.com/download then re-run.", vbExclamation, "AegisAI Installer"
   Else
     Dim i, m, rc
     For i = 0 To UBound(modelList)
@@ -257,14 +257,14 @@ If pullModels Then
       On Error Resume Next
       rc = sh.Run("cmd /c """ & ResolveOllama() & """ pull " & m, 1, True)
       If Err.Number <> 0 Then
-        MsgBox "Error pulling " & m & ": " & Err.Description, vbExclamation, "LocalAI Installer"
+        MsgBox "Error pulling " & m & ": " & Err.Description, vbExclamation, "AegisAI Installer"
       ElseIf rc <> 0 Then
         MsgBox "ollama pull " & m & " returned code " & rc & "." & vbCrLf & _
-               "Continuing with next model.", vbExclamation, "LocalAI Installer"
+               "Continuing with next model.", vbExclamation, "AegisAI Installer"
       End If
       On Error GoTo 0
     Next
-    MsgBox "Model pull complete.", vbInformation, "LocalAI Installer"
+    MsgBox "Model pull complete.", vbInformation, "AegisAI Installer"
     LogMsg logPath, "Model pull completed."
   End If
 End If
@@ -280,12 +280,12 @@ End If
 
 If createDesktop Then
   On Error Resume Next
-  CreateShortcut destBase, sh.SpecialFolders("Desktop") & "\LocalAI.lnk", "LocalAI"
+  CreateShortcut destBase, sh.SpecialFolders("Desktop") & "\AegisAI.lnk", "LocalAI"
   If Err.Number <> 0 Then
-    MsgBox "Could not create desktop shortcut: " & Err.Description, vbExclamation, "LocalAI Installer"
+    MsgBox "Could not create desktop shortcut: " & Err.Description, vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Desktop shortcut failed: " & Err.Description
   Else
-    MsgBox "Desktop shortcut created.", vbInformation, "LocalAI Installer"
+    MsgBox "Desktop shortcut created.", vbInformation, "AegisAI Installer"
     LogMsg logPath, "Desktop shortcut created."
   End If
   On Error GoTo 0
@@ -301,12 +301,12 @@ Else
 End If
 If autoStart Then
   On Error Resume Next
-  CreateShortcut destBase, sh.SpecialFolders("Startup") & "\LocalAI.lnk", "LocalAI (auto-start)"
+  CreateShortcut destBase, sh.SpecialFolders("Startup") & "\AegisAI.lnk", "AegisAI (auto-start)"
   If Err.Number <> 0 Then
-    MsgBox "Could not create startup shortcut: " & Err.Description, vbExclamation, "LocalAI Installer"
+    MsgBox "Could not create startup shortcut: " & Err.Description, vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Startup shortcut failed: " & Err.Description
   Else
-    MsgBox "LocalAI will start automatically at login.", vbInformation, "LocalAI Installer"
+    MsgBox "LocalAI will start automatically at login.", vbInformation, "AegisAI Installer"
     LogMsg logPath, "Startup shortcut created."
   End If
   On Error GoTo 0
@@ -329,10 +329,10 @@ If addFirewall Then
     MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _
            "Run this manually as Administrator:" & vbCrLf & _
            "netsh advfirewall firewall add rule name=LocalAI dir=in action=allow protocol=tcp localport=8080", _
-           vbExclamation, "LocalAI Installer"
+           vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Firewall rule failed (rc=" & fwRc & ")."
   Else
-    MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080", vbInformation, "LocalAI Installer"
+    MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080", vbInformation, "AegisAI Installer"
     LogMsg logPath, "Firewall rule added."
   End If
   On Error GoTo 0
@@ -346,7 +346,7 @@ If launchNow Then
   On Error Resume Next
   sh.Run "wscript.exe """ & destBase & "\launcher.vbs""", 1, False
   If Err.Number <> 0 Then
-    MsgBox "Could not launch: " & Err.Description, vbExclamation, "LocalAI Installer"
+    MsgBox "Could not launch: " & Err.Description, vbExclamation, "AegisAI Installer"
   End If
   On Error GoTo 0
 End If
@@ -356,12 +356,12 @@ If updateOnly Then
          "Core application files updated in:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
          "Models and shortcuts preserved." & vbCrLf & _
          "You can run LocalAI anytime from the desktop shortcut " & _
-         "(or by double-clicking launcher.vbs).", vbInformation, "LocalAI Installer"
+         "(or by double-clicking launcher.vbs).", vbInformation, "AegisAI Installer"
 Else
   MsgBox "Installation complete." & vbCrLf & vbCrLf & _
          "Installed to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
          "You can run LocalAI anytime from the desktop shortcut " & _
-         "(or by double-clicking launcher.vbs).", vbInformation, "LocalAI Installer"
+         "(or by double-clicking launcher.vbs).", vbInformation, "AegisAI Installer"
 End If
 
 LogMsg logPath, "=== Install complete ==="

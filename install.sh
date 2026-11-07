@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LocalAI installer (bash) - Linux / macOS
+# AegisAI installer (bash) - Linux / macOS
 # Usage: bash install.sh
 set -e
 
@@ -10,26 +10,26 @@ ask() { read -r -p "$1 [y/N]: " ans; case "$ans" in [yY]|[yY][eE][sS]) return 0;
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
-say "Welcome to the LocalAI installer."
+say "Welcome to the AegisAI installer."
 echo "Detected OS: $OS ($ARCH)"
 
 # ---------- source folder ----------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ ! -f "$SCRIPT_DIR/server.js" ]; then
-  echo "ERROR: server.js not found next to this installer. Keep install.sh in the LocalAI folder."
+  echo "ERROR: server.js not found next to this installer. Keep install.sh in the AegisAI folder."
   exit 1
 fi
 
 # ---------- choose install location ----------
-DEFAULT_DEST="$HOME/LocalAI"
+DEFAULT_DEST="$HOME/AegisAI"
 read -r -p "Install location [$DEFAULT_DEST]: " DEST
 DEST="${DEST:-$DEFAULT_DEST}"
 if [ ! -d "$DEST" ]; then
   mkdir -p "$DEST"
 fi
-# If user picked a parent, append LocalAI unless server.js already there
+# If user picked a parent, append AegisAI unless server.js already there
 if [ ! -f "$DEST/server.js" ]; then
-  DEST="$DEST/LocalAI"
+  DEST="$DEST/AegisAI"
   mkdir -p "$DEST"
 fi
 echo "Installing to: $DEST"
@@ -86,9 +86,9 @@ create_desktop_shortcut() {
   if [ "$OS" = "Linux" ]; then
     DESKTOP_DIR="$HOME/Desktop"
     [ -d "$DESKTOP_DIR" ] || DESKTOP_DIR="$HOME"
-    cat > "$DESKTOP_DIR/LocalAI.desktop" <<EOF
+    cat > "$DESKTOP_DIR/AegisAI.desktop" <<EOF
 [Desktop Entry]
-Name=LocalAI
+Name=AegisAI
 Comment=Local AI web UI
 Exec=bash -c 'cd "$DEST" && node server.js & sleep 3 && (command -v xdg-open >/dev/null && xdg-open http://127.0.0.1:8080 || open http://127.0.0.1:8080)'
 Type=Application
@@ -96,11 +96,11 @@ Terminal=false
 Icon=utilities-terminal
 Categories=Development;
 EOF
-    chmod +x "$DESKTOP_DIR/LocalAI.desktop"
+    chmod +x "$DESKTOP_DIR/AegisAI.desktop"
     # Also register in applications menu
     mkdir -p "$HOME/.local/share/applications"
-    cp "$DESKTOP_DIR/LocalAI.desktop" "$HOME/.local/share/applications/LocalAI.desktop"
-    echo "Desktop shortcut created: $DESKTOP_DIR/LocalAI.desktop"
+    cp "$DESKTOP_DIR/AegisAI.desktop" "$HOME/.local/share/applications/AegisAI.desktop"
+    echo "Desktop shortcut created: $DESKTOP_DIR/AegisAI.desktop"
   elif [ "$OS" = "Darwin" ]; then
     # macOS: create a small launcher script + .command for double-click
     LAUNCHER="$DEST/launch.command"
@@ -113,22 +113,22 @@ open http://127.0.0.1:8080
 EOF
     chmod +x "$LAUNCHER"
     # Symlink on Desktop
-    ln -sf "$LAUNCHER" "$HOME/Desktop/LocalAI.command"
-    echo "Desktop shortcut created: $HOME/Desktop/LocalAI.command"
+    ln -sf "$LAUNCHER" "$HOME/Desktop/AegisAI.command"
+    echo "Desktop shortcut created: $HOME/Desktop/AegisAI.command"
   fi
 }
 
-if ask "Create a desktop shortcut for LocalAI?"; then
+if ask "Create a desktop shortcut for AegisAI?"; then
   create_desktop_shortcut
 fi
 
 # ---------- auto-start (Linux systemd / macOS launchd) ----------
-if ask "Start LocalAI automatically at login?"; then
+if ask "Start AegisAI automatically at login?"; then
   if [ "$OS" = "Linux" ]; then
     mkdir -p "$HOME/.config/systemd/user"
     cat > "$HOME/.config/systemd/user/localai.service" <<EOF
 [Unit]
-Description=LocalAI web UI
+Description=AegisAI web UI
 After=network.target
 
 [Service]
@@ -168,7 +168,7 @@ EOF
 fi
 
 # ---------- launch now ----------
-if ask "Launch LocalAI now?"; then
+if ask "Launch AegisAI now?"; then
   (cd "$DEST" && node server.js &) 
   sleep 3
   if [ "$OS" = "Darwin" ]; then open "http://127.0.0.1:8080"; else (command -v xdg-open >/dev/null && xdg-open "http://127.0.0.1:8080" &) || echo "Open http://127.0.0.1:8080 in your browser"; fi

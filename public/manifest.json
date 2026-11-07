@@ -1,6 +1,6 @@
 {
-  "name": "Local AI",
-  "short_name": "LocalAI",
+  "name": "AegisAI",
+  "short_name": "AegisAI",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f1115",

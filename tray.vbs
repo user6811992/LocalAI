@@ -11,5 +11,5 @@ If base = "" Then base = sh.CurrentDirectory
 If fso.FileExists(base & "\tray.ps1") Then
   sh.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & base & "\tray.ps1""", 0, False
 Else
-  MsgBox "tray.ps1 not found in:" & vbCrLf & base, vbExclamation, "LocalAI Tray"
+  MsgBox "tray.ps1 not found in:" & vbCrLf & base, vbExclamation, "AegisAI Tray"
 End If
