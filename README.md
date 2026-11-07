@@ -129,6 +129,26 @@ Then re-run `install.vbs`.
 
 ![About dialog](docs/screenshots/about.png)
 
+## Security / Auth
+
+By default, LocalAI has **no authentication** (suitable for localhost use). For LAN or remote access, set a token:
+
+**Environment variable:**
+```
+LOCALAI_TOKEN=your-secret-token node server.js
+```
+
+**Or create `auth.json` in the app folder:**
+```json
+{ "token": "your-secret-token" }
+```
+
+When a token is set, all API requests require `X-Auth-Token: <token>` header. The web UI will prompt for the token on first load and store it in localStorage.
+
+**Rate limiting:** 120 requests/minute per IP (built-in).
+
+**LAN access warning:** If no token is set and the server binds to 0.0.0.0, a warning is printed to the console. Use Tailscale or Cloudflare Tunnel for secure remote access.
+
 ## Privacy
 
 - No telemetry, analytics, or tracking
