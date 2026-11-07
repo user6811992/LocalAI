@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.6.1</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.0</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -126,13 +126,20 @@
       <input type="checkbox" id="reMode" /> RE tools
     </label>
     <select id="model" title="Model"></select>
+    <select id="systemPrompt" title="System prompt template">
+      <option value="">Default</option>
+    </select>
+    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>
     <select id="searchEngine" title="Search engine"></select>
     <button id="instancesBtn" onclick="openInstances()">Instances</button>
     <button id="modelsBtn">Models</button>
+    <button id="codeBtn">Code</button>
+    <button id="ragBtn">Docs</button>
     <button id="componentsBtn">Components</button>
     <button id="aboutBtn" onclick="openAbout()">About</button>
     <button id="refresh">Refresh</button>
     <button id="clear">Clear</button>
+  <button id="exportChat">Export</button>
   </div>
   <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
     <span style="font-size:12px;color:var(--muted);">Project:</span>
@@ -148,6 +155,7 @@
     <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />
     <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">+</button>
     <button id="pasteBtn" title="Paste from clipboard" style="padding:6px 10px;">Paste</button>
+    <button id="voiceBtn" title="Voice input (speech-to-text)" style="padding:6px 10px;">Mic</button>
     <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
     <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
     <button id="send" class="primary">Send</button>
@@ -175,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.6.1</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -218,6 +226,14 @@
         <button id="scanDrivesBtn" style="font-size:12px;padding:4px 8px;">Scan drives for models</button>
         <div id="scanResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:160px;overflow:auto;"></div>
       </div>
+      <div style="margin-top:10px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Search HuggingFace (GGUF):</div>
+        <div style="display:flex;gap:6px;">
+          <input id="hfSearchInput" style="flex:1;font-size:12px;" placeholder="e.g. qwen coder" />
+          <button id="hfSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
+        </div>
+        <div id="hfResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:200px;overflow:auto;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -230,11 +246,89 @@
   </div>
 </div>
 
+<div id="ragBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="ragClose">&times;</button>
+    <h2>Document RAG</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <label>Upload a document (txt, md, json, pdf):
+        <input type="file" id="ragFile" accept=".txt,.md,.json,.pdf,.js,.py,.csv" />
+      </label>
+      <button id="ragUploadBtn" class="primary" style="font-size:12px;">Upload & index</button>
+      <div id="ragStatus" class="status"></div>
+      <div style="font-size:13px;font-weight:600;margin-top:8px;">Indexed documents:</div>
+      <div id="ragDocs" style="font-size:12px;color:var(--muted);max-height:160px;overflow:auto;"></div>
+      <button id="ragClearBtn" style="font-size:12px;padding:4px 8px;">Clear all</button>
+    </div>
+  </div>
+</div>
+
+<div id="codeBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:600px;">
+    <button class="close-btn" id="codeClose">&times;</button>
+    <h2>Run Code</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <select id="codeLang" style="font-size:12px;">
+        <option value="javascript">JavaScript</option>
+        <option value="python">Python</option>
+      </select>
+      <button id="runCodeBtn" class="primary" style="font-size:12px;">Run</button>
+    </div>
+    <textarea id="codeInput" style="width:100%;min-height:120px;font-family:monospace;font-size:13px;" placeholder="Enter code here..."></textarea>
+    <div style="font-size:13px;font-weight:600;margin-top:8px;">Output:</div>
+    <pre id="codeOutput" style="background:var(--panel2);padding:8px;border-radius:6px;max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+  </div>
+</div>
+
 <script>
   const chat = document.getElementById('chat');
   const input = document.getElementById('input');
   const sendBtn = document.getElementById('send');
   const modelSel = document.getElementById('model');
+  const systemPromptSel = document.getElementById('systemPrompt');
+  const savePromptBtn = document.getElementById('savePromptBtn');
+  let systemPromptText = '';
+
+  function loadSystemPrompts() {
+    let prompts = {};
+    try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+    if (!systemPromptSel) return;
+    systemPromptSel.innerHTML = '<option value="">Default</option>';
+    Object.keys(prompts).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      systemPromptSel.appendChild(opt);
+    });
+  }
+  loadSystemPrompts();
+
+  if (systemPromptSel) {
+    systemPromptSel.addEventListener('change', () => {
+      const name = systemPromptSel.value;
+      if (!name) { systemPromptText = ''; return; }
+      let prompts = {};
+      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+      systemPromptText = prompts[name] || '';
+    });
+  }
+  if (savePromptBtn) {
+    savePromptBtn.addEventListener('click', () => {
+      const name = prompt('Name for this system prompt:');
+      if (!name) return;
+      const text = prompt('System prompt text:');
+      if (!text) return;
+      let prompts = {};
+      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+      prompts[name] = text;
+      try { localStorage.setItem('localai_systemPrompts', JSON.stringify(prompts)); } catch (e) {}
+      loadSystemPrompts();
+      systemPromptSel.value = name;
+      systemPromptText = text;
+      status.textContent = 'Saved prompt: ' + name;
+      status.className = 'status';
+    });
+  }
   const status = document.getElementById('status');
   const hostEl = document.getElementById('host');
 
@@ -334,6 +428,68 @@
     Array.from(attachInput.files || []).forEach(addAttachment);
     attachInput.value = '';
   });
+
+  // Voice input (Web Speech API)
+  const voiceBtn = document.getElementById('voiceBtn');
+  if (voiceBtn) {
+    let recognition = null;
+    let listening = false;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      recognition = new SR();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.onresult = (e) => {
+        let transcript = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        const last = e.results[e.results.length - 1];
+        if (last.isFinal) {
+          const start = input.selectionStart || 0;
+          const end = input.selectionEnd || 0;
+          const val = input.value || '';
+          input.value = val.slice(0, start) + transcript + ' ' + val.slice(end);
+          const pos = start + transcript.length + 1;
+          input.selectionStart = input.selectionEnd = pos;
+          input.dispatchEvent(new Event('input'));
+        } else {
+          status.textContent = 'Listening: ' + transcript;
+          status.className = 'status';
+        }
+      };
+      recognition.onend = () => {
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+        status.textContent = 'Voice input stopped.';
+        status.className = 'status';
+      };
+      recognition.onerror = (e) => {
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+        status.textContent = 'Voice error: ' + e.error;
+        status.className = 'status err';
+      };
+    } else {
+      voiceBtn.disabled = true;
+      voiceBtn.title = 'Speech recognition not supported in this browser';
+    }
+    voiceBtn.addEventListener('click', () => {
+      if (!recognition) return;
+      if (listening) {
+        recognition.stop();
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+      } else {
+        listening = true;
+        voiceBtn.textContent = 'Stop';
+        status.textContent = 'Listening...';
+        status.className = 'status';
+        try { recognition.start(); } catch (e) { listening = false; voiceBtn.textContent = 'Mic'; }
+      }
+    });
+  }
 
   // Paste support (text + images)
   input.addEventListener('paste', (e) => {
@@ -447,7 +603,14 @@
     const rawText = input.value.trim();
     if (!rawText && attachments.length === 0) return;
     const atts = attachments.slice();
-    const text = buildMessageText(rawText, atts);
+    // RAG: fetch relevant chunks from indexed docs
+    let ragContext = '';
+    try {
+      const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4 }) });
+      const rd = await rr.json();
+      if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
+    } catch (e) {}
+    const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
     input.value = '';
     attachments = [];
     renderAttachments();
@@ -473,7 +636,7 @@
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, messages: messages.slice(-20), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked })
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
@@ -513,7 +676,7 @@
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, messages, stream: true })
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true })
         });
         if (!res.ok) {
           const t = await res.text();
@@ -618,6 +781,25 @@
     messages = [];
     chat.innerHTML = '';
     status.textContent = 'Conversation cleared.';
+    status.className = 'status';
+  });
+  document.getElementById('exportChat').addEventListener('click', () => {
+    if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }
+    let md = '# LocalAI Chat Export\\n\\n';
+    md += 'Exported: ' + new Date().toISOString() + '\\n\\n';
+    messages.forEach(m => {
+      md += '## ' + m.role + '\\n\\n' + (m.content || '') + '\\n\\n';
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'localai-chat-' + Date.now() + '.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    status.textContent = 'Chat exported.';
     status.className = 'status';
   });
 
@@ -1045,6 +1227,54 @@
   document.getElementById('modelsClose').addEventListener('click', () => {
     document.getElementById('modelsBackdrop').classList.remove('open');
   });
+  const hfBtn = document.getElementById('hfSearchBtn');
+  if (hfBtn) {
+    hfBtn.addEventListener('click', async () => {
+      const q = (document.getElementById('hfSearchInput').value || '').trim();
+      const res = document.getElementById('hfResults');
+      res.textContent = 'Searching...';
+      hfBtn.disabled = true;
+      try {
+        const r = await fetch('/api/hf-search?q=' + encodeURIComponent(q));
+        const d = await r.json();
+        const items = d.items || [];
+        if (items.length === 0) { res.textContent = 'No GGUF models found.'; return; }
+        res.innerHTML = '';
+        items.forEach(it => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '6px';
+          div.style.padding = '4px';
+          div.style.borderBottom = '1px solid var(--border)';
+          const name = document.createElement('div');
+          name.style.fontWeight = '600';
+          name.textContent = it.id;
+          div.appendChild(name);
+          const meta = document.createElement('div');
+          meta.style.fontSize = '11px';
+          meta.style.color = 'var(--muted)';
+          meta.textContent = 'Downloads: ' + (it.downloads || 0).toLocaleString() + ' | Likes: ' + (it.likes || 0);
+          div.appendChild(meta);
+          const pullBtn = document.createElement('button');
+          pullBtn.style.fontSize = '11px';
+          pullBtn.style.padding = '2px 6px';
+          pullBtn.style.marginTop = '4px';
+          pullBtn.textContent = 'Pull via Ollama';
+          pullBtn.addEventListener('click', async () => {
+            const modelName = 'hf.co/' + it.id;
+            document.getElementById('pullModelName').value = modelName;
+            document.getElementById('pullModelBtn').click();
+          });
+          div.appendChild(pullBtn);
+          res.appendChild(div);
+        });
+      } catch (e) {
+        res.textContent = 'Search failed: ' + e.message;
+      } finally {
+        hfBtn.disabled = false;
+      }
+    });
+  }
+
   const scanBtn = document.getElementById('scanDrivesBtn');
   if (scanBtn) {
     scanBtn.addEventListener('click', async () => {
@@ -1092,6 +1322,108 @@
     } catch (e) { st.textContent = 'Error: ' + e.message; st.className = 'status err'; }
     finally { btn.disabled = false; btn.textContent = 'Pull'; }
   });
+
+  // RAG handlers
+  async function loadRagDocs() {
+    try {
+      const r = await fetch('/api/rag-docs');
+      const d = await r.json();
+      const el = document.getElementById('ragDocs');
+      el.innerHTML = '';
+      (d.docs || []).forEach(doc => {
+        const div = document.createElement('div');
+        div.textContent = doc.name + ' (' + doc.chunks + ' chunks)';
+        el.appendChild(div);
+      });
+      if (!d.docs || d.docs.length === 0) el.textContent = '(none)';
+    } catch (e) {}
+  }
+  const ragBtn = document.getElementById('ragBtn');
+  if (ragBtn) {
+    ragBtn.addEventListener('click', () => {
+      document.getElementById('ragBackdrop').classList.add('open');
+      loadRagDocs();
+    });
+  }
+  document.getElementById('ragClose').addEventListener('click', () => {
+    document.getElementById('ragBackdrop').classList.remove('open');
+  });
+  document.getElementById('ragBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'ragBackdrop') document.getElementById('ragBackdrop').classList.remove('open');
+  });
+  const ragUploadBtn = document.getElementById('ragUploadBtn');
+  if (ragUploadBtn) {
+    ragUploadBtn.addEventListener('click', async () => {
+      const fileInput = document.getElementById('ragFile');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) { document.getElementById('ragStatus').textContent = 'Select a file first.'; document.getElementById('ragStatus').className = 'status err'; return; }
+      const st = document.getElementById('ragStatus');
+      st.textContent = 'Indexing...';
+      st.className = 'status';
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const isPdf = file.name.toLowerCase().endsWith('.pdf');
+        const content = isPdf ? e.target.result.split(',')[1] : btoa(unescape(encodeURIComponent(e.target.result)));
+        try {
+          const r = await fetch('/api/rag-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content, type: isPdf ? 'pdf' : 'text' }) });
+          const d = await r.json();
+          if (d.ok) { st.textContent = d.message; st.className = 'status'; loadRagDocs(); }
+          else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
+        } catch (err) { st.textContent = 'Error: ' + err.message; st.className = 'status err'; }
+      };
+      if (file.name.toLowerCase().endsWith('.pdf')) reader.readAsDataURL(file);
+      else reader.readAsText(file);
+    });
+  }
+  const ragClearBtn = document.getElementById('ragClearBtn');
+  if (ragClearBtn) {
+    ragClearBtn.addEventListener('click', async () => {
+      await fetch('/api/rag-clear', { method: 'POST' });
+      loadRagDocs();
+      document.getElementById('ragStatus').textContent = 'Cleared.';
+      document.getElementById('ragStatus').className = 'status';
+    });
+  }
+
+  const codeBtn = document.getElementById('codeBtn');
+  if (codeBtn) {
+    codeBtn.addEventListener('click', () => {
+      document.getElementById('codeBackdrop').classList.add('open');
+    });
+  }
+  const codeClose = document.getElementById('codeClose');
+  if (codeClose) {
+    codeClose.addEventListener('click', () => {
+      document.getElementById('codeBackdrop').classList.remove('open');
+    });
+  }
+  const codeBackdrop = document.getElementById('codeBackdrop');
+  if (codeBackdrop) {
+    codeBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'codeBackdrop') codeBackdrop.classList.remove('open');
+    });
+  }
+  const runCodeBtn = document.getElementById('runCodeBtn');
+  if (runCodeBtn) {
+    runCodeBtn.addEventListener('click', async () => {
+      const lang = document.getElementById('codeLang').value;
+      const code = document.getElementById('codeInput').value;
+      const out = document.getElementById('codeOutput');
+      out.textContent = 'Running...';
+      try {
+        const r = await fetch('/api/run-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang, code }) });
+        const d = await r.json();
+        let text = '';
+        if (d.stdout) text += d.stdout;
+        if (d.stderr) text += (text ? '\\n--- stderr ---\\n' : '') + d.stderr;
+        if (!text) text = '(no output)';
+        if (d.code !== 0) text += '\\n[exit code: ' + d.code + ']';
+        out.textContent = text;
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+      }
+    });
+  }
 
   loadModels();
   loadProject();
