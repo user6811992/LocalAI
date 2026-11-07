@@ -87,6 +87,7 @@ A standard Windows-shell installer is included in the repo: **`install.vbs`**. I
 - Optionally launches LocalAI immediately after install
 - Writes an `install.log` for troubleshooting
 - Includes `uninstall.vbs` to remove shortcuts (and optionally the app folder)
+- Includes `tray.vbs` for a system-tray icon (via PowerShell NotifyIcon)
 - Creates `.lnk` shortcuts via `WScript.Shell` (standard Windows shell)
 
 Run it by double-clicking `install.vbs`. Or from a command prompt:

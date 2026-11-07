@@ -201,6 +201,45 @@ If createDesktop Then
 End If
 If Not createDesktop Then LogMsg logPath, "Desktop shortcut skipped."
 
+' ---------- auto-start at login ----------
+Dim autoStart
+autoStart = (MsgBox("Start LocalAI automatically when Windows starts?", vbYesNo + vbQuestion, "Auto-start") = vbYes)
+If autoStart Then
+  On Error Resume Next
+  CreateShortcut destBase, sh.SpecialFolders("Startup") & "\LocalAI.lnk", "LocalAI (auto-start)"
+  If Err.Number <> 0 Then
+    MsgBox "Could not create startup shortcut: " & Err.Description, vbExclamation, "LocalAI Installer"
+    LogMsg logPath, "Startup shortcut failed: " & Err.Description
+  Else
+    MsgBox "LocalAI will start automatically at login.", vbInformation, "LocalAI Installer"
+    LogMsg logPath, "Startup shortcut created."
+  End If
+  On Error GoTo 0
+End If
+If Not autoStart Then LogMsg logPath, "Auto-start skipped."
+
+' ---------- firewall rule for LAN access ----------
+Dim addFirewall
+addFirewall = (MsgBox("Allow other devices on your network to access LocalAI?" & vbCrLf & _
+                      "(Adds a Windows Firewall rule for port 8080.)", vbYesNo + vbQuestion, "LAN access") = vbYes)
+If addFirewall Then
+  On Error Resume Next
+  Dim fwRc
+  fwRc = sh.Run("netsh advfirewall firewall add rule name=""LocalAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
+  If Err.Number <> 0 Or fwRc <> 0 Then
+    MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _
+           "Run this manually as Administrator:" & vbCrLf & _
+           "netsh advfirewall firewall add rule name=LocalAI dir=in action=allow protocol=tcp localport=8080", _
+           vbExclamation, "LocalAI Installer"
+    LogMsg logPath, "Firewall rule failed (rc=" & fwRc & ")."
+  Else
+    MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080", vbInformation, "LocalAI Installer"
+    LogMsg logPath, "Firewall rule added."
+  End If
+  On Error GoTo 0
+End If
+If Not addFirewall Then LogMsg logPath, "Firewall rule skipped."
+
 ' ---------- launch now ----------
 Dim launchNow
 launchNow = (MsgBox("Launch LocalAI now?", vbYesNo + vbQuestion, "Launch") = vbYes)
