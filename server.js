@@ -1256,7 +1256,56 @@ function proxyToOllama(req, res) {
   req.pipe(proxyReq);
 }
 
+// ---------- Auth + rate limiting ----------
+const AUTH_TOKEN = (process.env.LOCALAI_TOKEN || '').trim();
+function getAuthToken() {
+  if (AUTH_TOKEN) return AUTH_TOKEN;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const p = path.join(__dirname, 'auth.json');
+    if (fs.existsSync(p)) {
+      const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return (j && j.token) ? String(j.token).trim() : '';
+    }
+  } catch (e) {}
+  return '';
+}
+const _rateLimits = new Map();
+function rateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 60000;
+  const maxReq = 120;
+  let entry = _rateLimits.get(ip);
+  if (!entry || now - entry.start > windowMs) {
+    entry = { start: now, count: 0 };
+    _rateLimits.set(ip, entry);
+  }
+  entry.count++;
+  return entry.count > maxReq;
+}
+
 const server = http.createServer(async (req, res) => {
+  // Rate limit
+  const ip = req.socket.remoteAddress || 'unknown';
+  if (rateLimit(ip)) {
+    res.statusCode = 429;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: 'Too many requests' }));
+    return;
+  }
+  // Auth check
+  const token = getAuthToken();
+  if (token) {
+    // Allow health check and static assets without auth? No - require auth for everything except a login hint
+    const provided = (req.headers['x-auth-token'] || req.headers['authorization'] || '').replace(/^Bearer\\s+/i, '').trim();
+    if (provided !== token) {
+      res.statusCode = 401;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ error: 'Unauthorized', authRequired: true }));
+      return;
+    }
+  }
   // Custom routes
   if (req.url === '/api/tools' && req.method === 'GET') {
     json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: mcpTools.map((t) => ({ name: t.name, description: t.description })) });
@@ -1929,6 +1978,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Local AI web UI: http://0.0.0.0:${PORT}`);
   console.log(`Ollama backend: ${OLLAMA}`);
+  if (!getAuthToken()) {
+    console.warn('WARNING: No auth token set. Set LOCALAI_TOKEN env var or auth.json for LAN security.');
+    console.warn('Anyone on your network can access this UI. For remote access, use Tailscale or set a token.');
+  }
 });
 
 // Init MCP after server start
