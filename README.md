@@ -54,6 +54,25 @@ ollama pull llama3.2:3b
 ```
 Or use the **Models** button in the web UI.
 
+## Docker (cross-platform)
+
+Run LocalAI with Docker (works on Windows, macOS, Linux):
+
+```
+docker compose up -d
+```
+
+This starts:
+- **Ollama** on port 11434
+- **LocalAI** on port 8080
+
+Pull a model:
+```
+docker exec -it <ollama-container> ollama pull llama3.2:3b
+```
+
+Or use the Models button in the web UI.
+
 ## Remote Access
 
 ### Same Wi-Fi (LAN)

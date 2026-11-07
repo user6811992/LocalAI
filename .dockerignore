@@ -1,0 +1,9 @@
+node_modules
+.git
+*.log
+search-config.json
+memory.json
+skills.json
+chats.json
+rag-store.json
+workspace

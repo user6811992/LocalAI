@@ -24,3 +24,4 @@ desktop.ini
 # User workspace data
 workspace/
 rag-store.json
+chats.json
