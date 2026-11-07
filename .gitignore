@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+repos/
+tools/
+
+# Logs and temp
+*.log
+tool-output/
+
+# Sensitive data
+search-config.json
+memory.json
+skills.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# User workspace data
+workspace/
