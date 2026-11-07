@@ -723,6 +723,73 @@ for (const t of extraToolsDef) codingToolsDef.push(t);
 
 const codingToolNames = new Set(codingToolsDef.map((t) => t.name));
 
+// ---------- Streaming helper for Ollama ----------
+function ollamaStream(path, bodyObj, onChunk) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(bodyObj);
+    const req = http.request(
+      {
+        hostname: OLLAMA_URL.hostname,
+        port: OLLAMA_URL.port || 80,
+        path: path,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
+      },
+      (res) => {
+        let buf = '';
+        let fullContent = '';
+        let fullThinking = '';
+        let toolCalls = [];
+        let done = false;
+        res.on('data', (c) => {
+          buf += c.toString();
+          const lines = buf.split('\\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              if (obj.message) {
+                if (obj.message.content) {
+                  fullContent += obj.message.content;
+                  if (onChunk) onChunk({ type: 'token', content: obj.message.content });
+                }
+                if (obj.message.thinking) {
+                  fullThinking += obj.message.thinking;
+                  if (onChunk) onChunk({ type: 'thinking', content: obj.message.thinking });
+                }
+                if (obj.message.tool_calls) toolCalls = toolCalls.concat(obj.message.tool_calls);
+              }
+              if (obj.done) done = true;
+            } catch (e) {}
+          }
+        });
+        res.on('end', () => {
+          // flush remaining
+          if (buf.trim()) {
+            try {
+              const obj = JSON.parse(buf);
+              if (obj.message) {
+                if (obj.message.content) { fullContent += obj.message.content; if (onChunk) onChunk({ type: 'token', content: obj.message.content }); }
+                if (obj.message.thinking) { fullThinking += obj.message.thinking; if (onChunk) onChunk({ type: 'thinking', content: obj.message.thinking }); }
+                if (obj.message.tool_calls) toolCalls = toolCalls.concat(obj.message.tool_calls);
+              }
+            } catch (e) {}
+          }
+          resolve({ status: res.statusCode, data: { message: { content: fullContent, thinking: fullThinking, tool_calls: toolCalls } } });
+        });
+        res.on('error', reject);
+      }
+    );
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
 // HTTP helpers marker
 // ---------- HTTP helpers ----------
 function readBody(req) {
@@ -774,6 +841,7 @@ async function runAgent(model, messages, maxIter, opts) {
   opts = opts || {};
   const includeRe = opts.includeRe !== false;
   const includeCoding = opts.includeCoding !== false;
+  const onEvent = opts.onEvent || null;
   maxIter = maxIter || 8;
   const tools = [];
   if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
@@ -785,50 +853,64 @@ async function runAgent(model, messages, maxIter, opts) {
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
   let toolsSupported = true;
-  for (let i = 0; i < maxIter; i++) {
-    let r = await ollamaRequest('/api/chat', {
-      model,
-      messages: msgs,
-      tools: (toolsSupported && tools.length) ? tools : undefined,
-      stream: false,
-    });
+  for (let iter = 0; iter < maxIter; iter++) {
+    let r;
+    let streamedText = '';
+    try {
+      r = await ollamaStream('/api/chat', {
+        model,
+        messages: msgs,
+        tools: (toolsSupported && tools.length) ? tools : undefined,
+        stream: true,
+      }, (chunk) => {
+        if (chunk.type === 'token') {
+          streamedText += chunk.content;
+          if (onEvent) onEvent({ type: 'token', content: chunk.content });
+        }
+        if (chunk.type === 'thinking') {
+          if (onEvent) onEvent({ type: 'thinking', content: chunk.content });
+        }
+      });
+    } catch (e) {
+      throw new Error('Ollama error: ' + (e.message || String(e)));
+    }
     if (r.status !== 200) {
       const errText = (r.data && r.data.error) ? String(r.data.error) : JSON.stringify(r.data);
       if (/does not support tools/i.test(errText)) {
         toolsSupported = false;
-        // retry without tools
         r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false });
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
+        const msg = r.data.message || {};
+        msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
+        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
+        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
       } else {
         throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
       }
     }
     const msg = r.data.message || {};
     let toolCalls = msg.tool_calls || [];
-    // Fallback: parse function-call JSON emitted in text (some models)
     if (!toolCalls.length && msg.content) {
       const m = msg.content.match(/\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"(?:parameters?|arguments)"\s*:\s*(\{[\s\S]*\})\s*\}/);
       if (m) {
         let raw = m[2].replace(/\bFalse\b/g, 'false').replace(/\bTrue\b/g, 'true').replace(/\bNone\b/g, 'null');
-        // trim trailing junk: find matching brace
         let args = {};
         try { args = JSON.parse(raw); } catch (e) {
-          // try to extract the first balanced object
-          let depth = 0, end = -1;
+          let depth = 0, end2 = -1;
           for (let i = 0; i < raw.length; i++) {
             if (raw[i] === '{') depth++;
-            else if (raw[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+            else if (raw[i] === '}') { depth--; if (depth === 0) { end2 = i + 1; break; } }
           }
-          if (end > 0) { try { args = JSON.parse(raw.slice(0, end).replace(/\bFalse\b/g,'false').replace(/\bTrue\b/g,'true').replace(/\bNone\b/g,'null')); } catch (e2) {} }
+          if (end2 > 0) { try { args = JSON.parse(raw.slice(0, end2).replace(/\bFalse\b/g,'false').replace(/\bTrue\b/g,'true').replace(/\bNone\b/g,'null')); } catch (e2) {} }
         }
         toolCalls = [{ function: { name: m[1], arguments: args } }];
       }
     }
-  if (!toolCalls.length) {
-    msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
-    return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
+    if (!toolCalls.length) {
+      msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
+      if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
+      return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
     }
-    // append assistant with tool_calls
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
     for (const tc of toolCalls) {
@@ -837,22 +919,24 @@ async function runAgent(model, messages, maxIter, opts) {
       let args = fn.arguments;
       if (typeof args === 'string') { try { args = JSON.parse(args); } catch (e) { args = {}; } }
       log.push({ name, args });
+      if (onEvent) onEvent({ type: 'tool', name, args });
       let result;
       try {
         if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
         else result = await callMcpTool(name, args);
       } catch (e) { result = 'ERROR: ' + (e.message || String(e)); }
-      log[log.length - 1].resultPreview = (result || '').slice(0, 500);
-      msgs.push({ role: 'tool', content: (result || '').slice(0, 20000) });
+      msgs.push({ role: 'tool', content: (typeof result === 'string' ? result : JSON.stringify(result)) });
+      if (onEvent) onEvent({ type: 'tool_result', name, preview: String(result).slice(0, 200) });
     }
+    if (onEvent) onEvent({ type: 'tool_done' });
+    accumulatedContent = '';
   }
-  // exceeded
-  const r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false });
-  const content = (r.data && r.data.message && r.data.message.content) || '(max tool iterations reached)';
-  msgs.push({ role: 'assistant', content });
-  msgs.push({ role: 'assistant', content, thinking: '' });
-  return { messages: msgs, final: content, thinking: finalThinking, toolLog: log };
+  const fallback = 'Reached max iterations without final answer.';
+  msgs.push({ role: 'assistant', content: fallback });
+  if (onEvent) onEvent({ type: 'final', content: fallback, thinking: finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
+  return { messages: msgs, final: fallback, thinking: finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
 }
+
 
   // ---------- Components (About/Update) ----------
   // ---------- Version helpers ----------
@@ -1148,6 +1232,7 @@ function serveStatic(req, res) {
     if (err) { res.statusCode = 404; res.end('Not found'); return; }
     const ext = path.extname(filePath).toLowerCase();
     res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.end(data);
   });
 }
@@ -1803,16 +1888,34 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.url === '/api/agent' && req.method === 'POST') {
+    // SSE streaming
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); } catch (_) {} };
+    // abort handling
+    let aborted = false;
+    req.on('close', () => { aborted = true; });
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding } = JSON.parse(body || '{}');
-      const result = await runAgent(model, messages || [], undefined, { includeRe: includeRe !== false, includeCoding: includeCoding !== false });
-      // background learning
-      autoExtractMemories(result.messages || messages || []).catch(() => {});
-      json(res, 200, result);
+      const result = await runAgent(model, messages || [], undefined, {
+        includeRe: includeRe !== false,
+        includeCoding: includeCoding !== false,
+        onEvent: (ev) => { if (!aborted) sendEvent(ev); },
+      });
+      if (!aborted) {
+        sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, toolsDisabled: result.toolsDisabled });
+        // background learning
+        autoExtractMemories(result.messages || messages || []).catch(() => {});
+      }
     } catch (e) {
       console.error('agent error:', e && e.stack || e);
-      json(res, 500, { error: e.message || String(e) });
+      if (!aborted) sendEvent({ type: 'error', message: e.message || String(e) });
+    } finally {
+      try { res.end(); } catch (_) {}
     }
     return;
   }
