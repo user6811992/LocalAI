@@ -19,7 +19,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 ## Supported Models
 
 Tested with:
-- `llama3.2:3b`, `qwen2.5:14b`, `qwen2.5-coder:14b`, `mistral:7b`, `phi3:mini`, `gemma2:9b`
+- `llama3.2:3b`, `qwen2.5:14b`, `qwen2.5-coder:14b`, `qwen2.5-coder:7b`, `mistral:7b`, `phi3:mini`, `gemma2:9b`, `deepseek-coder:6.7b`, `deepseek-coder-v2:16b`, `deepseek-r1:14b`
 - Uncensored: `huihui_ai/qwen2.5-coder-abliterate:7b`, `huihui_ai/deepseek-r1-abliterated:8b`
 - Vision: `moondream`, `gemma3:4b`
 - Embeddings: `nomic-embed-text`
