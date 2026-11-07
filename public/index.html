@@ -23,6 +23,19 @@
     --assistant: #1f232b;
     --danger: #ff6b6b;
   }
+  body.light {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --panel2: #eef0f4;
+    --border: #d8dce3;
+    --text: #1a1d23;
+    --muted: #5a6270;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --user: #dbeafe;
+    --assistant: #f3f4f6;
+    --danger: #dc2626;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; overscroll-behavior: none; }
   body { display: flex; flex-direction: column; }
@@ -118,7 +131,8 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.20</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.8.0</span>
+    <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -139,7 +153,10 @@
     <button id="aboutBtn" onclick="openAbout()">About</button>
     <button id="refresh">Refresh</button>
     <button id="clear">Clear</button>
-  <button id="exportChat">Export</button>
+  <button id="exportChat">Export MD</button>
+  <button id="exportJson">Export JSON</button>
+  <button id="compareBtn">Compare</button>
+  <input id="chatSearch" placeholder="Search chat..." style="width:140px;font-size:12px;padding:4px 8px;" />
   </div>
   <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
     <span style="font-size:12px;color:var(--muted);">Project:</span>
@@ -183,7 +200,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.20</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.8.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -287,6 +304,29 @@
   </div>
 </div>
 
+<div id="compareBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:700px;">
+    <button class="close-btn" id="compareClose">&times;</button>
+    <h2>Model Comparison</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <select id="compareModelA" style="flex:1;font-size:12px;"></select>
+      <select id="compareModelB" style="flex:1;font-size:12px;"></select>
+    </div>
+    <textarea id="comparePrompt" style="width:100%;min-height:60px;font-size:13px;" placeholder="Enter a prompt to compare..."></textarea>
+    <button id="compareRunBtn" class="primary" style="margin-top:8px;font-size:12px;">Compare</button>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model A</div>
+        <pre id="compareOutA" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model B</div>
+        <pre id="compareOutB" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   const chat = document.getElementById('chat');
   const input = document.getElementById('input');
@@ -338,6 +378,20 @@
   }
   const status = document.getElementById('status');
   const hostEl = document.getElementById('host');
+
+  // Theme toggle
+  (function() {
+    try {
+      if (localStorage.getItem('localai_theme') === 'light') document.body.classList.add('light');
+    } catch (e) {}
+    const btn = document.getElementById('themeBtn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        document.body.classList.toggle('light');
+        try { localStorage.setItem('localai_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch (e) {}
+      });
+    }
+  })();
 
   hostEl.textContent = 'Backend: ' + location.hostname + ':11434';
 
@@ -858,6 +912,23 @@
     status.textContent = 'Conversation cleared.';
     status.className = 'status';
   });
+  const chatSearch = document.getElementById('chatSearch');
+  if (chatSearch) {
+    chatSearch.addEventListener('input', () => {
+      const q = chatSearch.value.trim().toLowerCase();
+      const msgs = chat.querySelectorAll('.msg');
+      msgs.forEach(m => {
+        const content = (m.textContent || '').toLowerCase();
+        if (!q || content.includes(q)) {
+          m.style.display = '';
+          m.style.opacity = '1';
+        } else {
+          m.style.display = 'none';
+        }
+      });
+    });
+  }
+
   document.getElementById('exportChat').addEventListener('click', () => {
     if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }
     let md = '# LocalAI Chat Export\\n\\n';
@@ -877,6 +948,24 @@
     status.textContent = 'Chat exported.';
     status.className = 'status';
   });
+  const exportJsonBtn = document.getElementById('exportJson');
+  if (exportJsonBtn) {
+    exportJsonBtn.addEventListener('click', () => {
+      if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }
+      const data = { exported: new Date().toISOString(), messages: messages };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'localai-chat-' + Date.now() + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      status.textContent = 'Chat exported as JSON.';
+      status.className = 'status';
+    });
+  }
 
   async function loadProject() {
     try {
@@ -1589,6 +1678,44 @@
     finally { btn.disabled = false; btn.textContent = 'Pull'; }
   });
 
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd+Enter: send
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      send();
+      return;
+    }
+    // Esc: stop generating (best effort) / close modals
+    if (e.key === 'Escape') {
+      const openModal = document.querySelector('.modal-backdrop.open');
+      if (openModal) { openModal.classList.remove('open'); e.preventDefault(); return; }
+      if (generating) { /* can't easily cancel fetch; just notify */ status.textContent = 'Stop requested (finish current request).'; status.className = 'status err'; }
+      return;
+    }
+    // '/' to focus input (when not in an input)
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const t = e.target;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) return;
+      e.preventDefault();
+      input.focus();
+      return;
+    }
+    // Ctrl/Cmd+K: command palette (simple help)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      const msg = 'Keyboard shortcuts:\\n' +
+        'Ctrl+Enter / Cmd+Enter: Send message\\n' +
+        'Enter: Send (Shift+Enter: newline)\\n' +
+        'Up/Down: Recall previous messages\\n' +
+        '/: Focus input\\n' +
+        'Esc: Close modal\\n' +
+        'Ctrl+V: Paste';
+      alert(msg);
+      return;
+    }
+  });
+
   // RAG handlers
   async function loadRagDocs() {
     try {
@@ -1714,6 +1841,102 @@
       }
       if (serverVer) localStorage.setItem('localai_cachedVersion', serverVer);
     } catch (e) {}
+  })();
+
+  // Compare modal
+  const compareBtn = document.getElementById('compareBtn');
+  if (compareBtn) {
+    compareBtn.addEventListener('click', () => {
+      const selA = document.getElementById('compareModelA');
+      const selB = document.getElementById('compareModelB');
+      // populate model dropdowns
+      [selA, selB].forEach(sel => {
+        sel.innerHTML = '';
+        Array.from(modelSel.options).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.value; opt.textContent = o.textContent;
+          sel.appendChild(opt);
+        });
+      });
+      if (selB.options.length > 1) selB.selectedIndex = 1;
+      document.getElementById('compareBackdrop').classList.add('open');
+    });
+  }
+  const compareClose = document.getElementById('compareClose');
+  if (compareClose) {
+    compareClose.addEventListener('click', () => {
+      document.getElementById('compareBackdrop').classList.remove('open');
+    });
+  }
+  const compareBackdrop = document.getElementById('compareBackdrop');
+  if (compareBackdrop) {
+    compareBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'compareBackdrop') compareBackdrop.classList.remove('open');
+    });
+  }
+  const compareRunBtn = document.getElementById('compareRunBtn');
+  if (compareRunBtn) {
+    compareRunBtn.addEventListener('click', async () => {
+      const modelA = document.getElementById('compareModelA').value;
+      const modelB = document.getElementById('compareModelB').value;
+      const prompt = document.getElementById('comparePrompt').value.trim();
+      if (!prompt) return;
+      const outA = document.getElementById('compareOutA');
+      const outB = document.getElementById('compareOutB');
+      outA.textContent = 'Thinking...';
+      outB.textContent = 'Thinking...';
+      const msgs = [{ role: 'user', content: prompt }];
+      async function run(model, outEl) {
+        try {
+          const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: msgs, stream: false }) });
+          const d = await r.json();
+          outEl.textContent = d.message ? d.message.content : (d.final || JSON.stringify(d).slice(0, 500));
+        } catch (e) {
+          outEl.textContent = 'Error: ' + e.message;
+        }
+      }
+      await Promise.all([run(modelA, outA), run(modelB, outB)]);
+    });
+  }
+
+  // Resizable sidebar toggle (simple collapse)
+  // Add a sidebar with quick info
+  (function() {
+    const sidebar = document.createElement('div');
+    sidebar.id = 'sidebar';
+    sidebar.style.cssText = 'width:220px;min-width:180px;max-width:320px;background:var(--panel);border-right:1px solid var(--border);padding:12px;overflow:auto;display:none;flex-shrink:0;';
+    sidebar.innerHTML = '<h3 style="font-size:13px;margin:0 0 8px;">Quick info</h3>' +
+      '<div id="sidebarInfo" style="font-size:12px;color:var(--muted);">Loading...</div>';
+    const handle = document.createElement('div');
+    handle.style.cssText = 'width:6px;cursor:col-resize;background:var(--border);display:none;';
+    const main = document.querySelector('main');
+    if (main && main.parentNode) {
+      main.parentNode.insertBefore(sidebar, main);
+      main.parentNode.insertBefore(handle, main);
+    }
+    // toggle button in header
+    const toggle = document.createElement('button');
+    toggle.textContent = 'Sidebar';
+    toggle.style.fontSize = '12px';
+    toggle.style.padding = '4px 8px';
+    const controls = document.querySelector('.controls');
+    if (controls) controls.appendChild(toggle);
+    toggle.addEventListener('click', () => {
+      const show = sidebar.style.display === 'none';
+      sidebar.style.display = show ? 'block' : 'none';
+      handle.style.display = show ? 'block' : 'none';
+      toggle.textContent = show ? 'Hide sidebar' : 'Sidebar';
+    });
+    // resize
+    let dragging = false;
+    handle.addEventListener('mousedown', () => { dragging = true; });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = sidebar.getBoundingClientRect();
+      const newW = e.clientX - rect.left;
+      if (newW >= 160 && newW <= 360) sidebar.style.width = newW + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
   })();
 
   loadModels();
