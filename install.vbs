@@ -71,6 +71,54 @@ Dim srcBase
 srcBase = fso.GetParentFolderName(WScript.ScriptFullName)
 If srcBase = "" Then srcBase = sh.CurrentDirectory
 
+' ---------- scan drives for existing tools/models ----------
+Dim scanReport
+scanReport = "Drive scan results:" & vbCrLf & vbCrLf
+
+' Helper: check a path
+Function CheckPath(label, p)
+  If fso.FolderExists(p) Or fso.FileExists(p) Then
+    CheckPath = "  [FOUND] " & label & ": " & p
+  Else
+    CheckPath = "  [missing] " & label
+  End If
+End Function
+
+' Common tool locations
+scanReport = scanReport & "Tools:" & vbCrLf
+scanReport = scanReport & CheckPath("Ollama", sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Ollama\ollama.exe") & vbCrLf
+scanReport = scanReport & CheckPath("Node.js", "C:\Program Files\nodejs\node.exe") & vbCrLf
+scanReport = scanReport & CheckPath("Ghidra (C:)", "C:\Ghidra") & vbCrLf
+scanReport = scanReport & CheckPath("jadx (C:)", "C:\jadx") & vbCrLf
+scanReport = scanReport & CheckPath("Java (Adoptium)", "C:\Program Files\Eclipse Adoptium") & vbCrLf
+
+' Scan other drives for Ghidra/jadx/Ollama folders
+Dim drv, drvLetter
+For Each drv In fso.Drives
+  If drv.IsReady Then
+    drvLetter = drv.DriveLetter & ":\"
+    If UCase(drvLetter) <> "C:\" Then
+      If fso.FolderExists(drvLetter & "Ghidra") Then scanReport = scanReport & "  [FOUND] Ghidra on " & drvLetter & vbCrLf
+      If fso.FolderExists(drvLetter & "jadx") Then scanReport = scanReport & "  [FOUND] jadx on " & drvLetter & vbCrLf
+      If fso.FolderExists(drvLetter & "Ollama") Then scanReport = scanReport & "  [FOUND] Ollama on " & drvLetter & vbCrLf
+      If fso.FolderExists(drvLetter & "Tools") Then scanReport = scanReport & "  [FOUND] Tools folder on " & drvLetter & vbCrLf
+    End If
+  End If
+Next
+
+' Ollama models
+Dim ollamaModelsPath
+ollamaModelsPath = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\.ollama\models"
+scanReport = scanReport & vbCrLf & "Ollama models:" & vbCrLf
+If fso.FolderExists(ollamaModelsPath) Then
+  scanReport = scanReport & "  [FOUND] " & ollamaModelsPath & vbCrLf
+Else
+  scanReport = scanReport & "  [missing] " & ollamaModelsPath & vbCrLf
+End If
+
+' Show scan results
+MsgBox scanReport, vbInformation, "Drive scan"
+
 ' Welcome
 MsgBox "Welcome to the LocalAI installer." & vbCrLf & vbCrLf & _
        "This will install LocalAI, pull recommended AI models in order, " & _

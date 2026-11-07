@@ -88,6 +88,7 @@ A standard Windows-shell installer is included in the repo: **`install.vbs`**. I
 - Prompts whether to create a **desktop shortcut** (your selection)
 - Optionally launches LocalAI immediately after install
 - Detects an existing install and offers a core-file update (preserves models & shortcuts)
+- Scans drives for existing tools (Ghidra, jadx, Ollama, Node, Java) and reports findings
 - Writes an `install.log` for troubleshooting
 - Includes `uninstall.vbs` to remove shortcuts (and optionally the app folder)
 - Includes `tray.vbs` for a system-tray icon (via PowerShell NotifyIcon)
