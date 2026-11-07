@@ -1,5 +1,719 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" /><meta name="theme-color" content="#0f1115" /><link rel="manifest" href="/manifest.json" /><link rel="apple-touch-icon" href="/icon.svg" /><meta name="apple-mobile-web-app-capable" content="yes" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" /><title>Local AI</title><style>  :root {    --bg: #0f1115;    --panel: #181b22;    --panel2: #20242d;    --border: #2a2f3a;    --text: #e6e8ec;    --muted: #9aa3b2;    --accent: #6aa9ff;    --accent2: #8b5cf6;    --user: #1e3a5f;    --assistant: #1f232b;    --danger: #ff6b6b;  }  body.light {    --bg: #f0f2f5;    --panel: #ffffff;    --panel2: #e4e7ec;    --border: #c9ced6;    --text: #1a1d23;    --muted: #5a6270;    --accent: #2563eb;    --accent2: #7c3aed;    --user: #bfdbfe;    --assistant: #e5e7eb;    --danger: #dc2626;  }  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; overscroll-behavior: none; }  body { display: flex; flex-direction: column; }  header {    display: flex; align-items: center; gap: 12px; padding: 12px 16px;    padding-top: max(12px, env(safe-area-inset-top));    background: var(--panel); border-bottom: 1px solid var(--border);    flex-wrap: wrap;  }  header h1 { font-size: 18px; margin: 0; font-weight: 600; }  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }  select, button, input {    background: var(--panel2); color: var(--text); border: 1px solid var(--border);    border-radius: 8px; padding: 8px 12px; font-size: 16px; min-height: 44px;  }  button { cursor: pointer; }  button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }  button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }  button:disabled { opacity: 0.5; cursor: not-allowed; }  main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }  header, .controls, button { -webkit-user-select: none; user-select: none; }  textarea, input { -webkit-user-select: text; user-select: text; }  .msg {    max-width: 85%; padding: 12px 14px; border-radius: 12px;    white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;  }  .msg.user { align-self: flex-end; background: var(--user); }  .msg.assistant { align-self: flex-start; background: var(--assistant); border: 1px solid var(--border); }  .msg .role { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }  .thinking-block { margin-bottom: 8px; }  .thinking-block summary { cursor: pointer; color: var(--accent2); font-size: 13px; font-weight: 600; user-select: none; }  .thinking-block .thinking-content { margin-top: 6px; padding: 8px 10px; background: #00000040; border-left: 2px solid var(--accent2); border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; color: var(--muted); max-height: 300px; overflow-y: auto; }  .typing { display: inline-block; }  .typing span { display: inline-block; width: 6px; height: 6px; margin: 0 2px; background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite; }  .typing span:nth-child(2){ animation-delay:.2s; } .typing span:nth-child(3){ animation-delay:.4s; }  @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }  footer {    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));    background: var(--panel); border-top: 1px solid var(--border);    -webkit-overflow-scrolling: touch;  }  .input-row { display: flex; gap: 8px; align-items: flex-end; }  .attach-preview, .queue-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }  .attach-chip, .queue-chip {    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;    padding: 4px 8px; font-size: 12px; display: flex; align-items: center; gap: 6px;  }  .attach-chip img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; }  .chip-remove { cursor: pointer; color: var(--muted); font-weight: bold; }  .chip-remove:hover { color: var(--danger, #f87171); }  textarea {    flex: 1; resize: none; min-height: 44px; max-height: 160px;    background: var(--panel2); color: var(--text); border: 1px solid var(--border);    border-radius: 10px; padding: 10px 12px; font-size: 16px; font-family: inherit;    -webkit-overflow-scrolling: touch;  }  .msg, .msg.user, .msg.assistant { background-clip: padding-box; }  .msg.user { background: var(--user) !important; }  .msg.assistant { background: var(--assistant) !important; border: 1px solid var(--border); }  .msg .content { background: transparent; }  .status { font-size: 12px; color: var(--muted); margin-top: 6px; }  .status.err { color: var(--danger); }  .meta { display: flex; gap: 12px; align-items: center; }  @media (max-width: 600px) {    .msg { max-width: 95%; }    header { gap: 8px; }  }  .ctx-menu { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; z-index: 100; min-width: 140px; box-shadow: 0 4px 16px rgba(0,0,0,.4); display: none; }  .ctx-menu.open { display: block; }  .ctx-menu-item { padding: 8px 14px; font-size: 14px; cursor: pointer; color: var(--text); }  .ctx-menu-item:hover { background: var(--panel2); }  .ctx-menu-sep { border-top: 1px solid var(--border); margin: 4px 0; }  /* Components modal */  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }  .modal-backdrop.open { display: flex; }  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 16px; }  .modal h2 { margin: 0 0 12px; font-size: 18px; }  .comp-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--panel2); }  .comp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }  .comp-name { font-weight: 600; }  .comp-kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }  .comp-status { font-size: 12px; color: var(--accent); }  .comp-detail { font-size: 12px; color: var(--muted); word-break: break-all; }  .comp-actions { display: flex; gap: 8px; margin-top: 4px; }  .comp-about { font-size: 12px; color: var(--text); background: #00000040; padding: 8px; border-radius: 6px; white-space: pre-wrap; font-family: ui-monospace, monospace; }  .close-btn { float: right; }</style></head><body><div id="installHint" style="display:none;background:var(--accent);color:#0b1220;padding:10px 16px;font-size:14px;text-align:center;">  Tap Share ? <b>Add to Home Screen</b> to install this app.  <button onclick="document.getElementById('installHint').style.display='none'" style="margin-left:12px;background:transparent;border:1px solid #0b1220;color:#0b1220;padding:2px 8px;border-radius:6px;">Dismiss</button></div><header>  <h1>Local AI</h1>  <div class="meta">    <span id="host" class="status"></span>  </div>  <div class="controls">    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.8.5</span>    <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">      <input type="checkbox" id="codingMode" checked /> Coding tools    </label>    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">      <input type="checkbox" id="reMode" /> RE tools    </label>    <select id="model" title="Model"></select>    <select id="systemPrompt" title="System prompt template">      <option value="">Default</option>    </select>    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>    <select id="searchEngine" title="Search engine"></select>    <button id="instancesBtn" onclick="openInstances()">Instances</button>    <button id="modelsBtn">Models</button>    <button id="codeBtn">Code</button>    <button id="ragBtn">Docs</button>    <button id="componentsBtn">Components</button>    <button id="aboutBtn" onclick="openAbout()">About</button>    <button id="refresh">Refresh</button>    <button id="clear">Clear</button>  <button id="exportChat">Export MD</button>  <button id="exportJson">Export JSON</button>  <button id="compareBtn">Compare</button>  <input id="chatSearch" placeholder="Search chat..." style="width:140px;font-size:12px;padding:4px 8px;" />  </div>  <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">    <span style="font-size:12px;color:var(--muted);">Project:</span>    <input id="projectRoot" style="flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;" placeholder="C:\path\to\project" />    <button id="setProject">Set</button>  </div></header><main id="chat"></main><footer>  <div id="queueList" class="queue-list"></div>  <div id="attachPreview" class="attach-preview"></div>  <div class="input-row">    <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />    <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">+</button>    <button id="pasteBtn" title="Paste from clipboard" style="padding:6px 10px;">Paste</button>    <button id="voiceBtn" title="Voice input (speech-to-text)" style="padding:6px 10px;">Mic</button>
-    <button id="ttsBtn" title="Read last reply aloud (TTS)" style="padding:6px 10px;">Speak</button>    <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>    <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>    <button id="send" class="primary">Send</button>  </div>  <div id="status" class="status"></div></footer><div id="instancesBackdrop" class="modal-backdrop">  <div class="modal">    <button class="close-btn" id="instancesClose">&times;</button>    <h2>Search Engine Instances</h2>    <div style="display:flex;flex-direction:column;gap:10px;">      <label>SearXNG instance URL<br><input id="instSearxng" style="width:100%;" placeholder="https://searx.be" /></label>      <label>SearXNG (Free-Web-Search) instance URL<br><input id="instSearxngFws" style="width:100%;" placeholder="https://search.sapti.me" /></label>      <label>Firecrawl instance URL<br><input id="instFirecrawl" style="width:100%;" placeholder="http://localhost:3002" /></label>      <label>LangSearch API key<br><input id="instLangsearchKey" style="width:100%;" placeholder="sk-..." /></label>      <button id="instancesSave" class="primary">Save</button>      <div id="instancesStatus" class="status"></div>    </div>  </div></div><div id="aboutBackdrop" class="modal-backdrop">  <div class="modal">    <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>    <h2>Local AI � About</h2>    <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">      <div><b>Version:</b> <span id="aboutVersion">v1.8.5</span></div>      <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>      <div><b>Web UI:</b> http://127.0.0.1:8080</div>      <div><b>Models:</b> <span id="aboutModels">�</span></div>      <div><b>Search engines:</b> 8 keyless + LangSearch</div>      <div><b>Features:</b> Chat, agent mode (coding + RE tools), memory, skills, components manager, right-click menu, PWA, Tailscale remote access, AdGuard DNS filtering.</div>      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Built for reverse engineering and local AI experimentation. Uncensored models included. Data stays on your machine.</div>      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Special thanks to OpenCode (opencode.ai), Beam.ai (beam.ai), Ollama (ollama.com), HuggingFace (huggingface.co), morluto/rea (github.com/morluto), and all contributors to this project.</div>      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">        <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>        <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>        <button id="clearCacheBtn" style="font-size:12px;padding:6px 10px;">Clear cache & reload</button>        <span id="updateStatus" style="font-size:12px;color:var(--muted);"></span>      </div>    </div>  </div></div><div id="modelsBackdrop" class="modal-backdrop">  <div class="modal">    <button class="close-btn" id="modelsClose">&times;</button>    <h2>Models</h2>    <div style="display:flex;flex-direction:column;gap:10px;">      <div style="display:flex;gap:8px;">        <input id="pullModelName" style="flex:1;" placeholder="e.g. llama3.2:3b or hf.co/..." />        <button id="pullModelBtn" class="primary">Pull</button>      </div>      <div id="pullModelStatus" class="status"></div>      <div style="font-size:12px;color:var(--muted);">        Browse models: <a href="https://ollama.com/library" target="_blank" style="color:var(--accent);">ollama.com/library</a>        &nbsp;|&nbsp;        <a href="https://huggingface.co/models?pipeline_tag=text-generation&sort=trending" target="_blank" style="color:var(--accent);">HuggingFace</a>      </div>      <div style="margin-top:8px;">        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Quick pull (recommended):</div>        <div style="display:flex;flex-wrap:wrap;gap:6px;" id="quickPulls"></div>      </div>      <div style="margin-top:8px;">        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Installed models:</div>        <div id="installedModels" style="font-size:12px;color:var(--muted);"></div>      </div>      <div style="margin-top:10px;">        <button id="scanDrivesBtn" style="font-size:12px;padding:4px 8px;">Scan drives for models</button>        <div id="scanResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:160px;overflow:auto;"></div>      </div>      <div style="margin-top:10px;">        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Search HuggingFace (GGUF):</div>        <div style="display:flex;gap:6px;">          <input id="hfSearchInput" style="flex:1;font-size:12px;" placeholder="e.g. qwen coder" />          <button id="hfSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>        </div>        <div id="hfResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:200px;overflow:auto;"></div>      </div>    </div>  </div></div><div id="compBackdrop" class="modal-backdrop">  <div class="modal">    <button class="close-btn" id="compClose">&times;</button>    <h2>Local AI Components</h2>    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">      <button id="compUpdateAllBtn" class="primary" style="font-size:12px;padding:4px 10px;">Update all</button>      <button id="compRefreshBtn" style="font-size:12px;padding:4px 10px;">Refresh versions</button>      <span id="compUpdateAllStatus" style="font-size:12px;color:var(--muted);"></span>    </div>    <div id="compList">Loading...</div>  </div></div><div id="ragBackdrop" class="modal-backdrop">  <div class="modal">    <button class="close-btn" id="ragClose">&times;</button>    <h2>Document RAG</h2>    <div style="display:flex;flex-direction:column;gap:10px;">      <label>Upload a document (txt, md, json, pdf):        <input type="file" id="ragFile" accept=".txt,.md,.json,.pdf,.js,.py,.csv" />      </label>      <button id="ragUploadBtn" class="primary" style="font-size:12px;">Upload & index</button>      <div id="ragStatus" class="status"></div>      <div style="font-size:13px;font-weight:600;margin-top:8px;">Indexed documents:</div>      <div id="ragDocs" style="font-size:12px;color:var(--muted);max-height:160px;overflow:auto;"></div>      <button id="ragClearBtn" style="font-size:12px;padding:4px 8px;">Clear all</button>    </div>  </div></div><div id="codeBackdrop" class="modal-backdrop">  <div class="modal" style="max-width:600px;">    <button class="close-btn" id="codeClose">&times;</button>    <h2>Run Code</h2>    <div style="display:flex;gap:8px;margin-bottom:8px;">      <select id="codeLang" style="font-size:12px;">        <option value="javascript">JavaScript</option>        <option value="python">Python</option>      </select>      <button id="runCodeBtn" class="primary" style="font-size:12px;">Run</button>    </div>    <textarea id="codeInput" style="width:100%;min-height:120px;font-family:monospace;font-size:13px;" placeholder="Enter code here..."></textarea>    <div style="font-size:13px;font-weight:600;margin-top:8px;">Output:</div>    <pre id="codeOutput" style="background:var(--panel2);padding:8px;border-radius:6px;max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>  </div></div><div id="compareBackdrop" class="modal-backdrop">  <div class="modal" style="max-width:700px;">    <button class="close-btn" id="compareClose">&times;</button>    <h2>Model Comparison</h2>    <div style="display:flex;gap:8px;margin-bottom:8px;">      <select id="compareModelA" style="flex:1;font-size:12px;"></select>      <select id="compareModelB" style="flex:1;font-size:12px;"></select>    </div>    <textarea id="comparePrompt" style="width:100%;min-height:60px;font-size:13px;" placeholder="Enter a prompt to compare..."></textarea>    <button id="compareRunBtn" class="primary" style="margin-top:8px;font-size:12px;">Compare</button>    <div style="display:flex;gap:8px;margin-top:12px;">      <div style="flex:1;">        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model A</div>        <pre id="compareOutA" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>      </div>      <div style="flex:1;">        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model B</div>        <pre id="compareOutB" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>      </div>    </div>  </div></div><script>  const chat = document.getElementById('chat');  const input = document.getElementById('input');  const sendBtn = document.getElementById('send');  const modelSel = document.getElementById('model');  const systemPromptSel = document.getElementById('systemPrompt');  const savePromptBtn = document.getElementById('savePromptBtn');  let systemPromptText = '';  function loadSystemPrompts() {    let prompts = {};    try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}    if (!systemPromptSel) return;    systemPromptSel.innerHTML = '<option value="">Default</option>';    Object.keys(prompts).forEach(name => {      const opt = document.createElement('option');      opt.value = name;      opt.textContent = name;      systemPromptSel.appendChild(opt);    });  }  loadSystemPrompts();  if (systemPromptSel) {    systemPromptSel.addEventListener('change', () => {      const name = systemPromptSel.value;      if (!name) { systemPromptText = ''; return; }      let prompts = {};      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}      systemPromptText = prompts[name] || '';    });  }  if (savePromptBtn) {    savePromptBtn.addEventListener('click', () => {      const name = prompt('Name for this system prompt:');      if (!name) return;      const text = prompt('System prompt text:');      if (!text) return;      let prompts = {};      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}      prompts[name] = text;      try { localStorage.setItem('localai_systemPrompts', JSON.stringify(prompts)); } catch (e) {}      loadSystemPrompts();      systemPromptSel.value = name;      systemPromptText = text;      status.textContent = 'Saved prompt: ' + name;      status.className = 'status';    });  }  const status = document.getElementById('status');  const hostEl = document.getElementById('host');  // Theme toggle  (function() {    try {      if (localStorage.getItem('localai_theme') === 'light') document.body.classList.add('light');    } catch (e) {}    const btn = document.getElementById('themeBtn');    if (btn) {      btn.addEventListener('click', () => {        document.body.classList.toggle('light');        try { localStorage.setItem('localai_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch (e) {}      });    }  })();  hostEl.textContent = 'Backend: ' + location.hostname + ':11434';  let messages = [];  let generating = false;  let attachments = [];  let messageQueue = [];  let inputHistory = [];  let historyIndex = -1;  function renderAttachments() {    const el = document.getElementById('attachPreview');    el.innerHTML = '';    attachments.forEach((a, idx) => {      const chip = document.createElement('div');      chip.className = 'attach-chip';      if (a.type && a.type.startsWith('image/')) {        const img = document.createElement('img');        img.src = a.preview;        chip.appendChild(img);      }      const name = document.createElement('span');      name.textContent = a.name;      chip.appendChild(name);      const rm = document.createElement('span');      rm.className = 'chip-remove';      rm.textContent = '�';      rm.addEventListener('click', () => { attachments.splice(idx, 1); renderAttachments(); });      chip.appendChild(rm);      el.appendChild(chip);    });  }  function renderQueue() {    const el = document.getElementById('queueList');    el.innerHTML = '';    messageQueue.forEach((q, idx) => {      const chip = document.createElement('div');      chip.className = 'queue-chip';      const t = document.createElement('span');      t.textContent = 'Queued: ' + q.text.slice(0, 60);      chip.appendChild(t);      const rm = document.createElement('span');      rm.className = 'chip-remove';      rm.textContent = '�';      rm.addEventListener('click', () => { messageQueue.splice(idx, 1); renderQueue(); });      chip.appendChild(rm);      el.appendChild(chip);    });  }  function addAttachment(file) {    const reader = new FileReader();    reader.onload = (e) => {      const a = { name: file.name, type: file.type, size: file.size };      if (file.type.startsWith('image/')) {        a.preview = e.target.result;        a.dataUrl = e.target.result;      } else {        a.text = e.target.result;      }      attachments.push(a);      renderAttachments();    };    if (file.type.startsWith('image/')) reader.readAsDataURL(file);    else reader.readAsText(file);  }  const attachInput = document.getElementById('attachInput');  const attachBtn = document.getElementById('attachBtn');  attachBtn.addEventListener('click', () => attachInput.click());  const pasteBtn = document.getElementById('pasteBtn');  if (pasteBtn) {    pasteBtn.addEventListener('click', async () => {      try {        if (navigator.clipboard && navigator.clipboard.readText) {          const txt = await navigator.clipboard.readText();          if (txt) {            const start = input.selectionStart || 0;            const end = input.selectionEnd || 0;            const val = input.value || '';            input.value = val.slice(0, start) + txt + val.slice(end);            const pos = start + txt.length;            input.selectionStart = input.selectionEnd = pos;            input.dispatchEvent(new Event('input'));          }        } else {          input.focus();        }      } catch (e) {        status.textContent = 'Clipboard read failed: ' + e.message;        status.className = 'status err';      }    });  }  attachInput.addEventListener('change', () => {    Array.from(attachInput.files || []).forEach(addAttachment);    attachInput.value = '';  });  // Voice input (Web Speech API)  const voiceBtn = document.getElementById('voiceBtn');  if (voiceBtn) {    let recognition = null;    let listening = false;    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;    if (SR) {      recognition = new SR();      recognition.continuous = false;      recognition.interimResults = true;      recognition.lang = 'en-US';      recognition.onresult = (e) => {        let transcript = '';        for (let i = e.resultIndex; i < e.results.length; i++) {          transcript += e.results[i][0].transcript;        }        const last = e.results[e.results.length - 1];        if (last.isFinal) {          const start = input.selectionStart || 0;          const end = input.selectionEnd || 0;          const val = input.value || '';          input.value = val.slice(0, start) + transcript + ' ' + val.slice(end);          const pos = start + transcript.length + 1;          input.selectionStart = input.selectionEnd = pos;          input.dispatchEvent(new Event('input'));        } else {          status.textContent = 'Listening: ' + transcript;          status.className = 'status';        }      };      recognition.onend = () => {        listening = false;        voiceBtn.textContent = 'Mic';        status.textContent = 'Voice input stopped.';        status.className = 'status';      };      recognition.onerror = (e) => {        listening = false;        voiceBtn.textContent = 'Mic';        status.textContent = 'Voice error: ' + e.error;        status.className = 'status err';      };    } else {      voiceBtn.disabled = true;      voiceBtn.title = 'Speech recognition not supported in this browser';    }    voiceBtn.addEventListener('click', () => {      if (!recognition) return;      if (listening) {        recognition.stop();        listening = false;        voiceBtn.textContent = 'Mic';      } else {        listening = true;        voiceBtn.textContent = 'Stop';        status.textContent = 'Listening...';        status.className = 'status';        try { recognition.start(); } catch (e) { listening = false; voiceBtn.textContent = 'Mic'; }      }    });  }  // Paste support (text + images)  input.addEventListener('paste', (e) => {    const cd = e.clipboardData;    if (!cd) return;    // images    const items = cd.items || [];    let hasImage = false;    for (const it of items) {      if (it.type && it.type.startsWith('image/')) {        const f = it.getAsFile();        if (f) { addAttachment(f); hasImage = true; }      }    }    const txt = cd.getData('text/plain');    if (txt && !hasImage) {      e.preventDefault();      const start = input.selectionStart || 0;      const end = input.selectionEnd || 0;      const val = input.value || '';      input.value = val.slice(0, start) + txt + val.slice(end);      const pos = start + txt.length;      input.selectionStart = input.selectionEnd = pos;      input.dispatchEvent(new Event('input'));    } else if (hasImage) {      e.preventDefault();    }  });  function addMsg(role, content, thinking) {    const div = document.createElement('div');    div.className = 'msg ' + role;    const ts = new Date().toLocaleTimeString();    div.innerHTML = '<div class="role">' + role + ' <span class="msg-ts" style="font-size:10px;color:var(--muted);font-weight:normal;margin-left:6px;">' + ts + '</span></div>';    if (thinking) {      const det = document.createElement('details');      det.className = 'thinking-block';      const sum = document.createElement('summary');      sum.textContent = 'Reasoning';      const tc = document.createElement('div');      tc.className = 'thinking-content';      tc.textContent = thinking;      det.appendChild(sum);      det.appendChild(tc);      div.appendChild(det);    }    const ce = document.createElement('div');    ce.className = 'content';    ce.textContent = content;    div.appendChild(ce);    chat.appendChild(div);    chat.scrollTop = chat.scrollHeight;    return div;  }  async function loadModels() {    try {      const r = await fetch('/api/tags');      if (!r.ok) throw new Error('HTTP ' + r.status);      const data = await r.json();      const models = (data.models || []).map(m => m.name);      modelSel.innerHTML = '';      if (models.length === 0) {        const opt = document.createElement('option');        opt.textContent = '(no models)';        modelSel.appendChild(opt);        status.textContent = 'No models found. Pull one with: ollama pull llama3.1:8b';        status.className = 'status err';        return;      }      models.forEach(m => {        const opt = document.createElement('option');        opt.value = m; opt.textContent = m;        modelSel.appendChild(opt);      });      // prefer llama3.1      const pref = models.find(m => m.includes('llama3.1')) || models[0];      modelSel.value = pref;      const toolsData = await (await fetch('/api/tools')).json();      status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 14 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');      status.className = 'status';    } catch (e) {      status.textContent = 'Cannot reach Ollama: ' + e.message;      status.className = 'status err';    }  }  function buildMessageText(text, atts) {    let out = text || '';    (atts || []).forEach(a => {      if (a.text) out += '\\n\\n--- ' + a.name + ' ---\\n' + a.text;      else if (a.type && a.type.startsWith('image/')) out += '\\n\\n[Image attached: ' + a.name + ']';      else out += '\\n\\n[File attached: ' + a.name + ']';    });    return out.trim();  }  async function send() {    if (generating) {      // queue instead of dropping      const t = input.value.trim();      if (!t && attachments.length === 0) return;      const queuedText = buildMessageText(t);      messageQueue.push({ text: queuedText, attachments: attachments.slice() });      input.value = '';      attachments = [];      renderAttachments();      renderQueue();      input.style.height = 'auto';      return;    }    const rawText = input.value.trim();    if (!rawText && attachments.length === 0) return;    if (rawText) { inputHistory.push(rawText); historyIndex = -1; }    const atts = attachments.slice();    // RAG: fetch relevant chunks from indexed docs    let ragContext = '';    try {      const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4 }) });      const rd = await rr.json();      if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');    } catch (e) {}    const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');    input.value = '';    attachments = [];    renderAttachments();    input.style.height = 'auto';    messages.push({ role: 'user', content: text });    let display = rawText;    if (atts.length) display += '\\n\\n[Attachments: ' + atts.map(a=>a.name).join(', ') + ']';    addMsg('user', display);    const model = modelSel.value;    const useAgent = document.getElementById('codingMode').checked || document.getElementById('reMode').checked;    generating = true;    sendBtn.disabled = true;    const assistantDiv = addMsg('assistant', '');    const contentEl = assistantDiv.querySelector('.content');    const typing = document.createElement('span');    typing.className = 'typing';    typing.innerHTML = '<span></span><span></span><span></span>';    contentEl.appendChild(typing);    const timerEl = document.createElement('span');    timerEl.className = 'working-timer';    timerEl.style.fontSize = '11px';    timerEl.style.color = 'var(--muted)';    timerEl.style.marginLeft = '8px';    timerEl.textContent = '0s';    contentEl.appendChild(timerEl);    const startTime = Date.now();    const timerInterval = setInterval(() => {      const elapsed = Math.floor((Date.now() - startTime) / 1000);      timerEl.textContent = elapsed + 's';    }, 1000);    try {      if (useAgent) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Local AI</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel2: #20242d;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #9aa3b2;
+    --accent: #6aa9ff;
+    --accent2: #8b5cf6;
+    --user: #1e3a5f;
+    --assistant: #1f232b;
+    --danger: #ff6b6b;
+  }
+  body.light {
+    --bg: #f0f2f5;
+    --panel: #ffffff;
+    --panel2: #e4e7ec;
+    --border: #c9ced6;
+    --text: #1a1d23;
+    --muted: #5a6270;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --user: #bfdbfe;
+    --assistant: #e5e7eb;
+    --danger: #dc2626;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+  select, button, input {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 16px; min-height: 44px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
+  header, .controls, button { -webkit-user-select: none; user-select: none; }
+  textarea, input { -webkit-user-select: text; user-select: text; }
+  .msg {
+    max-width: 85%; padding: 12px 14px; border-radius: 12px;
+    white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;
+  }
+  .msg.user { align-self: flex-end; background: var(--user); }
+  .msg.assistant { align-self: flex-start; background: var(--assistant); border: 1px solid var(--border); }
+  .msg .role { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .thinking-block { margin-bottom: 8px; }
+  .thinking-block summary { cursor: pointer; color: var(--accent2); font-size: 13px; font-weight: 600; user-select: none; }
+  .thinking-block .thinking-content { margin-top: 6px; padding: 8px 10px; background: #00000040; border-left: 2px solid var(--accent2); border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; color: var(--muted); max-height: 300px; overflow-y: auto; }
+  .typing { display: inline-block; }
+  .typing span { display: inline-block; width: 6px; height: 6px; margin: 0 2px; background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite; }
+  .typing span:nth-child(2){ animation-delay:.2s; } .typing span:nth-child(3){ animation-delay:.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+  footer {
+    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--panel); border-top: 1px solid var(--border);
+    -webkit-overflow-scrolling: touch;
+  }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .attach-preview, .queue-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+  .attach-chip, .queue-chip {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 8px; font-size: 12px; display: flex; align-items: center; gap: 6px;
+  }
+  .attach-chip img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; }
+  .chip-remove { cursor: pointer; color: var(--muted); font-weight: bold; }
+  .chip-remove:hover { color: var(--danger, #f87171); }
+  textarea {
+    flex: 1; resize: none; min-height: 44px; max-height: 160px;
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; font-size: 16px; font-family: inherit;
+    -webkit-overflow-scrolling: touch;
+  }
+  .msg, .msg.user, .msg.assistant { background-clip: padding-box; }
+  .msg.user { background: var(--user) !important; }
+  .msg.assistant { background: var(--assistant) !important; border: 1px solid var(--border); }
+  .msg .content { background: transparent; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .status.err { color: var(--danger); }
+  .meta { display: flex; gap: 12px; align-items: center; }
+  @media (max-width: 600px) {
+    .msg { max-width: 95%; }
+    header { gap: 8px; }
+  }
+  .ctx-menu { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; z-index: 100; min-width: 140px; box-shadow: 0 4px 16px rgba(0,0,0,.4); display: none; }
+  .ctx-menu.open { display: block; }
+  .ctx-menu-item { padding: 8px 14px; font-size: 14px; cursor: pointer; color: var(--text); }
+  .ctx-menu-item:hover { background: var(--panel2); }
+  .ctx-menu-sep { border-top: 1px solid var(--border); margin: 4px 0; }
+  /* Components modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 16px; }
+  .modal h2 { margin: 0 0 12px; font-size: 18px; }
+  .comp-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--panel2); }
+  .comp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .comp-name { font-weight: 600; }
+  .comp-kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .comp-status { font-size: 12px; color: var(--accent); }
+  .comp-detail { font-size: 12px; color: var(--muted); word-break: break-all; }
+  .comp-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .comp-about { font-size: 12px; color: var(--text); background: #00000040; padding: 8px; border-radius: 6px; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+  .close-btn { float: right; }
+</style>
+</head>
+<body>
+<div id="installHint" style="display:none;background:var(--accent);color:#0b1220;padding:10px 16px;font-size:14px;text-align:center;">
+  Tap Share ? <b>Add to Home Screen</b> to install this app.
+  <button onclick="document.getElementById('installHint').style.display='none'" style="margin-left:12px;background:transparent;border:1px solid #0b1220;color:#0b1220;padding:2px 8px;border-radius:6px;">Dismiss</button>
+</div>
+<header>
+  <h1>Local AI</h1>
+  <div class="meta">
+    <span id="host" class="status"></span>
+  </div>
+  <div class="controls">
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.8.1</span>
+    <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
+      <input type="checkbox" id="codingMode" checked /> Coding tools
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
+      <input type="checkbox" id="reMode" /> RE tools
+    </label>
+    <select id="model" title="Model"></select>
+    <select id="systemPrompt" title="System prompt template">
+      <option value="">Default</option>
+    </select>
+    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>
+    <select id="searchEngine" title="Search engine"></select>
+    <button id="instancesBtn" onclick="openInstances()">Instances</button>
+    <button id="modelsBtn">Models</button>
+    <button id="codeBtn">Code</button>
+    <button id="ragBtn">Docs</button>
+    <button id="componentsBtn">Components</button>
+    <button id="aboutBtn" onclick="openAbout()">About</button>
+    <button id="refresh">Refresh</button>
+    <button id="clear">Clear</button>
+  <button id="exportChat">Export MD</button>
+  <button id="exportJson">Export JSON</button>
+  <button id="compareBtn">Compare</button>
+  <input id="chatSearch" placeholder="Search chat..." style="width:140px;font-size:12px;padding:4px 8px;" />
+  </div>
+  <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
+    <span style="font-size:12px;color:var(--muted);">Project:</span>
+    <input id="projectRoot" style="flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;" placeholder="C:\path\to\project" />
+    <button id="setProject">Set</button>
+  </div>
+</header>
+<main id="chat"></main>
+<footer>
+  <div id="queueList" class="queue-list"></div>
+  <div id="attachPreview" class="attach-preview"></div>
+  <div class="input-row">
+    <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />
+    <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">+</button>
+    <button id="pasteBtn" title="Paste from clipboard" style="padding:6px 10px;">Paste</button>
+    <button id="voiceBtn" title="Voice input (speech-to-text)" style="padding:6px 10px;">Mic</button>
+    <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
+    <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
+    <button id="send" class="primary">Send</button>
+  </div>
+  <div id="status" class="status"></div>
+</footer>
+
+<div id="instancesBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="instancesClose">&times;</button>
+    <h2>Search Engine Instances</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <label>SearXNG instance URL<br><input id="instSearxng" style="width:100%;" placeholder="https://searx.be" /></label>
+      <label>SearXNG (Free-Web-Search) instance URL<br><input id="instSearxngFws" style="width:100%;" placeholder="https://search.sapti.me" /></label>
+      <label>Firecrawl instance URL<br><input id="instFirecrawl" style="width:100%;" placeholder="http://localhost:3002" /></label>
+      <label>LangSearch API key<br><input id="instLangsearchKey" style="width:100%;" placeholder="sk-..." /></label>
+      <button id="instancesSave" class="primary">Save</button>
+      <div id="instancesStatus" class="status"></div>
+    </div>
+  </div>
+</div>
+
+<div id="aboutBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
+    <h2>Local AI � About</h2>
+    <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
+      <div><b>Version:</b> <span id="aboutVersion">v1.8.1</span></div>
+      <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
+      <div><b>Web UI:</b> http://127.0.0.1:8080</div>
+      <div><b>Models:</b> <span id="aboutModels">�</span></div>
+      <div><b>Search engines:</b> 8 keyless + LangSearch</div>
+      <div><b>Features:</b> Chat, agent mode (coding + RE tools), memory, skills, components manager, right-click menu, PWA, Tailscale remote access, AdGuard DNS filtering.</div>
+      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Built for reverse engineering and local AI experimentation. Uncensored models included. Data stays on your machine.</div>
+      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Special thanks to OpenCode (opencode.ai), Beam.ai (beam.ai), Ollama (ollama.com), HuggingFace (huggingface.co), morluto/rea (github.com/morluto), and all contributors to this project.</div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>
+        <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>
+        <button id="clearCacheBtn" style="font-size:12px;padding:6px 10px;">Clear cache & reload</button>
+        <span id="updateStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modelsBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="modelsClose">&times;</button>
+    <h2>Models</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:8px;">
+        <input id="pullModelName" style="flex:1;" placeholder="e.g. llama3.2:3b or hf.co/..." />
+        <button id="pullModelBtn" class="primary">Pull</button>
+      </div>
+      <div id="pullModelStatus" class="status"></div>
+      <div style="font-size:12px;color:var(--muted);">
+        Browse models: <a href="https://ollama.com/library" target="_blank" style="color:var(--accent);">ollama.com/library</a>
+        &nbsp;|&nbsp;
+        <a href="https://huggingface.co/models?pipeline_tag=text-generation&sort=trending" target="_blank" style="color:var(--accent);">HuggingFace</a>
+      </div>
+      <div style="margin-top:8px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Quick pull (recommended):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;" id="quickPulls"></div>
+      </div>
+      <div style="margin-top:8px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Installed models:</div>
+        <div id="installedModels" style="font-size:12px;color:var(--muted);"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <button id="scanDrivesBtn" style="font-size:12px;padding:4px 8px;">Scan drives for models</button>
+        <div id="scanResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:160px;overflow:auto;"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Search HuggingFace (GGUF):</div>
+        <div style="display:flex;gap:6px;">
+          <input id="hfSearchInput" style="flex:1;font-size:12px;" placeholder="e.g. qwen coder" />
+          <button id="hfSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
+        </div>
+        <div id="hfResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:200px;overflow:auto;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="compBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="compClose">&times;</button>
+    <h2>Local AI Components</h2>
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="compUpdateAllBtn" class="primary" style="font-size:12px;padding:4px 10px;">Update all</button>
+      <button id="compRefreshBtn" style="font-size:12px;padding:4px 10px;">Refresh versions</button>
+      <span id="compUpdateAllStatus" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+    <div id="compList">Loading...</div>
+  </div>
+</div>
+
+<div id="ragBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="ragClose">&times;</button>
+    <h2>Document RAG</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <label>Upload a document (txt, md, json, pdf):
+        <input type="file" id="ragFile" accept=".txt,.md,.json,.pdf,.js,.py,.csv" />
+      </label>
+      <button id="ragUploadBtn" class="primary" style="font-size:12px;">Upload & index</button>
+      <div id="ragStatus" class="status"></div>
+      <div style="font-size:13px;font-weight:600;margin-top:8px;">Indexed documents:</div>
+      <div id="ragDocs" style="font-size:12px;color:var(--muted);max-height:160px;overflow:auto;"></div>
+      <button id="ragClearBtn" style="font-size:12px;padding:4px 8px;">Clear all</button>
+    </div>
+  </div>
+</div>
+
+<div id="codeBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:600px;">
+    <button class="close-btn" id="codeClose">&times;</button>
+    <h2>Run Code</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <select id="codeLang" style="font-size:12px;">
+        <option value="javascript">JavaScript</option>
+        <option value="python">Python</option>
+      </select>
+      <button id="runCodeBtn" class="primary" style="font-size:12px;">Run</button>
+    </div>
+    <textarea id="codeInput" style="width:100%;min-height:120px;font-family:monospace;font-size:13px;" placeholder="Enter code here..."></textarea>
+    <div style="font-size:13px;font-weight:600;margin-top:8px;">Output:</div>
+    <pre id="codeOutput" style="background:var(--panel2);padding:8px;border-radius:6px;max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+  </div>
+</div>
+
+<div id="compareBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:700px;">
+    <button class="close-btn" id="compareClose">&times;</button>
+    <h2>Model Comparison</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <select id="compareModelA" style="flex:1;font-size:12px;"></select>
+      <select id="compareModelB" style="flex:1;font-size:12px;"></select>
+    </div>
+    <textarea id="comparePrompt" style="width:100%;min-height:60px;font-size:13px;" placeholder="Enter a prompt to compare..."></textarea>
+    <button id="compareRunBtn" class="primary" style="margin-top:8px;font-size:12px;">Compare</button>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model A</div>
+        <pre id="compareOutA" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Model B</div>
+        <pre id="compareOutB" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const chat = document.getElementById('chat');
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+  const modelSel = document.getElementById('model');
+  const systemPromptSel = document.getElementById('systemPrompt');
+  const savePromptBtn = document.getElementById('savePromptBtn');
+  let systemPromptText = '';
+
+  function loadSystemPrompts() {
+    let prompts = {};
+    try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+    if (!systemPromptSel) return;
+    systemPromptSel.innerHTML = '<option value="">Default</option>';
+    Object.keys(prompts).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      systemPromptSel.appendChild(opt);
+    });
+  }
+  loadSystemPrompts();
+
+  if (systemPromptSel) {
+    systemPromptSel.addEventListener('change', () => {
+      const name = systemPromptSel.value;
+      if (!name) { systemPromptText = ''; return; }
+      let prompts = {};
+      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+      systemPromptText = prompts[name] || '';
+    });
+  }
+  if (savePromptBtn) {
+    savePromptBtn.addEventListener('click', () => {
+      const name = prompt('Name for this system prompt:');
+      if (!name) return;
+      const text = prompt('System prompt text:');
+      if (!text) return;
+      let prompts = {};
+      try { prompts = JSON.parse(localStorage.getItem('localai_systemPrompts') || '{}'); } catch (e) {}
+      prompts[name] = text;
+      try { localStorage.setItem('localai_systemPrompts', JSON.stringify(prompts)); } catch (e) {}
+      loadSystemPrompts();
+      systemPromptSel.value = name;
+      systemPromptText = text;
+      status.textContent = 'Saved prompt: ' + name;
+      status.className = 'status';
+    });
+  }
+  const status = document.getElementById('status');
+  const hostEl = document.getElementById('host');
+
+  // Theme toggle
+  (function() {
+    try {
+      if (localStorage.getItem('localai_theme') === 'light') document.body.classList.add('light');
+    } catch (e) {}
+    const btn = document.getElementById('themeBtn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        document.body.classList.toggle('light');
+        try { localStorage.setItem('localai_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch (e) {}
+      });
+    }
+  })();
+
+  hostEl.textContent = 'Backend: ' + location.hostname + ':11434';
+
+  let messages = [];
+  let generating = false;
+  let attachments = [];
+  let messageQueue = [];
+  let inputHistory = [];
+  let historyIndex = -1;
+
+  function renderAttachments() {
+    const el = document.getElementById('attachPreview');
+    el.innerHTML = '';
+    attachments.forEach((a, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'attach-chip';
+      if (a.type && a.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = a.preview;
+        chip.appendChild(img);
+      }
+      const name = document.createElement('span');
+      name.textContent = a.name;
+      chip.appendChild(name);
+      const rm = document.createElement('span');
+      rm.className = 'chip-remove';
+      rm.textContent = '�';
+      rm.addEventListener('click', () => { attachments.splice(idx, 1); renderAttachments(); });
+      chip.appendChild(rm);
+      el.appendChild(chip);
+    });
+  }
+
+  function renderQueue() {
+    const el = document.getElementById('queueList');
+    el.innerHTML = '';
+    messageQueue.forEach((q, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'queue-chip';
+      const t = document.createElement('span');
+      t.textContent = 'Queued: ' + q.text.slice(0, 60);
+      chip.appendChild(t);
+      const rm = document.createElement('span');
+      rm.className = 'chip-remove';
+      rm.textContent = '�';
+      rm.addEventListener('click', () => { messageQueue.splice(idx, 1); renderQueue(); });
+      chip.appendChild(rm);
+      el.appendChild(chip);
+    });
+  }
+
+  function addAttachment(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const a = { name: file.name, type: file.type, size: file.size };
+      if (file.type.startsWith('image/')) {
+        a.preview = e.target.result;
+        a.dataUrl = e.target.result;
+      } else {
+        a.text = e.target.result;
+      }
+      attachments.push(a);
+      renderAttachments();
+    };
+    if (file.type.startsWith('image/')) reader.readAsDataURL(file);
+    else reader.readAsText(file);
+  }
+
+  const attachInput = document.getElementById('attachInput');
+  const attachBtn = document.getElementById('attachBtn');
+  attachBtn.addEventListener('click', () => attachInput.click());
+  const pasteBtn = document.getElementById('pasteBtn');
+  if (pasteBtn) {
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const txt = await navigator.clipboard.readText();
+          if (txt) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const val = input.value || '';
+            input.value = val.slice(0, start) + txt + val.slice(end);
+            const pos = start + txt.length;
+            input.selectionStart = input.selectionEnd = pos;
+            input.dispatchEvent(new Event('input'));
+          }
+        } else {
+          input.focus();
+        }
+      } catch (e) {
+        status.textContent = 'Clipboard read failed: ' + e.message;
+        status.className = 'status err';
+      }
+    });
+  }
+  attachInput.addEventListener('change', () => {
+    Array.from(attachInput.files || []).forEach(addAttachment);
+    attachInput.value = '';
+  });
+
+  // Voice input (Web Speech API)
+  const voiceBtn = document.getElementById('voiceBtn');
+  if (voiceBtn) {
+    let recognition = null;
+    let listening = false;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      recognition = new SR();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.onresult = (e) => {
+        let transcript = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        const last = e.results[e.results.length - 1];
+        if (last.isFinal) {
+          const start = input.selectionStart || 0;
+          const end = input.selectionEnd || 0;
+          const val = input.value || '';
+          input.value = val.slice(0, start) + transcript + ' ' + val.slice(end);
+          const pos = start + transcript.length + 1;
+          input.selectionStart = input.selectionEnd = pos;
+          input.dispatchEvent(new Event('input'));
+        } else {
+          status.textContent = 'Listening: ' + transcript;
+          status.className = 'status';
+        }
+      };
+      recognition.onend = () => {
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+        status.textContent = 'Voice input stopped.';
+        status.className = 'status';
+      };
+      recognition.onerror = (e) => {
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+        status.textContent = 'Voice error: ' + e.error;
+        status.className = 'status err';
+      };
+    } else {
+      voiceBtn.disabled = true;
+      voiceBtn.title = 'Speech recognition not supported in this browser';
+    }
+    voiceBtn.addEventListener('click', () => {
+      if (!recognition) return;
+      if (listening) {
+        recognition.stop();
+        listening = false;
+        voiceBtn.textContent = 'Mic';
+      } else {
+        listening = true;
+        voiceBtn.textContent = 'Stop';
+        status.textContent = 'Listening...';
+        status.className = 'status';
+        try { recognition.start(); } catch (e) { listening = false; voiceBtn.textContent = 'Mic'; }
+      }
+    });
+  }
+
+  // Paste support (text + images)
+  input.addEventListener('paste', (e) => {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    // images
+    const items = cd.items || [];
+    let hasImage = false;
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) { addAttachment(f); hasImage = true; }
+      }
+    }
+    const txt = cd.getData('text/plain');
+    if (txt && !hasImage) {
+      e.preventDefault();
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const val = input.value || '';
+      input.value = val.slice(0, start) + txt + val.slice(end);
+      const pos = start + txt.length;
+      input.selectionStart = input.selectionEnd = pos;
+      input.dispatchEvent(new Event('input'));
+    } else if (hasImage) {
+      e.preventDefault();
+    }
+  });
+
+  function addMsg(role, content, thinking) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    const ts = new Date().toLocaleTimeString();
+    div.innerHTML = '<div class="role">' + role + ' <span class="msg-ts" style="font-size:10px;color:var(--muted);font-weight:normal;margin-left:6px;">' + ts + '</span></div>';
+    if (thinking) {
+      const det = document.createElement('details');
+      det.className = 'thinking-block';
+      const sum = document.createElement('summary');
+      sum.textContent = 'Reasoning';
+      const tc = document.createElement('div');
+      tc.className = 'thinking-content';
+      tc.textContent = thinking;
+      det.appendChild(sum);
+      det.appendChild(tc);
+      div.appendChild(det);
+    }
+    const ce = document.createElement('div');
+    ce.className = 'content';
+    ce.textContent = content;
+    div.appendChild(ce);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  async function loadModels() {
+    try {
+      const r = await fetch('/api/tags');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const models = (data.models || []).map(m => m.name);
+      modelSel.innerHTML = '';
+      if (models.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = '(no models)';
+        modelSel.appendChild(opt);
+        status.textContent = 'No models found. Pull one with: ollama pull llama3.1:8b';
+        status.className = 'status err';
+        return;
+      }
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        modelSel.appendChild(opt);
+      });
+      // prefer llama3.1
+      const pref = models.find(m => m.includes('llama3.1')) || models[0];
+      modelSel.value = pref;
+      const toolsData = await (await fetch('/api/tools')).json();
+      status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 14 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');
+      status.className = 'status';
+    } catch (e) {
+      status.textContent = 'Cannot reach Ollama: ' + e.message;
+      status.className = 'status err';
+    }
+  }
+
+  function buildMessageText(text, atts) {
+    let out = text || '';
+    (atts || []).forEach(a => {
+      if (a.text) out += '\\n\\n--- ' + a.name + ' ---\\n' + a.text;
+      else if (a.type && a.type.startsWith('image/')) out += '\\n\\n[Image attached: ' + a.name + ']';
+      else out += '\\n\\n[File attached: ' + a.name + ']';
+    });
+    return out.trim();
+  }
+
+  async function send() {
+    if (generating) {
+      // queue instead of dropping
+      const t = input.value.trim();
+      if (!t && attachments.length === 0) return;
+      const queuedText = buildMessageText(t);
+      messageQueue.push({ text: queuedText, attachments: attachments.slice() });
+      input.value = '';
+      attachments = [];
+      renderAttachments();
+      renderQueue();
+      input.style.height = 'auto';
+      return;
+    }
+    const rawText = input.value.trim();
+    if (!rawText && attachments.length === 0) return;
+    if (rawText) { inputHistory.push(rawText); historyIndex = -1; }
+    const atts = attachments.slice();
+    // RAG: fetch relevant chunks from indexed docs
+    let ragContext = '';
+    try {
+      const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4 }) });
+      const rd = await rr.json();
+      if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
+    } catch (e) {}
+    const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
+    input.value = '';
+    attachments = [];
+    renderAttachments();
+    input.style.height = 'auto';
+    messages.push({ role: 'user', content: text });
+    let display = rawText;
+    if (atts.length) display += '\\n\\n[Attachments: ' + atts.map(a=>a.name).join(', ') + ']';
+    addMsg('user', display);
+
+    const model = modelSel.value;
+    const useAgent = document.getElementById('codingMode').checked || document.getElementById('reMode').checked;
+    generating = true;
+    sendBtn.disabled = true;
+    const assistantDiv = addMsg('assistant', '');
+    const contentEl = assistantDiv.querySelector('.content');
+    const typing = document.createElement('span');
+    typing.className = 'typing';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    contentEl.appendChild(typing);
+    const timerEl = document.createElement('span');
+    timerEl.className = 'working-timer';
+    timerEl.style.fontSize = '11px';
+    timerEl.style.color = 'var(--muted)';
+    timerEl.style.marginLeft = '8px';
+    timerEl.textContent = '0s';
+    contentEl.appendChild(timerEl);
+    const startTime = Date.now();
+    const timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timerEl.textContent = elapsed + 's';
+    }, 1000);
+
+    try {
+      if (useAgent) {
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -10,91 +724,1257 @@
           try { t = await res.text(); } catch (e) { t = ''; }
           throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
         }
+        const data = await res.json();
+        const finalText = data.final || '';
+        const thinkingText = data.thinking || '';
+        contentEl.textContent = finalText;
+        if (data.toolsDisabled) {
+          status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';
+          status.className = 'status err';
+        }
+        // show thinking block if present
+        if (thinkingText) {
+          const det = document.createElement('details');
+          det.className = 'thinking-block';
+          const sum = document.createElement('summary');
+          sum.textContent = 'Reasoning';
+          const tc = document.createElement('div');
+          tc.className = 'thinking-content';
+          tc.textContent = thinkingText;
+          det.appendChild(sum);
+          det.appendChild(tc);
+          assistantDiv.insertBefore(det, contentEl);
+        }
+        // show tool log
+        if (data.toolLog && data.toolLog.length) {
+          const logDiv = document.createElement('div');
+          logDiv.style.marginTop = '8px';
+          logDiv.style.fontSize = '12px';
+          logDiv.style.color = 'var(--muted)';
+          logDiv.innerHTML = '<b>Tools used:</b><br>' + data.toolLog.map(t =>
+            '• ' + t.name + ' ' + JSON.stringify(t.args || {}).slice(0,120) +
+            (t.resultPreview ? '<br>&nbsp;&nbsp;→ ' + t.resultPreview.slice(0,200) : '')
+          ).join('<br>');
+          assistantDiv.appendChild(logDiv);
+        }
+        // update messages with final assistant
+        messages.push({ role: 'assistant', content: finalText });
+        if (!data.toolsDisabled) {
+          status.textContent = 'Done (agent).';
+          status.className = 'status';
+        }
+      } else {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true })
+        });
+        if (!res.ok) {
+          let t = '';
+          try { t = await res.text(); } catch (e) { t = ''; }
+          throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
+        }
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let finalText = '';
-        let thinkingText = '';
-        let toolLog = [];
-        let toolsDisabled = false;
-        const typingEl = contentEl.querySelector('.typing');
-        if (typingEl) typingEl.remove();
+        let accumulated = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const lines2 = buffer.split('\n');
-          buffer = lines2.pop();
-          for (const line of lines2) {
-            if (!line.startsWith('data: ')) continue;
-            let ev;
-            try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
-            if (ev.type === 'token') {
-              finalText += ev.content;
-              contentEl.textContent = finalText;
-              chat.scrollTop = chat.scrollHeight;
-            } else if (ev.type === 'thinking') {
-              thinkingText += ev.content;
-            } else if (ev.type === 'tool') {
-              const toolDiv = document.createElement('div');
-              toolDiv.style.marginTop = '8px';
-              toolDiv.style.fontSize = '12px';
-              toolDiv.style.color = 'var(--muted)';
-              toolDiv.textContent = 'Calling tool: ' + ev.name + '...';
-              assistantDiv.appendChild(toolDiv);
-              chat.scrollTop = chat.scrollHeight;
-            } else if (ev.type === 'final') {
-              finalText = ev.final || finalText;
-              thinkingText = ev.thinking || thinkingText;
-              toolLog = ev.toolLog || [];
-              toolsDisabled = !!ev.toolsDisabled;
-              contentEl.textContent = finalText;
-              if (thinkingText) {
-                const det = document.createElement('details');
-                det.className = 'thinking-block';
-                const sum = document.createElement('summary');
-                sum.textContent = 'Reasoning';
-                const tc = document.createElement('div');
-                tc.className = 'thinking-content';
-                tc.textContent = thinkingText;
-                det.appendChild(sum);
-                det.appendChild(tc);
-                assistantDiv.insertBefore(det, contentEl);
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              if (obj.message && obj.message.content) {
+                accumulated += obj.message.content;
+                contentEl.textContent = accumulated;
+                chat.scrollTop = chat.scrollHeight;
               }
-              if (toolLog.length) {
-                const logDiv = document.createElement('div');
-                logDiv.style.marginTop = '8px';
-                logDiv.style.fontSize = '12px';
-                logDiv.style.color = 'var(--muted)';
-                logDiv.innerHTML = '<b>Tools used:</b><br>' + toolLog.map(t =>
-                  '? ' + t.name + ' ' + JSON.stringify(t.args || {}).slice(0,120)
-                ).join('<br>');
-                assistantDiv.appendChild(logDiv);
-              }
-              messages.push({ role: 'assistant', content: finalText });
-              if (toolsDisabled) {
-                status.textContent = 'Note: this model does not support tools (agent mode disabled).';
-                status.className = 'status err';
-              } else {
-                status.textContent = 'Done (agent).';
-                status.className = 'status';
-              }
-            } else if (ev.type === 'error') {
-              contentEl.textContent = 'Error: ' + ev.message;
-              status.textContent = 'Error: ' + ev.message;
-              status.className = 'status err';
-            }
+            } catch (e) { /* ignore partial */ }
           }
         }
+        if (buffer.trim()) {
+          try {
+            const obj = JSON.parse(buffer);
+            if (obj.message && obj.message.content) accumulated += obj.message.content;
+            contentEl.textContent = accumulated;
+          } catch (e) {}
+        }
+        messages.push({ role: 'assistant', content: accumulated });
+        status.textContent = 'Done.';
+        status.className = 'status';
+      }
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      const friendly = /failed to fetch/i.test(msg)
+        ? 'Network error: could not reach the LocalAI server. Is it running? (node server.js)'
+        : msg;
+      contentEl.textContent = 'Error: ' + friendly;
+      status.textContent = 'Error: ' + friendly;
+      status.className = 'status err';
+    } finally {
+      clearInterval(timerInterval);
+      if (timerEl && timerEl.parentNode) timerEl.remove();
+      generating = false;
+      sendBtn.disabled = false;
+      input.focus();
+      // process queued messages
+      if (messageQueue.length > 0) {
+        const next = messageQueue.shift();
+        renderQueue();
+        input.value = next.text;
+        attachments = [];
+        renderAttachments();
+        setTimeout(() => send(), 50);
+      }
+    }
+  }
+
+  sendBtn.addEventListener('click', send);
+  document.getElementById('queueBtn').addEventListener('click', () => {
+    const t = input.value.trim();
+    if (!t && attachments.length === 0) return;
+    if (t) { inputHistory.push(t); historyIndex = -1; }
+    const queuedText = buildMessageText(t);
+    messageQueue.push({ text: queuedText, attachments: attachments.slice() });
+    input.value = '';
+    attachments = [];
+    renderAttachments();
+    renderQueue();
+    input.style.height = 'auto';
+  });
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); return; }
+    // Arrow-key history recall (like a terminal)
+    if (e.key === 'ArrowUp') {
+      if (input.value === '' || input.selectionStart === 0) {
+        if (inputHistory.length > 0 && historyIndex > 0) {
+          e.preventDefault();
+          historyIndex--;
+          input.value = inputHistory[historyIndex];
+          input.selectionStart = input.selectionEnd = input.value.length;
+          input.dispatchEvent(new Event('input'));
+        } else if (inputHistory.length > 0 && historyIndex === -1) {
+          e.preventDefault();
+          historyIndex = inputHistory.length - 1;
+          input.value = inputHistory[historyIndex];
+          input.selectionStart = input.selectionEnd = input.value.length;
+          input.dispatchEvent(new Event('input'));
+        }
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      if (historyIndex >= 0 && (input.selectionStart === input.value.length)) {
+        e.preventDefault();
+        historyIndex++;
+        if (historyIndex >= inputHistory.length) {
+          historyIndex = -1;
+          input.value = '';
+        } else {
+          input.value = inputHistory[historyIndex];
+        }
+        input.selectionStart = input.selectionEnd = input.value.length;
+        input.dispatchEvent(new Event('input'));
+      }
+      return;
+    }
+    // reset history browsing on normal typing
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      historyIndex = -1;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+      // fallback: read clipboard manually
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const t = await navigator.clipboard.readText();
+          if (t) {
+            e.preventDefault();
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const val = input.value || '';
+            input.value = val.slice(0, start) + t + val.slice(end);
+            const pos = start + t.length;
+            input.selectionStart = input.selectionEnd = pos;
+            input.dispatchEvent(new Event('input'));
+          }
+        }
+      } catch (err) { /* let default paste try */ }
+    }
+  });
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+  });
+  document.getElementById('refresh').addEventListener('click', loadModels);
+  document.getElementById('clear').addEventListener('click', () => {
+    messages = [];
+    chat.innerHTML = '';
+    status.textContent = 'Conversation cleared.';
+    status.className = 'status';
+  });
+  const chatSearch = document.getElementById('chatSearch');
+  if (chatSearch) {
+    chatSearch.addEventListener('input', () => {
+      const q = chatSearch.value.trim().toLowerCase();
+      const msgs = chat.querySelectorAll('.msg');
+      msgs.forEach(m => {
+        const content = (m.textContent || '').toLowerCase();
+        if (!q || content.includes(q)) {
+          m.style.display = '';
+          m.style.opacity = '1';
+        } else {
+          m.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  document.getElementById('exportChat').addEventListener('click', () => {
+    if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }
+    let md = '# LocalAI Chat Export\\n\\n';
+    md += 'Exported: ' + new Date().toISOString() + '\\n\\n';
+    messages.forEach(m => {
+      md += '## ' + m.role + '\\n\\n' + (m.content || '') + '\\n\\n';
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'localai-chat-' + Date.now() + '.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    status.textContent = 'Chat exported.';
+    status.className = 'status';
+  });
+  const exportJsonBtn = document.getElementById('exportJson');
+  if (exportJsonBtn) {
+    exportJsonBtn.addEventListener('click', () => {
+      if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }
+      const data = { exported: new Date().toISOString(), messages: messages };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'localai-chat-' + Date.now() + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      status.textContent = 'Chat exported as JSON.';
+      status.className = 'status';
+    });
+  }
+
+  async function loadProject() {
+    try {
+      const r = await fetch('/api/project');
+      const d = await r.json();
+      document.getElementById('projectRoot').value = d.projectRoot || '';
+    } catch (e) {}
+  }
+  document.getElementById('setProject').addEventListener('click', async () => {
+    const root = document.getElementById('projectRoot').value.trim();
+    if (!root) return;
+    try {
+      const r = await fetch('/api/project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root }) });
+      const d = await r.json();
+      document.getElementById('projectRoot').value = d.projectRoot;
+      status.textContent = 'Project set: ' + d.projectRoot;
+      status.className = 'status';
+    } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+  });
+
+  async function loadComponents() {
+    const list = document.getElementById('compList');
+    list.textContent = 'Loading...';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+      const r = await fetch('/api/components', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      const d = await r.json();
+      const comps = d.components || [];
+      list.innerHTML = '';
+      comps.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'comp-row';
+        const head = document.createElement('div');
+        head.className = 'comp-head';
+        head.innerHTML = '<span class="comp-name"></span> <span class="comp-kind"></span> <span class="comp-status"></span>';
+        head.querySelector('.comp-name').textContent = c.name;
+        head.querySelector('.comp-kind').textContent = c.kind;
+        head.querySelector('.comp-status').textContent = c.status;
+        const detail = document.createElement('div');
+        detail.className = 'comp-detail';
+        detail.textContent = c.detail || '';
+        const ver = document.createElement('div');
+        ver.className = 'comp-detail';
+        let vText = 'Version: ' + (c.version || '?');
+        if (c.latest) vText += '  (latest: ' + c.latest + ')';
+        if (c.updateAvailable) vText += '  � update available';
+        else if (c.latest) vText += '  � up to date';
+        ver.textContent = vText;
+        if (c.updateAvailable) ver.style.color = 'var(--accent)';
+        const actions = document.createElement('div');
+        actions.className = 'comp-actions';
+        const aboutBtn = document.createElement('button');
+        aboutBtn.textContent = 'About';
+        const updateBtn = document.createElement('button');
+        updateBtn.textContent = 'Update';
+        updateBtn.className = 'primary';
+        if (c.updateAvailable) updateBtn.style.borderColor = 'var(--accent)';
+        const installBtn = document.createElement('button');
+        installBtn.textContent = 'Install';
+        installBtn.className = 'primary';
+        if (c.installed === false) installBtn.style.borderColor = 'var(--accent)';
+        const aboutDiv = document.createElement('div');
+        aboutDiv.className = 'comp-about';
+        aboutDiv.style.display = 'none';
+        aboutBtn.addEventListener('click', async () => {
+          if (aboutDiv.style.display === 'none') {
+            try {
+              const rr = await fetch('/api/component/about?id=' + encodeURIComponent(c.id));
+              const dd = await rr.json();
+              let txt = (dd.about || '');
+              txt += '\\nVersion: ' + (dd.version || '?');
+              if (dd.latest) txt += ' (latest: ' + dd.latest + ')';
+              if (dd.updateAvailable) txt += ' � update available';
+              else if (dd.latest) txt += ' � up to date';
+              if (dd.homepage) txt += '\\nHomepage: ' + dd.homepage;
+              if (dd.installUrl && dd.installUrl !== dd.homepage) txt += '\\nInstall URL: ' + dd.installUrl;
+              txt += (dd.detail ? '\\n\\nDetail: ' + dd.detail : '') + '\\nStatus: ' + dd.status;
+              aboutDiv.textContent = txt;
+            } catch (e) { aboutDiv.textContent = 'Error: ' + e.message; }
+            aboutDiv.style.display = 'block';
+            aboutBtn.textContent = 'Hide';
+          } else {
+            aboutDiv.style.display = 'none';
+            aboutBtn.textContent = 'About';
+          }
+        });
+        updateBtn.addEventListener('click', async () => {
+          updateBtn.disabled = true;
+          updateBtn.textContent = 'Updating...';
+          const st = status;
+          try {
+            const rr = await fetch('/api/component/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            if (dd.async) {
+              st.textContent = c.name + ': ' + dd.message;
+              st.className = 'status';
+              // poll for completion
+              const poll = setInterval(async () => {
+                try {
+                  const pr = await fetch('/api/component/update-status');
+                  const pd = await pr.json();
+                  st.textContent = c.name + ': ' + (pd.status || 'working...') + (pd.result ? ' — ' + (pd.result.message || '') : '');
+                  if (!pd.running && pd.result) {
+                    clearInterval(poll);
+                    st.className = pd.result.ok ? 'status' : 'status err';
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = 'Update';
+                    await loadComponents();
+                  }
+                } catch (e) {}
+              }, 3000);
+            } else {
+              st.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));
+              st.className = dd.ok ? 'status' : 'status err';
+              updateBtn.disabled = false;
+              updateBtn.textContent = 'Update';
+              await loadComponents();
+            }
+          } catch (e) {
+            st.textContent = c.name + ': ' + e.message;
+            st.className = 'status err';
+            updateBtn.disabled = false;
+            updateBtn.textContent = 'Update';
+          }
+        });
+        installBtn.addEventListener('click', async () => {
+          installBtn.disabled = true;
+          installBtn.textContent = 'Installing...';
+          try {
+            const rr = await fetch('/api/component/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            status.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));
+            status.className = dd.ok ? 'status' : 'status err';
+            if (dd.ok) {
+              // For components with an install URL, also open it
+              if (c.installUrl && !dd.message.includes('installed') && !dd.message.includes('Cloned')) {
+                window.open(c.installUrl, '_blank');
+              }
+            }
+            await loadComponents();
+          } catch (e) {
+            status.textContent = c.name + ': ' + e.message;
+            status.className = 'status err';
+            if (c.installUrl) window.open(c.installUrl, '_blank');
+          } finally {
+            installBtn.disabled = false;
+            installBtn.textContent = 'Install';
+          }
+        });
+        actions.appendChild(aboutBtn);
+        if (c.installed === false) {
+          actions.appendChild(installBtn);
+          updateBtn.style.display = 'none';
+        } else {
+          actions.appendChild(updateBtn);
+          installBtn.style.display = 'none';
+        }
+        row.appendChild(head);
+        row.appendChild(detail);
+        row.appendChild(ver);
+        row.appendChild(actions);
+        row.appendChild(aboutDiv);
+        list.appendChild(row);
+      });
+      if (comps.length === 0) list.textContent = 'No components.';
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        list.textContent = 'Loading timed out. Click Components to retry.';
       } else {
-      } else {        const res = await fetch('/api/chat', {          method: 'POST',          headers: { 'Content-Type': 'application/json' },          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true })        });        if (!res.ok) {          let t = '';          try { t = await res.text(); } catch (e) { t = ''; }          throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));        }        const reader = res.body.getReader();        const decoder = new TextDecoder();        let buffer = '';        let accumulated = '';        while (true) {          const { done, value } = await reader.read();          if (done) break;          buffer += decoder.decode(value, { stream: true });          const lines = buffer.split('\n');          buffer = lines.pop();          for (const line of lines) {            if (!line.trim()) continue;            try {              const obj = JSON.parse(line);              if (obj.message && obj.message.content) {                accumulated += obj.message.content;                contentEl.textContent = accumulated;                chat.scrollTop = chat.scrollHeight;              }            } catch (e) { /* ignore partial */ }          }        }        if (buffer.trim()) {          try {            const obj = JSON.parse(buffer);            if (obj.message && obj.message.content) accumulated += obj.message.content;            contentEl.textContent = accumulated;          } catch (e) {}        }        messages.push({ role: 'assistant', content: accumulated });        status.textContent = 'Done.';        status.className = 'status';      }    } catch (e) {      const msg = (e && e.message) ? e.message : String(e);      const friendly = /failed to fetch/i.test(msg)        ? 'Network error: could not reach the LocalAI server. Is it running? (node server.js)'        : msg;      contentEl.textContent = 'Error: ' + friendly;      status.textContent = 'Error: ' + friendly;      status.className = 'status err';    } finally {      clearInterval(timerInterval);      if (timerEl && timerEl.parentNode) timerEl.remove();      generating = false;      sendBtn.disabled = false;      input.focus();      // process queued messages      if (messageQueue.length > 0) {        const next = messageQueue.shift();        renderQueue();        input.value = next.text;        attachments = [];        renderAttachments();        setTimeout(() => send(), 50);      }    }  }  sendBtn.addEventListener('click', send);  document.getElementById('queueBtn').addEventListener('click', () => {    const t = input.value.trim();    if (!t && attachments.length === 0) return;    if (t) { inputHistory.push(t); historyIndex = -1; }    const queuedText = buildMessageText(t);    messageQueue.push({ text: queuedText, attachments: attachments.slice() });    input.value = '';    attachments = [];    renderAttachments();    renderQueue();    input.style.height = 'auto';  });  input.addEventListener('keydown', async (e) => {    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); return; }    // Arrow-key history recall (like a terminal)    if (e.key === 'ArrowUp') {      if (input.value === '' || input.selectionStart === 0) {        if (inputHistory.length > 0 && historyIndex > 0) {          e.preventDefault();          historyIndex--;          input.value = inputHistory[historyIndex];          input.selectionStart = input.selectionEnd = input.value.length;          input.dispatchEvent(new Event('input'));        } else if (inputHistory.length > 0 && historyIndex === -1) {          e.preventDefault();          historyIndex = inputHistory.length - 1;          input.value = inputHistory[historyIndex];          input.selectionStart = input.selectionEnd = input.value.length;          input.dispatchEvent(new Event('input'));        }      }      return;    }    if (e.key === 'ArrowDown') {      if (historyIndex >= 0 && (input.selectionStart === input.value.length)) {        e.preventDefault();        historyIndex++;        if (historyIndex >= inputHistory.length) {          historyIndex = -1;          input.value = '';        } else {          input.value = inputHistory[historyIndex];        }        input.selectionStart = input.selectionEnd = input.value.length;        input.dispatchEvent(new Event('input'));      }      return;    }    // reset history browsing on normal typing    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {      historyIndex = -1;    }    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {      // fallback: read clipboard manually      try {        if (navigator.clipboard && navigator.clipboard.readText) {          const t = await navigator.clipboard.readText();          if (t) {            e.preventDefault();            const start = input.selectionStart || 0;            const end = input.selectionEnd || 0;            const val = input.value || '';            input.value = val.slice(0, start) + t + val.slice(end);            const pos = start + t.length;            input.selectionStart = input.selectionEnd = pos;            input.dispatchEvent(new Event('input'));          }        }      } catch (err) { /* let default paste try */ }    }  });  input.addEventListener('input', () => {    input.style.height = 'auto';    input.style.height = Math.min(input.scrollHeight, 160) + 'px';  });  document.getElementById('refresh').addEventListener('click', loadModels);  document.getElementById('clear').addEventListener('click', () => {    messages = [];    chat.innerHTML = '';    status.textContent = 'Conversation cleared.';    status.className = 'status';  });  const chatSearch = document.getElementById('chatSearch');  if (chatSearch) {    chatSearch.addEventListener('input', () => {      const q = chatSearch.value.trim().toLowerCase();      const msgs = chat.querySelectorAll('.msg');      msgs.forEach(m => {        const content = (m.textContent || '').toLowerCase();        if (!q || content.includes(q)) {          m.style.display = '';          m.style.opacity = '1';        } else {          m.style.display = 'none';        }      });    });  }  document.getElementById('exportChat').addEventListener('click', () => {    if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }    let md = '# LocalAI Chat Export\\n\\n';    md += 'Exported: ' + new Date().toISOString() + '\\n\\n';    messages.forEach(m => {      md += '## ' + m.role + '\\n\\n' + (m.content || '') + '\\n\\n';    });    const blob = new Blob([md], { type: 'text/markdown' });    const url = URL.createObjectURL(blob);    const a = document.createElement('a');    a.href = url;    a.download = 'localai-chat-' + Date.now() + '.md';    document.body.appendChild(a);    a.click();    document.body.removeChild(a);    URL.revokeObjectURL(url);    status.textContent = 'Chat exported.';    status.className = 'status';  });  const exportJsonBtn = document.getElementById('exportJson');  if (exportJsonBtn) {    exportJsonBtn.addEventListener('click', () => {      if (messages.length === 0) { status.textContent = 'Nothing to export.'; status.className = 'status err'; return; }      const data = { exported: new Date().toISOString(), messages: messages };      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });      const url = URL.createObjectURL(blob);      const a = document.createElement('a');      a.href = url;      a.download = 'localai-chat-' + Date.now() + '.json';      document.body.appendChild(a);      a.click();      document.body.removeChild(a);      URL.revokeObjectURL(url);      status.textContent = 'Chat exported as JSON.';      status.className = 'status';    });  }  async function loadProject() {    try {      const r = await fetch('/api/project');      const d = await r.json();      document.getElementById('projectRoot').value = d.projectRoot || '';    } catch (e) {}  }  document.getElementById('setProject').addEventListener('click', async () => {    const root = document.getElementById('projectRoot').value.trim();    if (!root) return;    try {      const r = await fetch('/api/project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root }) });      const d = await r.json();      document.getElementById('projectRoot').value = d.projectRoot;      status.textContent = 'Project set: ' + d.projectRoot;      status.className = 'status';    } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }  });  async function loadComponents() {    const list = document.getElementById('compList');    list.textContent = 'Loading...';    const controller = new AbortController();    const timeoutId = setTimeout(() => controller.abort(), 15000);    try {      const r = await fetch('/api/components', { signal: controller.signal });      clearTimeout(timeoutId);      const d = await r.json();      const comps = d.components || [];      list.innerHTML = '';      comps.forEach(c => {        const row = document.createElement('div');        row.className = 'comp-row';        const head = document.createElement('div');        head.className = 'comp-head';        head.innerHTML = '<span class="comp-name"></span> <span class="comp-kind"></span> <span class="comp-status"></span>';        head.querySelector('.comp-name').textContent = c.name;        head.querySelector('.comp-kind').textContent = c.kind;        head.querySelector('.comp-status').textContent = c.status;        const detail = document.createElement('div');        detail.className = 'comp-detail';        detail.textContent = c.detail || '';        const ver = document.createElement('div');        ver.className = 'comp-detail';        let vText = 'Version: ' + (c.version || '?');        if (c.latest) vText += '  (latest: ' + c.latest + ')';        if (c.updateAvailable) vText += '  � update available';        else if (c.latest) vText += '  � up to date';        ver.textContent = vText;        if (c.updateAvailable) ver.style.color = 'var(--accent)';        const actions = document.createElement('div');        actions.className = 'comp-actions';        const aboutBtn = document.createElement('button');        aboutBtn.textContent = 'About';        const updateBtn = document.createElement('button');        updateBtn.textContent = 'Update';        updateBtn.className = 'primary';        if (c.updateAvailable) updateBtn.style.borderColor = 'var(--accent)';        const installBtn = document.createElement('button');        installBtn.textContent = 'Install';        installBtn.className = 'primary';        if (c.installed === false) installBtn.style.borderColor = 'var(--accent)';        const aboutDiv = document.createElement('div');        aboutDiv.className = 'comp-about';        aboutDiv.style.display = 'none';        aboutBtn.addEventListener('click', async () => {          if (aboutDiv.style.display === 'none') {            try {              const rr = await fetch('/api/component/about?id=' + encodeURIComponent(c.id));              const dd = await rr.json();              let txt = (dd.about || '');              txt += '\\nVersion: ' + (dd.version || '?');              if (dd.latest) txt += ' (latest: ' + dd.latest + ')';              if (dd.updateAvailable) txt += ' � update available';              else if (dd.latest) txt += ' � up to date';              if (dd.homepage) txt += '\\nHomepage: ' + dd.homepage;              if (dd.installUrl && dd.installUrl !== dd.homepage) txt += '\\nInstall URL: ' + dd.installUrl;              txt += (dd.detail ? '\\n\\nDetail: ' + dd.detail : '') + '\\nStatus: ' + dd.status;              aboutDiv.textContent = txt;            } catch (e) { aboutDiv.textContent = 'Error: ' + e.message; }            aboutDiv.style.display = 'block';            aboutBtn.textContent = 'Hide';          } else {            aboutDiv.style.display = 'none';            aboutBtn.textContent = 'About';          }        });        updateBtn.addEventListener('click', async () => {          updateBtn.disabled = true;          updateBtn.textContent = 'Updating...';          const st = status;          try {            const rr = await fetch('/api/component/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });            const dd = await rr.json();            if (dd.async) {              st.textContent = c.name + ': ' + dd.message;              st.className = 'status';              // poll for completion              const poll = setInterval(async () => {                try {                  const pr = await fetch('/api/component/update-status');                  const pd = await pr.json();                  st.textContent = c.name + ': ' + (pd.status || 'working...') + (pd.result ? ' — ' + (pd.result.message || '') : '');                  if (!pd.running && pd.result) {                    clearInterval(poll);                    st.className = pd.result.ok ? 'status' : 'status err';                    updateBtn.disabled = false;                    updateBtn.textContent = 'Update';                    await loadComponents();                  }                } catch (e) {}              }, 3000);            } else {              st.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));              st.className = dd.ok ? 'status' : 'status err';              updateBtn.disabled = false;              updateBtn.textContent = 'Update';              await loadComponents();            }          } catch (e) {            st.textContent = c.name + ': ' + e.message;            st.className = 'status err';            updateBtn.disabled = false;            updateBtn.textContent = 'Update';          }        });        installBtn.addEventListener('click', async () => {          installBtn.disabled = true;          installBtn.textContent = 'Installing...';          try {            const rr = await fetch('/api/component/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });            const dd = await rr.json();            status.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));            status.className = dd.ok ? 'status' : 'status err';            if (dd.ok) {              // For components with an install URL, also open it              if (c.installUrl && !dd.message.includes('installed') && !dd.message.includes('Cloned')) {                window.open(c.installUrl, '_blank');              }            }            await loadComponents();          } catch (e) {            status.textContent = c.name + ': ' + e.message;            status.className = 'status err';            if (c.installUrl) window.open(c.installUrl, '_blank');          } finally {            installBtn.disabled = false;            installBtn.textContent = 'Install';          }        });        actions.appendChild(aboutBtn);        if (c.installed === false) {          actions.appendChild(installBtn);          updateBtn.style.display = 'none';        } else {          actions.appendChild(updateBtn);          installBtn.style.display = 'none';        }        row.appendChild(head);        row.appendChild(detail);        row.appendChild(ver);        row.appendChild(actions);        row.appendChild(aboutDiv);        list.appendChild(row);      });      if (comps.length === 0) list.textContent = 'No components.';    } catch (e) {      if (e.name === 'AbortError') {        list.textContent = 'Loading timed out. Click Components to retry.';      } else {        list.textContent = 'Error: ' + e.message;      }    }  }  document.getElementById('componentsBtn').addEventListener('click', () => {    document.getElementById('compBackdrop').classList.add('open');    loadComponents();  });  document.getElementById('compClose').addEventListener('click', () => {    document.getElementById('compBackdrop').classList.remove('open');  });  document.getElementById('compBackdrop').addEventListener('click', (e) => {    if (e.target.id === 'compBackdrop') document.getElementById('compBackdrop').classList.remove('open');  });  const compUpdateAllBtn = document.getElementById('compUpdateAllBtn');  if (compUpdateAllBtn) {    compUpdateAllBtn.addEventListener('click', async () => {      const st = document.getElementById('compUpdateAllStatus');      compUpdateAllBtn.disabled = true;      st.textContent = 'Updating all...';      try {        const r = await fetch('/api/components');        const d = await r.json();        const comps = (d.components || []).filter(c => c.updateAvailable || c.installed === false);        if (comps.length === 0) { st.textContent = 'All up to date.'; return; }        let done = 0;        for (const c of comps) {          st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + '...';          try {            const endpoint = c.installed === false ? '/api/component/install' : '/api/component/update';            const rr = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });            const dd = await rr.json();            if (dd.async) {              // wait for background job to finish              await new Promise((resolve) => {                const poll = setInterval(async () => {                  try {                    const pr = await fetch('/api/component/update-status');                    const pd = await pr.json();                    st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + ' — ' + (pd.status || 'working...');                    if (!pd.running && pd.result) {                      clearInterval(poll);                      resolve();                    }                  } catch (e) {}                }, 3000);              });            }          } catch (e) {}          done++;        }        st.textContent = 'Updated ' + done + ' component(s).';        await loadComponents();      } catch (e) {        st.textContent = 'Error: ' + e.message;      } finally {        compUpdateAllBtn.disabled = false;      }    });  }  const compRefreshBtn = document.getElementById('compRefreshBtn');  if (compRefreshBtn) {    compRefreshBtn.addEventListener('click', async () => {      const st = document.getElementById('compUpdateAllStatus');      compRefreshBtn.disabled = true;      st.textContent = 'Refreshing versions...';      try {        const r = await fetch('/api/components?refresh=1');        const d = await r.json();        const comps = d.components || [];        const avail = comps.filter(c => c.updateAvailable).length;        st.textContent = 'Versions refreshed. ' + avail + ' update(s) available.';        await loadComponents();      } catch (e) {        st.textContent = 'Refresh failed: ' + e.message;      } finally {        compRefreshBtn.disabled = false;      }    });  }  async function loadSearchEngines() {    try {      const r = await fetch('/api/search-engines');      const d = await r.json();      const sel = document.getElementById('searchEngine');      sel.innerHTML = '';      (d.engines || []).forEach(e => {        const opt = document.createElement('option');        opt.value = e.id;        opt.textContent = e.name + (e.needsKey && !e.configured ? ' (needs key)' : '');        if (e.needsKey && !e.configured) opt.disabled = true;        sel.appendChild(opt);      });      sel.value = d.active || 'duckduckgo';    } catch (e) {}  }  document.getElementById('searchEngine').addEventListener('change', async (e) => {    try {      await fetch('/api/search-engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: e.target.value }) });      status.textContent = 'Search engine: ' + e.target.value;      status.className = 'status';    } catch (err) { status.textContent = 'Error: ' + err.message; status.className = 'status err'; }  });  // Instances modal  async function openInstances() {    try {      const r = await fetch('/api/search-config');      const d = await r.json();      document.getElementById('instSearxng').value = d.searxngInstance || '';      document.getElementById('instSearxngFws').value = d.searxngFwsInstance || '';      document.getElementById('instFirecrawl').value = d.firecrawlInstance || '';      document.getElementById('instLangsearchKey').value = (d.keys && d.keys.langsearch) || '';    } catch (e) {}    document.getElementById('instancesBackdrop').classList.add('open');  }  document.getElementById('instancesClose').addEventListener('click', () => {    document.getElementById('instancesBackdrop').classList.remove('open');  });  document.getElementById('instancesBackdrop').addEventListener('click', (e) => {    if (e.target.id === 'instancesBackdrop') document.getElementById('instancesBackdrop').classList.remove('open');  });  document.getElementById('instancesSave').addEventListener('click', async () => {    const patch = {};    const s = document.getElementById('instSearxng').value.trim();    const f = document.getElementById('instSearxngFws').value.trim();    const c = document.getElementById('instFirecrawl').value.trim();    const lk = document.getElementById('instLangsearchKey').value.trim();    if (s) patch.searxngInstance = s;    if (f) patch.searxngFwsInstance = f;    if (c) patch.firecrawlInstance = c;    if (lk) patch.keys = { langsearch: lk };    try {      await fetch('/api/search-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });      document.getElementById('instancesStatus').textContent = 'Saved.';      document.getElementById('instancesStatus').className = 'status';    } catch (e) {      document.getElementById('instancesStatus').textContent = 'Error: ' + e.message;      document.getElementById('instancesStatus').className = 'status err';    }  });  // Auto-unregister any stale service workers (fixes cached UI)  if ('serviceWorker' in navigator) {    navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); }).catch(function(){});  }  // Show Add-to-Home-Screen hint on iOS Safari when not installed  (function() {    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;    if (isIOS && !isStandalone) {      document.getElementById('installHint').style.display = 'block';    }  })();  // Right-click context menu (copy/paste/cut/select all)  const ctxMenu = document.createElement('div');  ctxMenu.id = 'ctxMenu';  ctxMenu.className = 'ctx-menu';  document.body.appendChild(ctxMenu);  function showCtxMenu(x, y, items) {    ctxMenu.innerHTML = '';    items.forEach(it => {      if (it === 'sep') { const s = document.createElement('div'); s.className = 'ctx-menu-sep'; ctxMenu.appendChild(s); return; }      const el = document.createElement('div');      el.className = 'ctx-menu-item';      el.textContent = it.label;      el.addEventListener('click', () => { hideCtxMenu(); it.action(); });      ctxMenu.appendChild(el);    });    ctxMenu.style.left = x + 'px';    ctxMenu.style.top = y + 'px';    ctxMenu.classList.add('open');    // keep on screen    const rect = ctxMenu.getBoundingClientRect();    if (rect.right > window.innerWidth) ctxMenu.style.left = (window.innerWidth - rect.width - 8) + 'px';    if (rect.bottom > window.innerHeight) ctxMenu.style.top = (window.innerHeight - rect.height - 8) + 'px';  }  function hideCtxMenu() { ctxMenu.classList.remove('open'); }  document.addEventListener('click', hideCtxMenu);  document.addEventListener('contextmenu', (e) => {    const target = e.target;    const isInput = (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT');    // Let the native context menu (with working Paste) show for inputs    if (isInput) return;    e.preventDefault();    const sel = window.getSelection().toString();    const items = [];    if (isInput) {      items.push({ label: 'Cut', action: () => { document.execCommand('cut'); } });      items.push({ label: 'Copy', action: () => { document.execCommand('copy'); } });      items.push({ label: 'Paste', action: async () => {        target.focus();        try {          const t = await navigator.clipboard.readText();          if (t) {            const el = target;            const start = el.selectionStart || 0;            const end = el.selectionEnd || 0;            const val = el.value || '';            el.value = val.slice(0, start) + t + val.slice(end);            const pos = start + t.length;            el.selectionStart = el.selectionEnd = pos;            el.dispatchEvent(new Event('input'));          }        } catch (err) {          try { document.execCommand('paste'); } catch (e2) {}        }      }});      items.push('sep');      items.push({ label: 'Select All', action: () => { target.select && target.select(); } });    } else if (sel) {      items.push({ label: 'Copy', action: () => { navigator.clipboard.writeText(sel).catch(() => document.execCommand('copy')); } });      items.push({ label: 'Quote', action: () => {        const quoted = sel.split('\n').map(l => '> ' + l).join('\n');        const current = input.value;        input.value = (current ? current + '\n\n' : '') + quoted + '\n\n<!-- your comment here -->\n';        input.style.height = 'auto';        input.style.height = Math.min(input.scrollHeight, 160) + 'px';        input.focus();        const idx = input.value.indexOf('<!-- your comment here -->');        if (idx >= 0) { input.selectionStart = input.selectionEnd = idx; }        window.getSelection().removeAllRanges();      }});      items.push({ label: 'Select All', action: () => { const r = document.createRange(); r.selectNodeContents(target.closest('.msg') || target); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } });    } else {      items.push({ label: 'Select All', action: () => { const r = document.createRange(); r.selectNodeContents(document.getElementById('chat')); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } });    }    if (items.length) showCtxMenu(e.clientX, e.clientY, items);  });  // About modal  async function openAbout() {    document.getElementById('aboutBackdrop').classList.add('open');    try {      const r = await fetch('/api/tags');      const d = await r.json();      document.getElementById('aboutModels').textContent = (d.models || []).length + ' installed';    } catch (e) { document.getElementById('aboutModels').textContent = 'unknown'; }    // refresh version info    try {      const r = await fetch('/api/version');      const d = await r.json();      document.getElementById('aboutVersion').textContent = 'v' + (d.version || '?');    } catch (e) {}  }  async function checkUpdate() {    const st = document.getElementById('updateStatus');    const btn = document.getElementById('doUpdateBtn');    st.textContent = 'Checking...';    try {      const r = await fetch('/api/check-update');      const d = await r.json();      if (d.hasUpdate) {        st.textContent = 'New version available: ' + d.latest + ' (current: v' + d.current + ')';        btn.disabled = false;      } else {        st.textContent = 'Up to date (v' + d.current + ').';        btn.disabled = true;      }    } catch (e) {      st.textContent = 'Check failed: ' + e.message;      btn.disabled = true;    }  }  async function doUpdate() {    const st = document.getElementById('updateStatus');    const btn = document.getElementById('doUpdateBtn');    const cbtn = document.getElementById('checkUpdateBtn');    btn.disabled = true; cbtn.disabled = true;    st.textContent = 'Updating... (this may take a minute)';    try {      const r = await fetch('/api/update', { method: 'POST' });      const d = await r.json();      if (d.ok) {        st.textContent = d.message + ' Clearing cache and reloading...';        // Auto-clear service worker cache and reload to pick up new version        try {          if ('serviceWorker' in navigator) {            const regs = await navigator.serviceWorker.getRegistrations();            for (const reg of regs) await reg.unregister();          }          if ('caches' in window) {            const keys = await caches.keys();            for (const k of keys) await caches.delete(k);          }          localStorage.removeItem('localai_cachedVersion');        } catch (e) {}        setTimeout(() => location.reload(), 1500);      } else {        st.textContent = 'Update failed: ' + (d.message || d.error || 'unknown');      }    } catch (e) {      st.textContent = 'Update failed: ' + e.message;    } finally {      cbtn.disabled = false;    }  }  document.getElementById('checkUpdateBtn').addEventListener('click', checkUpdate);  document.getElementById('doUpdateBtn').addEventListener('click', doUpdate);  const clearCacheBtn = document.getElementById('clearCacheBtn');  if (clearCacheBtn) {    clearCacheBtn.addEventListener('click', async () => {      try {        if ('serviceWorker' in navigator) {          const regs = await navigator.serviceWorker.getRegistrations();          for (const reg of regs) await reg.unregister();        }        if ('caches' in window) {          const keys = await caches.keys();          for (const k of keys) await caches.delete(k);        }        localStorage.removeItem('localai_cachedVersion');        location.reload();      } catch (e) {        document.getElementById('updateStatus').textContent = 'Clear failed: ' + e.message;      }    });  }  document.getElementById('aboutClose').addEventListener('click', () => {    document.getElementById('aboutBackdrop').classList.remove('open');  });  document.getElementById('aboutBackdrop').addEventListener('click', (e) => {    if (e.target.id === 'aboutBackdrop') document.getElementById('aboutBackdrop').classList.remove('open');  });  // Quote selected text with comment  let quoteBtn = null;  function showQuoteBtn(rect) {    if (!quoteBtn) {      quoteBtn = document.createElement('button');      quoteBtn.textContent = 'Quote';      quoteBtn.style.cssText = 'position:fixed;z-index:200;background:var(--accent);color:#0b1220;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;display:none;';      quoteBtn.addEventListener('click', () => {        const sel = window.getSelection().toString().trim();        if (!sel) return;        const quoted = sel.split('\n').map(l => '> ' + l).join('\n');        const current = input.value;        input.value = (current ? current + '\n\n' : '') + quoted + '\n\n<!-- your comment here -->\n';        input.style.height = 'auto';        input.style.height = Math.min(input.scrollHeight, 160) + 'px';        input.focus();        const idx = input.value.indexOf('<!-- your comment here -->');        if (idx >= 0) { input.selectionStart = input.selectionEnd = idx; }        hideQuoteBtn();        window.getSelection().removeAllRanges();      });      document.body.appendChild(quoteBtn);    }    quoteBtn.style.left = (rect.right + 4) + 'px';    quoteBtn.style.top = (rect.top - 28) + 'px';    quoteBtn.style.display = 'block';  }  function hideQuoteBtn() { if (quoteBtn) quoteBtn.style.display = 'none'; }  document.addEventListener('selectionchange', () => {    const sel = window.getSelection();    const text = sel ? sel.toString().trim() : '';    if (text && text.length > 0 && text.length < 2000) {      try {        const range = sel.getRangeAt(0);        const rect = range.getBoundingClientRect();        if (rect.width > 0) { showQuoteBtn(rect); return; }      } catch (e) {}    }    hideQuoteBtn();  });  document.addEventListener('mousedown', (e) => {    if (quoteBtn && !quoteBtn.contains(e.target)) hideQuoteBtn();  }, true);  // Models modal  const quickModels = ['llama3.2:3b', 'llama3.2:1b', 'qwen2.5:14b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'mistral:7b', 'phi3:mini', 'gemma2:9b', 'deepseek-coder:6.7b', 'deepseek-coder-v2:16b', 'deepseek-r1:14b', 'nomic-embed-text', 'moondream'];  function openModels() {    document.getElementById('modelsBackdrop').classList.add('open');    loadInstalledModels();    renderQuickPulls();  }  async function loadInstalledModels() {    try {      const r = await fetch('/api/tags');      const d = await r.json();      const models = d.models || [];      const el = document.getElementById('installedModels');      el.innerHTML = '';      if (models.length === 0) { el.textContent = '(none)'; return; }      models.forEach(m => {        const span = document.createElement('span');        span.style.marginRight = '8px';        const a = document.createElement('a');        a.href = 'https://ollama.com/library/' + m.name.split(':')[0];        a.target = '_blank';        a.rel = 'noopener';        a.textContent = m.name;        a.style.color = 'var(--accent)';        span.appendChild(a);        el.appendChild(span);      });    } catch (e) { document.getElementById('installedModels').textContent = 'error: ' + e.message; }  }  function renderQuickPulls() {    const container = document.getElementById('quickPulls');    container.innerHTML = '';    quickModels.forEach(m => {      const wrap = document.createElement('span');      wrap.style.display = 'inline-flex';      wrap.style.alignItems = 'center';      wrap.style.gap = '2px';      const b = document.createElement('button');      b.textContent = m;      b.style.fontSize = '12px';      b.style.padding = '4px 8px';      b.addEventListener('click', () => {        document.getElementById('pullModelName').value = m;        document.getElementById('pullModelBtn').click();      });      wrap.appendChild(b);      const link = document.createElement('a');      link.href = 'https://ollama.com/library/' + m.split(':')[0];      link.target = '_blank';      link.rel = 'noopener';      link.textContent = '[open]';      link.style.fontSize = '11px';      link.title = 'Inspect on Ollama';      wrap.appendChild(link);      container.appendChild(wrap);    });  }  document.getElementById('modelsBtn').addEventListener('click', openModels);  document.getElementById('modelsClose').addEventListener('click', () => {    document.getElementById('modelsBackdrop').classList.remove('open');  });  const hfBtn = document.getElementById('hfSearchBtn');  if (hfBtn) {    hfBtn.addEventListener('click', async () => {      const q = (document.getElementById('hfSearchInput').value || '').trim();      const res = document.getElementById('hfResults');      res.textContent = 'Searching...';      hfBtn.disabled = true;      try {        const r = await fetch('/api/hf-search?q=' + encodeURIComponent(q));        const d = await r.json();        const items = d.items || [];        if (items.length === 0) { res.textContent = 'No GGUF models found.'; return; }        res.innerHTML = '';        items.forEach(it => {          const div = document.createElement('div');          div.style.marginBottom = '6px';          div.style.padding = '4px';          div.style.borderBottom = '1px solid var(--border)';          const name = document.createElement('div');          name.style.fontWeight = '600';          const link = document.createElement('a');          link.href = 'https://huggingface.co/' + it.id;          link.target = '_blank';          link.rel = 'noopener';          link.textContent = it.id;          link.style.color = 'var(--accent)';          name.appendChild(link);          div.appendChild(name);          const meta = document.createElement('div');          meta.style.fontSize = '11px';          meta.style.color = 'var(--muted)';          meta.textContent = 'Downloads: ' + (it.downloads || 0).toLocaleString() + ' | Likes: ' + (it.likes || 0);          div.appendChild(meta);          const pullBtn = document.createElement('button');          pullBtn.style.fontSize = '11px';          pullBtn.style.padding = '2px 6px';          pullBtn.style.marginTop = '4px';          pullBtn.textContent = 'Pull via Ollama';          pullBtn.addEventListener('click', async () => {            const modelName = 'hf.co/' + it.id;            document.getElementById('pullModelName').value = modelName;            document.getElementById('pullModelBtn').click();          });          div.appendChild(pullBtn);
-          const hfLink = document.createElement('a');
-          hfLink.href = 'https://huggingface.co/' + it.id;
-          hfLink.target = '_blank';
-          hfLink.rel = 'noopener';
-          hfLink.textContent = 'Open on HuggingFace';
-          hfLink.style.fontSize = '11px';
-          hfLink.style.marginLeft = '8px';
-          hfLink.style.color = 'var(--accent)';
-          div.appendChild(hfLink);
-          res.appendChild(div);        });      } catch (e) {        res.textContent = 'Search failed: ' + e.message;      } finally {        hfBtn.disabled = false;      }    });  }  const scanBtn = document.getElementById('scanDrivesBtn');  if (scanBtn) {    scanBtn.addEventListener('click', async () => {      const res = document.getElementById('scanResults');      res.textContent = 'Scanning drives (this may take a while)...';      scanBtn.disabled = true;      try {        const r = await fetch('/api/scan-models');        const d = await r.json();        const items = d.found || [];        if (items.length === 0) { res.textContent = 'No models or stores found.'; return; }        res.innerHTML = '';        items.forEach(it => {          const div = document.createElement('div');          div.style.marginBottom = '4px';          const size = it.size ? ' (' + (it.size / 1e9).toFixed(1) + ' GB)' : '';          div.textContent = (it.type === 'gguf' ? '[file] ' : '📦 ') + it.label + size + ' — ' + it.path;          res.appendChild(div);        });      } catch (e) {        res.textContent = 'Scan failed: ' + e.message;      } finally {        scanBtn.disabled = false;      }    });  }  document.getElementById('modelsBackdrop').addEventListener('click', (e) => {    if (e.target.id === 'modelsBackdrop') document.getElementById('modelsBackdrop').classList.remove('open');  });  document.getElementById('pullModelBtn').addEventListener('click', async () => {    const name = document.getElementById('pullModelName').value.trim();    if (!name) { document.getElementById('pullModelStatus').textContent = 'Enter a model name.'; document.getElementById('pullModelStatus').className = 'status err'; return; }    const btn = document.getElementById('pullModelBtn');    const st = document.getElementById('pullModelStatus');    btn.disabled = true; btn.textContent = 'Pulling...';    st.textContent = 'Pulling ' + name + '... (this may take several minutes; keep this page open)';    st.className = 'status';    try {      const r = await fetch('/api/pull-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });      const d = await r.json();      if (d.ok) { st.textContent = 'Pulled ' + name + ': ' + (d.message || 'done').slice(0, 200); st.className = 'status'; }      else { st.textContent = 'Failed: ' + (d.message || 'unknown error'); st.className = 'status err'; }      await loadInstalledModels();      await loadModels();    } catch (e) { st.textContent = 'Error: ' + e.message; st.className = 'status err'; }    finally { btn.disabled = false; btn.textContent = 'Pull'; }  });  // Keyboard shortcuts  document.addEventListener('keydown', (e) => {    // Ctrl/Cmd+Enter: send    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {      e.preventDefault();      send();      return;    }    // Esc: stop generating (best effort) / close modals    if (e.key === 'Escape') {      const openModal = document.querySelector('.modal-backdrop.open');      if (openModal) { openModal.classList.remove('open'); e.preventDefault(); return; }      if (generating) { /* can't easily cancel fetch; just notify */ status.textContent = 'Stop requested (finish current request).'; status.className = 'status err'; }      return;    }    // '/' to focus input (when not in an input)    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {      const t = e.target;      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) return;      e.preventDefault();      input.focus();      return;    }    // Ctrl/Cmd+K: command palette (simple help)    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {      e.preventDefault();      const msg = 'Keyboard shortcuts:\\n' +        'Ctrl+Enter / Cmd+Enter: Send message\\n' +        'Enter: Send (Shift+Enter: newline)\\n' +        'Up/Down: Recall previous messages\\n' +        '/: Focus input\\n' +        'Esc: Close modal\\n' +        'Ctrl+V: Paste';      alert(msg);      return;    }  });  // RAG handlers  async function loadRagDocs() {    try {      const r = await fetch('/api/rag-docs');      const d = await r.json();      const el = document.getElementById('ragDocs');      el.innerHTML = '';      (d.docs || []).forEach(doc => {        const div = document.createElement('div');        div.textContent = doc.name + ' (' + doc.chunks + ' chunks)';        el.appendChild(div);      });      if (!d.docs || d.docs.length === 0) el.textContent = '(none)';    } catch (e) {}  }  const ragBtn = document.getElementById('ragBtn');  if (ragBtn) {    ragBtn.addEventListener('click', () => {      document.getElementById('ragBackdrop').classList.add('open');      loadRagDocs();    });  }  document.getElementById('ragClose').addEventListener('click', () => {    document.getElementById('ragBackdrop').classList.remove('open');  });  document.getElementById('ragBackdrop').addEventListener('click', (e) => {    if (e.target.id === 'ragBackdrop') document.getElementById('ragBackdrop').classList.remove('open');  });  const ragUploadBtn = document.getElementById('ragUploadBtn');  if (ragUploadBtn) {    ragUploadBtn.addEventListener('click', async () => {      const fileInput = document.getElementById('ragFile');      const file = fileInput.files && fileInput.files[0];      if (!file) { document.getElementById('ragStatus').textContent = 'Select a file first.'; document.getElementById('ragStatus').className = 'status err'; return; }      const st = document.getElementById('ragStatus');      st.textContent = 'Indexing...';      st.className = 'status';      const reader = new FileReader();      reader.onload = async (e) => {        const isPdf = file.name.toLowerCase().endsWith('.pdf');        const content = isPdf ? e.target.result.split(',')[1] : btoa(unescape(encodeURIComponent(e.target.result)));        try {          const r = await fetch('/api/rag-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content, type: isPdf ? 'pdf' : 'text' }) });          const d = await r.json();          if (d.ok) { st.textContent = d.message; st.className = 'status'; loadRagDocs(); }          else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }        } catch (err) { st.textContent = 'Error: ' + err.message; st.className = 'status err'; }      };      if (file.name.toLowerCase().endsWith('.pdf')) reader.readAsDataURL(file);      else reader.readAsText(file);    });  }  const ragClearBtn = document.getElementById('ragClearBtn');  if (ragClearBtn) {    ragClearBtn.addEventListener('click', async () => {      await fetch('/api/rag-clear', { method: 'POST' });      loadRagDocs();      document.getElementById('ragStatus').textContent = 'Cleared.';      document.getElementById('ragStatus').className = 'status';    });  }  const codeBtn = document.getElementById('codeBtn');  if (codeBtn) {    codeBtn.addEventListener('click', () => {      document.getElementById('codeBackdrop').classList.add('open');    });  }  const codeClose = document.getElementById('codeClose');  if (codeClose) {    codeClose.addEventListener('click', () => {      document.getElementById('codeBackdrop').classList.remove('open');    });  }  const codeBackdrop = document.getElementById('codeBackdrop');  if (codeBackdrop) {    codeBackdrop.addEventListener('click', (e) => {      if (e.target.id === 'codeBackdrop') codeBackdrop.classList.remove('open');    });  }  const runCodeBtn = document.getElementById('runCodeBtn');  if (runCodeBtn) {    runCodeBtn.addEventListener('click', async () => {      const lang = document.getElementById('codeLang').value;      const code = document.getElementById('codeInput').value;      const out = document.getElementById('codeOutput');      out.textContent = 'Running...';      try {        const r = await fetch('/api/run-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang, code }) });        const d = await r.json();        let text = '';        if (d.stdout) text += d.stdout;        if (d.stderr) text += (text ? '\\n--- stderr ---\\n' : '') + d.stderr;        if (!text) text = '(no output)';        if (d.code !== 0) text += '\\n[exit code: ' + d.code + ']';        out.textContent = text;      } catch (e) {        out.textContent = 'Error: ' + e.message;      }    });  }  // Auto-clear stale service worker cache when version changes  (async function checkVersion() {    try {      const r = await fetch('/api/version');      const d = await r.json();      const serverVer = d.version || '';      const cachedVer = localStorage.getItem('localai_cachedVersion') || '';      if (serverVer && cachedVer && serverVer !== cachedVer) {        // Version changed: unregister service worker and clear caches, then reload        if ('serviceWorker' in navigator) {          const regs = await navigator.serviceWorker.getRegistrations();          for (const reg of regs) await reg.unregister();        }        if ('caches' in window) {          const keys = await caches.keys();          for (const k of keys) await caches.delete(k);        }        localStorage.setItem('localai_cachedVersion', serverVer);        location.reload();        return;      }      if (serverVer) localStorage.setItem('localai_cachedVersion', serverVer);    } catch (e) {}  })();  // Compare modal  const compareBtn = document.getElementById('compareBtn');  if (compareBtn) {    compareBtn.addEventListener('click', () => {      const selA = document.getElementById('compareModelA');      const selB = document.getElementById('compareModelB');      // populate model dropdowns      [selA, selB].forEach(sel => {        sel.innerHTML = '';        Array.from(modelSel.options).forEach(o => {          const opt = document.createElement('option');          opt.value = o.value; opt.textContent = o.textContent;          sel.appendChild(opt);        });      });      if (selB.options.length > 1) selB.selectedIndex = 1;      document.getElementById('compareBackdrop').classList.add('open');    });  }  const compareClose = document.getElementById('compareClose');  if (compareClose) {    compareClose.addEventListener('click', () => {      document.getElementById('compareBackdrop').classList.remove('open');    });  }  const compareBackdrop = document.getElementById('compareBackdrop');  if (compareBackdrop) {    compareBackdrop.addEventListener('click', (e) => {      if (e.target.id === 'compareBackdrop') compareBackdrop.classList.remove('open');    });  }  const compareRunBtn = document.getElementById('compareRunBtn');  if (compareRunBtn) {    compareRunBtn.addEventListener('click', async () => {      const modelA = document.getElementById('compareModelA').value;      const modelB = document.getElementById('compareModelB').value;      const prompt = document.getElementById('comparePrompt').value.trim();      if (!prompt) return;      const outA = document.getElementById('compareOutA');      const outB = document.getElementById('compareOutB');      outA.textContent = 'Thinking...';      outB.textContent = 'Thinking...';      const msgs = [{ role: 'user', content: prompt }];      async function run(model, outEl) {        try {          const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: msgs, stream: false }) });          const d = await r.json();          outEl.textContent = d.message ? d.message.content : (d.final || JSON.stringify(d).slice(0, 500));        } catch (e) {          outEl.textContent = 'Error: ' + e.message;        }      }      await Promise.all([run(modelA, outA), run(modelB, outB)]);    });  }  // Resizable sidebar toggle (simple collapse)  // Add a sidebar with quick info  (function() {    const sidebar = document.createElement('div');    sidebar.id = 'sidebar';    sidebar.style.cssText = 'width:220px;min-width:180px;max-width:320px;background:var(--panel);border-right:1px solid var(--border);padding:12px;overflow:auto;display:none;flex-shrink:0;';    sidebar.innerHTML = '<h3 style="font-size:13px;margin:0 0 8px;">Quick info</h3>' +      '<div id="sidebarInfo" style="font-size:12px;color:var(--muted);">Loading...</div>';    const handle = document.createElement('div');    handle.style.cssText = 'width:6px;cursor:col-resize;background:var(--border);display:none;';    const main = document.querySelector('main');    if (main && main.parentNode) {      main.parentNode.insertBefore(sidebar, main);      main.parentNode.insertBefore(handle, main);    }    // toggle button in header    const toggle = document.createElement('button');    toggle.textContent = 'Sidebar';    toggle.style.fontSize = '12px';    toggle.style.padding = '4px 8px';    const controls = document.querySelector('.controls');    if (controls) controls.appendChild(toggle);    toggle.addEventListener('click', () => {      const show = sidebar.style.display === 'none';      sidebar.style.display = show ? 'block' : 'none';      handle.style.display = show ? 'block' : 'none';      toggle.textContent = show ? 'Hide sidebar' : 'Sidebar';    });    // resize    let dragging = false;    handle.addEventListener('mousedown', () => { dragging = true; });    document.addEventListener('mousemove', (e) => {      if (!dragging) return;      const rect = sidebar.getBoundingClientRect();      const newW = e.clientX - rect.left;      if (newW >= 160 && newW <= 360) sidebar.style.width = newW + 'px';    });    document.addEventListener('mouseup', () => { dragging = false; });  })();  loadModels();  loadProject();  loadSearchEngines();  // First-run wizard  (function() {    try {      if (localStorage.getItem('localai_firstRunDone')) return;    } catch (e) {}    const bd = document.createElement('div');    bd.id = 'firstRunBackdrop';    bd.className = 'modal-backdrop open';    bd.innerHTML = '<div class="modal" style="max-width:460px;">' +      '<h2>Welcome to LocalAI</h2>' +      '<p style="font-size:13px;color:var(--muted);">Quick setup checklist:</p>' +      '<ul style="font-size:13px;line-height:1.8;padding-left:18px;">' +      '<li>Ollama running on <code>127.0.0.1:11434</code></li>' +      '<li>At least one model pulled (e.g. <code>llama3.2:3b</code>)</li>' +      '<li>Open <b>Models</b> to pull recommended models</li>' +      '<li>Optional: set RE env vars for reverse-engineering tools</li>' +      '</ul>' +      '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">' +      '<button class="primary" id="firstRunOk">Get started</button>' +      '</div>' +      '</div>';    document.body.appendChild(bd);    document.getElementById('firstRunOk').addEventListener('click', function() {      bd.remove();      try { localStorage.setItem('localai_firstRunDone', '1'); } catch (e) {}    });  })();</script></body></html>
+        list.textContent = 'Error: ' + e.message;
+      }
+    }
+  }
+
+  document.getElementById('componentsBtn').addEventListener('click', () => {
+    document.getElementById('compBackdrop').classList.add('open');
+    loadComponents();
+  });
+  document.getElementById('compClose').addEventListener('click', () => {
+    document.getElementById('compBackdrop').classList.remove('open');
+  });
+  document.getElementById('compBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'compBackdrop') document.getElementById('compBackdrop').classList.remove('open');
+  });
+
+  const compUpdateAllBtn = document.getElementById('compUpdateAllBtn');
+  if (compUpdateAllBtn) {
+    compUpdateAllBtn.addEventListener('click', async () => {
+      const st = document.getElementById('compUpdateAllStatus');
+      compUpdateAllBtn.disabled = true;
+      st.textContent = 'Updating all...';
+      try {
+        const r = await fetch('/api/components');
+        const d = await r.json();
+        const comps = (d.components || []).filter(c => c.updateAvailable || c.installed === false);
+        if (comps.length === 0) { st.textContent = 'All up to date.'; return; }
+        let done = 0;
+        for (const c of comps) {
+          st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + '...';
+          try {
+            const endpoint = c.installed === false ? '/api/component/install' : '/api/component/update';
+            const rr = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            if (dd.async) {
+              // wait for background job to finish
+              await new Promise((resolve) => {
+                const poll = setInterval(async () => {
+                  try {
+                    const pr = await fetch('/api/component/update-status');
+                    const pd = await pr.json();
+                    st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + ' — ' + (pd.status || 'working...');
+                    if (!pd.running && pd.result) {
+                      clearInterval(poll);
+                      resolve();
+                    }
+                  } catch (e) {}
+                }, 3000);
+              });
+            }
+          } catch (e) {}
+          done++;
+        }
+        st.textContent = 'Updated ' + done + ' component(s).';
+        await loadComponents();
+      } catch (e) {
+        st.textContent = 'Error: ' + e.message;
+      } finally {
+        compUpdateAllBtn.disabled = false;
+      }
+    });
+  }
+
+  const compRefreshBtn = document.getElementById('compRefreshBtn');
+  if (compRefreshBtn) {
+    compRefreshBtn.addEventListener('click', async () => {
+      const st = document.getElementById('compUpdateAllStatus');
+      compRefreshBtn.disabled = true;
+      st.textContent = 'Refreshing versions...';
+      try {
+        const r = await fetch('/api/components?refresh=1');
+        const d = await r.json();
+        const comps = d.components || [];
+        const avail = comps.filter(c => c.updateAvailable).length;
+        st.textContent = 'Versions refreshed. ' + avail + ' update(s) available.';
+        await loadComponents();
+      } catch (e) {
+        st.textContent = 'Refresh failed: ' + e.message;
+      } finally {
+        compRefreshBtn.disabled = false;
+      }
+    });
+  }
+
+  async function loadSearchEngines() {
+    try {
+      const r = await fetch('/api/search-engines');
+      const d = await r.json();
+      const sel = document.getElementById('searchEngine');
+      sel.innerHTML = '';
+      (d.engines || []).forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = e.name + (e.needsKey && !e.configured ? ' (needs key)' : '');
+        if (e.needsKey && !e.configured) opt.disabled = true;
+        sel.appendChild(opt);
+      });
+      sel.value = d.active || 'duckduckgo';
+    } catch (e) {}
+  }
+  document.getElementById('searchEngine').addEventListener('change', async (e) => {
+    try {
+      await fetch('/api/search-engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: e.target.value }) });
+      status.textContent = 'Search engine: ' + e.target.value;
+      status.className = 'status';
+    } catch (err) { status.textContent = 'Error: ' + err.message; status.className = 'status err'; }
+  });
+
+  // Instances modal
+  async function openInstances() {
+    try {
+      const r = await fetch('/api/search-config');
+      const d = await r.json();
+      document.getElementById('instSearxng').value = d.searxngInstance || '';
+      document.getElementById('instSearxngFws').value = d.searxngFwsInstance || '';
+      document.getElementById('instFirecrawl').value = d.firecrawlInstance || '';
+      document.getElementById('instLangsearchKey').value = (d.keys && d.keys.langsearch) || '';
+    } catch (e) {}
+    document.getElementById('instancesBackdrop').classList.add('open');
+  }
+  document.getElementById('instancesClose').addEventListener('click', () => {
+    document.getElementById('instancesBackdrop').classList.remove('open');
+  });
+  document.getElementById('instancesBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'instancesBackdrop') document.getElementById('instancesBackdrop').classList.remove('open');
+  });
+  document.getElementById('instancesSave').addEventListener('click', async () => {
+    const patch = {};
+    const s = document.getElementById('instSearxng').value.trim();
+    const f = document.getElementById('instSearxngFws').value.trim();
+    const c = document.getElementById('instFirecrawl').value.trim();
+    const lk = document.getElementById('instLangsearchKey').value.trim();
+    if (s) patch.searxngInstance = s;
+    if (f) patch.searxngFwsInstance = f;
+    if (c) patch.firecrawlInstance = c;
+    if (lk) patch.keys = { langsearch: lk };
+    try {
+      await fetch('/api/search-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      document.getElementById('instancesStatus').textContent = 'Saved.';
+      document.getElementById('instancesStatus').className = 'status';
+    } catch (e) {
+      document.getElementById('instancesStatus').textContent = 'Error: ' + e.message;
+      document.getElementById('instancesStatus').className = 'status err';
+    }
+  });
+
+  // Service worker registration for PWA / Add to Home Screen
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  // Show Add-to-Home-Screen hint on iOS Safari when not installed
+  (function() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isIOS && !isStandalone) {
+      document.getElementById('installHint').style.display = 'block';
+    }
+  })();
+
+  // Right-click context menu (copy/paste/cut/select all)
+  const ctxMenu = document.createElement('div');
+  ctxMenu.id = 'ctxMenu';
+  ctxMenu.className = 'ctx-menu';
+  document.body.appendChild(ctxMenu);
+  function showCtxMenu(x, y, items) {
+    ctxMenu.innerHTML = '';
+    items.forEach(it => {
+      if (it === 'sep') { const s = document.createElement('div'); s.className = 'ctx-menu-sep'; ctxMenu.appendChild(s); return; }
+      const el = document.createElement('div');
+      el.className = 'ctx-menu-item';
+      el.textContent = it.label;
+      el.addEventListener('click', () => { hideCtxMenu(); it.action(); });
+      ctxMenu.appendChild(el);
+    });
+    ctxMenu.style.left = x + 'px';
+    ctxMenu.style.top = y + 'px';
+    ctxMenu.classList.add('open');
+    // keep on screen
+    const rect = ctxMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) ctxMenu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    if (rect.bottom > window.innerHeight) ctxMenu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+  }
+  function hideCtxMenu() { ctxMenu.classList.remove('open'); }
+  document.addEventListener('click', hideCtxMenu);
+  document.addEventListener('contextmenu', (e) => {
+    const target = e.target;
+    const isInput = (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT');
+    // Let the native context menu (with working Paste) show for inputs
+    if (isInput) return;
+    e.preventDefault();
+    const sel = window.getSelection().toString();
+    const items = [];
+    if (isInput) {
+      items.push({ label: 'Cut', action: () => { document.execCommand('cut'); } });
+      items.push({ label: 'Copy', action: () => { document.execCommand('copy'); } });
+      items.push({ label: 'Paste', action: async () => {
+        target.focus();
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t) {
+            const el = target;
+            const start = el.selectionStart || 0;
+            const end = el.selectionEnd || 0;
+            const val = el.value || '';
+            el.value = val.slice(0, start) + t + val.slice(end);
+            const pos = start + t.length;
+            el.selectionStart = el.selectionEnd = pos;
+            el.dispatchEvent(new Event('input'));
+          }
+        } catch (err) {
+          try { document.execCommand('paste'); } catch (e2) {}
+        }
+      }});
+      items.push('sep');
+      items.push({ label: 'Select All', action: () => { target.select && target.select(); } });
+    } else if (sel) {
+      items.push({ label: 'Copy', action: () => { navigator.clipboard.writeText(sel).catch(() => document.execCommand('copy')); } });
+      items.push({ label: 'Quote', action: () => {
+        const quoted = sel.split('\n').map(l => '> ' + l).join('\n');
+        const current = input.value;
+        input.value = (current ? current + '\n\n' : '') + quoted + '\n\n<!-- your comment here -->\n';
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+        input.focus();
+        const idx = input.value.indexOf('<!-- your comment here -->');
+        if (idx >= 0) { input.selectionStart = input.selectionEnd = idx; }
+        window.getSelection().removeAllRanges();
+      }});
+      items.push({ label: 'Select All', action: () => { const r = document.createRange(); r.selectNodeContents(target.closest('.msg') || target); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } });
+    } else {
+      items.push({ label: 'Select All', action: () => { const r = document.createRange(); r.selectNodeContents(document.getElementById('chat')); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } });
+    }
+    if (items.length) showCtxMenu(e.clientX, e.clientY, items);
+  });
+
+  // About modal
+  async function openAbout() {
+    document.getElementById('aboutBackdrop').classList.add('open');
+    try {
+      const r = await fetch('/api/tags');
+      const d = await r.json();
+      document.getElementById('aboutModels').textContent = (d.models || []).length + ' installed';
+    } catch (e) { document.getElementById('aboutModels').textContent = 'unknown'; }
+    // refresh version info
+    try {
+      const r = await fetch('/api/version');
+      const d = await r.json();
+      document.getElementById('aboutVersion').textContent = 'v' + (d.version || '?');
+    } catch (e) {}
+  }
+
+  async function checkUpdate() {
+    const st = document.getElementById('updateStatus');
+    const btn = document.getElementById('doUpdateBtn');
+    st.textContent = 'Checking...';
+    try {
+      const r = await fetch('/api/check-update');
+      const d = await r.json();
+      if (d.hasUpdate) {
+        st.textContent = 'New version available: ' + d.latest + ' (current: v' + d.current + ')';
+        btn.disabled = false;
+      } else {
+        st.textContent = 'Up to date (v' + d.current + ').';
+        btn.disabled = true;
+      }
+    } catch (e) {
+      st.textContent = 'Check failed: ' + e.message;
+      btn.disabled = true;
+    }
+  }
+
+  async function doUpdate() {
+    const st = document.getElementById('updateStatus');
+    const btn = document.getElementById('doUpdateBtn');
+    const cbtn = document.getElementById('checkUpdateBtn');
+    btn.disabled = true; cbtn.disabled = true;
+    st.textContent = 'Updating... (this may take a minute)';
+    try {
+      const r = await fetch('/api/update', { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) {
+        st.textContent = d.message + ' Clearing cache and reloading...';
+        // Auto-clear service worker cache and reload to pick up new version
+        try {
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) await reg.unregister();
+          }
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            for (const k of keys) await caches.delete(k);
+          }
+          localStorage.removeItem('localai_cachedVersion');
+        } catch (e) {}
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        st.textContent = 'Update failed: ' + (d.message || d.error || 'unknown');
+      }
+    } catch (e) {
+      st.textContent = 'Update failed: ' + e.message;
+    } finally {
+      cbtn.disabled = false;
+    }
+  }
+
+  document.getElementById('checkUpdateBtn').addEventListener('click', checkUpdate);
+  document.getElementById('doUpdateBtn').addEventListener('click', doUpdate);
+  const clearCacheBtn = document.getElementById('clearCacheBtn');
+  if (clearCacheBtn) {
+    clearCacheBtn.addEventListener('click', async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) await reg.unregister();
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) await caches.delete(k);
+        }
+        localStorage.removeItem('localai_cachedVersion');
+        location.reload();
+      } catch (e) {
+        document.getElementById('updateStatus').textContent = 'Clear failed: ' + e.message;
+      }
+    });
+  }
+  document.getElementById('aboutClose').addEventListener('click', () => {
+    document.getElementById('aboutBackdrop').classList.remove('open');
+  });
+  document.getElementById('aboutBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'aboutBackdrop') document.getElementById('aboutBackdrop').classList.remove('open');
+  });
+
+  // Quote selected text with comment
+  let quoteBtn = null;
+  function showQuoteBtn(rect) {
+    if (!quoteBtn) {
+      quoteBtn = document.createElement('button');
+      quoteBtn.textContent = 'Quote';
+      quoteBtn.style.cssText = 'position:fixed;z-index:200;background:var(--accent);color:#0b1220;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;display:none;';
+      quoteBtn.addEventListener('click', () => {
+        const sel = window.getSelection().toString().trim();
+        if (!sel) return;
+        const quoted = sel.split('\n').map(l => '> ' + l).join('\n');
+        const current = input.value;
+        input.value = (current ? current + '\n\n' : '') + quoted + '\n\n<!-- your comment here -->\n';
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+        input.focus();
+        const idx = input.value.indexOf('<!-- your comment here -->');
+        if (idx >= 0) { input.selectionStart = input.selectionEnd = idx; }
+        hideQuoteBtn();
+        window.getSelection().removeAllRanges();
+      });
+      document.body.appendChild(quoteBtn);
+    }
+    quoteBtn.style.left = (rect.right + 4) + 'px';
+    quoteBtn.style.top = (rect.top - 28) + 'px';
+    quoteBtn.style.display = 'block';
+  }
+  function hideQuoteBtn() { if (quoteBtn) quoteBtn.style.display = 'none'; }
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if (text && text.length > 0 && text.length < 2000) {
+      try {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 0) { showQuoteBtn(rect); return; }
+      } catch (e) {}
+    }
+    hideQuoteBtn();
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (quoteBtn && !quoteBtn.contains(e.target)) hideQuoteBtn();
+  }, true);
+
+  // Models modal
+  const quickModels = ['llama3.2:3b', 'llama3.2:1b', 'qwen2.5:14b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'mistral:7b', 'phi3:mini', 'gemma2:9b', 'deepseek-coder:6.7b', 'deepseek-coder-v2:16b', 'deepseek-r1:14b', 'nomic-embed-text', 'moondream'];
+  function openModels() {
+    document.getElementById('modelsBackdrop').classList.add('open');
+    loadInstalledModels();
+    renderQuickPulls();
+  }
+  async function loadInstalledModels() {
+    try {
+      const r = await fetch('/api/tags');
+      const d = await r.json();
+      const models = d.models || [];
+      const el = document.getElementById('installedModels');
+      el.innerHTML = '';
+      if (models.length === 0) { el.textContent = '(none)'; return; }
+      models.forEach(m => {
+        const span = document.createElement('span');
+        span.style.marginRight = '8px';
+        const a = document.createElement('a');
+        a.href = 'https://ollama.com/library/' + m.name.split(':')[0];
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = m.name;
+        a.style.color = 'var(--accent)';
+        span.appendChild(a);
+        el.appendChild(span);
+      });
+    } catch (e) { document.getElementById('installedModels').textContent = 'error: ' + e.message; }
+  }
+  function renderQuickPulls() {
+    const container = document.getElementById('quickPulls');
+    container.innerHTML = '';
+    quickModels.forEach(m => {
+      const wrap = document.createElement('span');
+      wrap.style.display = 'inline-flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '2px';
+      const b = document.createElement('button');
+      b.textContent = m;
+      b.style.fontSize = '12px';
+      b.style.padding = '4px 8px';
+      b.addEventListener('click', () => {
+        document.getElementById('pullModelName').value = m;
+        document.getElementById('pullModelBtn').click();
+      });
+      wrap.appendChild(b);
+      const link = document.createElement('a');
+      link.href = 'https://ollama.com/library/' + m.split(':')[0];
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = '🔗';
+      link.style.fontSize = '11px';
+      link.title = 'Inspect on Ollama';
+      wrap.appendChild(link);
+      container.appendChild(wrap);
+    });
+  }
+  document.getElementById('modelsBtn').addEventListener('click', openModels);
+  document.getElementById('modelsClose').addEventListener('click', () => {
+    document.getElementById('modelsBackdrop').classList.remove('open');
+  });
+  const hfBtn = document.getElementById('hfSearchBtn');
+  if (hfBtn) {
+    hfBtn.addEventListener('click', async () => {
+      const q = (document.getElementById('hfSearchInput').value || '').trim();
+      const res = document.getElementById('hfResults');
+      res.textContent = 'Searching...';
+      hfBtn.disabled = true;
+      try {
+        const r = await fetch('/api/hf-search?q=' + encodeURIComponent(q));
+        const d = await r.json();
+        const items = d.items || [];
+        if (items.length === 0) { res.textContent = 'No GGUF models found.'; return; }
+        res.innerHTML = '';
+        items.forEach(it => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '6px';
+          div.style.padding = '4px';
+          div.style.borderBottom = '1px solid var(--border)';
+          const name = document.createElement('div');
+          name.style.fontWeight = '600';
+          const link = document.createElement('a');
+          link.href = 'https://huggingface.co/' + it.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = it.id;
+          link.style.color = 'var(--accent)';
+          name.appendChild(link);
+          div.appendChild(name);
+          const meta = document.createElement('div');
+          meta.style.fontSize = '11px';
+          meta.style.color = 'var(--muted)';
+          meta.textContent = 'Downloads: ' + (it.downloads || 0).toLocaleString() + ' | Likes: ' + (it.likes || 0);
+          div.appendChild(meta);
+          const pullBtn = document.createElement('button');
+          pullBtn.style.fontSize = '11px';
+          pullBtn.style.padding = '2px 6px';
+          pullBtn.style.marginTop = '4px';
+          pullBtn.textContent = 'Pull via Ollama';
+          pullBtn.addEventListener('click', async () => {
+            const modelName = 'hf.co/' + it.id;
+            document.getElementById('pullModelName').value = modelName;
+            document.getElementById('pullModelBtn').click();
+          });
+          div.appendChild(pullBtn);
+          res.appendChild(div);
+        });
+      } catch (e) {
+        res.textContent = 'Search failed: ' + e.message;
+      } finally {
+        hfBtn.disabled = false;
+      }
+    });
+  }
+
+  const scanBtn = document.getElementById('scanDrivesBtn');
+  if (scanBtn) {
+    scanBtn.addEventListener('click', async () => {
+      const res = document.getElementById('scanResults');
+      res.textContent = 'Scanning drives (this may take a while)...';
+      scanBtn.disabled = true;
+      try {
+        const r = await fetch('/api/scan-models');
+        const d = await r.json();
+        const items = d.found || [];
+        if (items.length === 0) { res.textContent = 'No models or stores found.'; return; }
+        res.innerHTML = '';
+        items.forEach(it => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '4px';
+          const size = it.size ? ' (' + (it.size / 1e9).toFixed(1) + ' GB)' : '';
+          div.textContent = (it.type === 'gguf' ? '📄 ' : '📦 ') + it.label + size + ' — ' + it.path;
+          res.appendChild(div);
+        });
+      } catch (e) {
+        res.textContent = 'Scan failed: ' + e.message;
+      } finally {
+        scanBtn.disabled = false;
+      }
+    });
+  }
+  document.getElementById('modelsBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modelsBackdrop') document.getElementById('modelsBackdrop').classList.remove('open');
+  });
+  document.getElementById('pullModelBtn').addEventListener('click', async () => {
+    const name = document.getElementById('pullModelName').value.trim();
+    if (!name) { document.getElementById('pullModelStatus').textContent = 'Enter a model name.'; document.getElementById('pullModelStatus').className = 'status err'; return; }
+    const btn = document.getElementById('pullModelBtn');
+    const st = document.getElementById('pullModelStatus');
+    btn.disabled = true; btn.textContent = 'Pulling...';
+    st.textContent = 'Pulling ' + name + '... (this may take several minutes; keep this page open)';
+    st.className = 'status';
+    try {
+      const r = await fetch('/api/pull-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      const d = await r.json();
+      if (d.ok) { st.textContent = 'Pulled ' + name + ': ' + (d.message || 'done').slice(0, 200); st.className = 'status'; }
+      else { st.textContent = 'Failed: ' + (d.message || 'unknown error'); st.className = 'status err'; }
+      await loadInstalledModels();
+      await loadModels();
+    } catch (e) { st.textContent = 'Error: ' + e.message; st.className = 'status err'; }
+    finally { btn.disabled = false; btn.textContent = 'Pull'; }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd+Enter: send
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      send();
+      return;
+    }
+    // Esc: stop generating (best effort) / close modals
+    if (e.key === 'Escape') {
+      const openModal = document.querySelector('.modal-backdrop.open');
+      if (openModal) { openModal.classList.remove('open'); e.preventDefault(); return; }
+      if (generating) { /* can't easily cancel fetch; just notify */ status.textContent = 'Stop requested (finish current request).'; status.className = 'status err'; }
+      return;
+    }
+    // '/' to focus input (when not in an input)
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const t = e.target;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) return;
+      e.preventDefault();
+      input.focus();
+      return;
+    }
+    // Ctrl/Cmd+K: command palette (simple help)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      const msg = 'Keyboard shortcuts:\\n' +
+        'Ctrl+Enter / Cmd+Enter: Send message\\n' +
+        'Enter: Send (Shift+Enter: newline)\\n' +
+        'Up/Down: Recall previous messages\\n' +
+        '/: Focus input\\n' +
+        'Esc: Close modal\\n' +
+        'Ctrl+V: Paste';
+      alert(msg);
+      return;
+    }
+  });
+
+  // RAG handlers
+  async function loadRagDocs() {
+    try {
+      const r = await fetch('/api/rag-docs');
+      const d = await r.json();
+      const el = document.getElementById('ragDocs');
+      el.innerHTML = '';
+      (d.docs || []).forEach(doc => {
+        const div = document.createElement('div');
+        div.textContent = doc.name + ' (' + doc.chunks + ' chunks)';
+        el.appendChild(div);
+      });
+      if (!d.docs || d.docs.length === 0) el.textContent = '(none)';
+    } catch (e) {}
+  }
+  const ragBtn = document.getElementById('ragBtn');
+  if (ragBtn) {
+    ragBtn.addEventListener('click', () => {
+      document.getElementById('ragBackdrop').classList.add('open');
+      loadRagDocs();
+    });
+  }
+  document.getElementById('ragClose').addEventListener('click', () => {
+    document.getElementById('ragBackdrop').classList.remove('open');
+  });
+  document.getElementById('ragBackdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'ragBackdrop') document.getElementById('ragBackdrop').classList.remove('open');
+  });
+  const ragUploadBtn = document.getElementById('ragUploadBtn');
+  if (ragUploadBtn) {
+    ragUploadBtn.addEventListener('click', async () => {
+      const fileInput = document.getElementById('ragFile');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) { document.getElementById('ragStatus').textContent = 'Select a file first.'; document.getElementById('ragStatus').className = 'status err'; return; }
+      const st = document.getElementById('ragStatus');
+      st.textContent = 'Indexing...';
+      st.className = 'status';
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const isPdf = file.name.toLowerCase().endsWith('.pdf');
+        const content = isPdf ? e.target.result.split(',')[1] : btoa(unescape(encodeURIComponent(e.target.result)));
+        try {
+          const r = await fetch('/api/rag-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, content, type: isPdf ? 'pdf' : 'text' }) });
+          const d = await r.json();
+          if (d.ok) { st.textContent = d.message; st.className = 'status'; loadRagDocs(); }
+          else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
+        } catch (err) { st.textContent = 'Error: ' + err.message; st.className = 'status err'; }
+      };
+      if (file.name.toLowerCase().endsWith('.pdf')) reader.readAsDataURL(file);
+      else reader.readAsText(file);
+    });
+  }
+  const ragClearBtn = document.getElementById('ragClearBtn');
+  if (ragClearBtn) {
+    ragClearBtn.addEventListener('click', async () => {
+      await fetch('/api/rag-clear', { method: 'POST' });
+      loadRagDocs();
+      document.getElementById('ragStatus').textContent = 'Cleared.';
+      document.getElementById('ragStatus').className = 'status';
+    });
+  }
+
+  const codeBtn = document.getElementById('codeBtn');
+  if (codeBtn) {
+    codeBtn.addEventListener('click', () => {
+      document.getElementById('codeBackdrop').classList.add('open');
+    });
+  }
+  const codeClose = document.getElementById('codeClose');
+  if (codeClose) {
+    codeClose.addEventListener('click', () => {
+      document.getElementById('codeBackdrop').classList.remove('open');
+    });
+  }
+  const codeBackdrop = document.getElementById('codeBackdrop');
+  if (codeBackdrop) {
+    codeBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'codeBackdrop') codeBackdrop.classList.remove('open');
+    });
+  }
+  const runCodeBtn = document.getElementById('runCodeBtn');
+  if (runCodeBtn) {
+    runCodeBtn.addEventListener('click', async () => {
+      const lang = document.getElementById('codeLang').value;
+      const code = document.getElementById('codeInput').value;
+      const out = document.getElementById('codeOutput');
+      out.textContent = 'Running...';
+      try {
+        const r = await fetch('/api/run-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang, code }) });
+        const d = await r.json();
+        let text = '';
+        if (d.stdout) text += d.stdout;
+        if (d.stderr) text += (text ? '\\n--- stderr ---\\n' : '') + d.stderr;
+        if (!text) text = '(no output)';
+        if (d.code !== 0) text += '\\n[exit code: ' + d.code + ']';
+        out.textContent = text;
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+      }
+    });
+  }
+
+  // Auto-clear stale service worker cache when version changes
+  (async function checkVersion() {
+    try {
+      const r = await fetch('/api/version');
+      const d = await r.json();
+      const serverVer = d.version || '';
+      const cachedVer = localStorage.getItem('localai_cachedVersion') || '';
+      if (serverVer && cachedVer && serverVer !== cachedVer) {
+        // Version changed: unregister service worker and clear caches, then reload
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) await reg.unregister();
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) await caches.delete(k);
+        }
+        localStorage.setItem('localai_cachedVersion', serverVer);
+        location.reload();
+        return;
+      }
+      if (serverVer) localStorage.setItem('localai_cachedVersion', serverVer);
+    } catch (e) {}
+  })();
+
+  // Compare modal
+  const compareBtn = document.getElementById('compareBtn');
+  if (compareBtn) {
+    compareBtn.addEventListener('click', () => {
+      const selA = document.getElementById('compareModelA');
+      const selB = document.getElementById('compareModelB');
+      // populate model dropdowns
+      [selA, selB].forEach(sel => {
+        sel.innerHTML = '';
+        Array.from(modelSel.options).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.value; opt.textContent = o.textContent;
+          sel.appendChild(opt);
+        });
+      });
+      if (selB.options.length > 1) selB.selectedIndex = 1;
+      document.getElementById('compareBackdrop').classList.add('open');
+    });
+  }
+  const compareClose = document.getElementById('compareClose');
+  if (compareClose) {
+    compareClose.addEventListener('click', () => {
+      document.getElementById('compareBackdrop').classList.remove('open');
+    });
+  }
+  const compareBackdrop = document.getElementById('compareBackdrop');
+  if (compareBackdrop) {
+    compareBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'compareBackdrop') compareBackdrop.classList.remove('open');
+    });
+  }
+  const compareRunBtn = document.getElementById('compareRunBtn');
+  if (compareRunBtn) {
+    compareRunBtn.addEventListener('click', async () => {
+      const modelA = document.getElementById('compareModelA').value;
+      const modelB = document.getElementById('compareModelB').value;
+      const prompt = document.getElementById('comparePrompt').value.trim();
+      if (!prompt) return;
+      const outA = document.getElementById('compareOutA');
+      const outB = document.getElementById('compareOutB');
+      outA.textContent = 'Thinking...';
+      outB.textContent = 'Thinking...';
+      const msgs = [{ role: 'user', content: prompt }];
+      async function run(model, outEl) {
+        try {
+          const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: msgs, stream: false }) });
+          const d = await r.json();
+          outEl.textContent = d.message ? d.message.content : (d.final || JSON.stringify(d).slice(0, 500));
+        } catch (e) {
+          outEl.textContent = 'Error: ' + e.message;
+        }
+      }
+      await Promise.all([run(modelA, outA), run(modelB, outB)]);
+    });
+  }
+
+  // Resizable sidebar toggle (simple collapse)
+  // Add a sidebar with quick info
+  (function() {
+    const sidebar = document.createElement('div');
+    sidebar.id = 'sidebar';
+    sidebar.style.cssText = 'width:220px;min-width:180px;max-width:320px;background:var(--panel);border-right:1px solid var(--border);padding:12px;overflow:auto;display:none;flex-shrink:0;';
+    sidebar.innerHTML = '<h3 style="font-size:13px;margin:0 0 8px;">Quick info</h3>' +
+      '<div id="sidebarInfo" style="font-size:12px;color:var(--muted);">Loading...</div>';
+    const handle = document.createElement('div');
+    handle.style.cssText = 'width:6px;cursor:col-resize;background:var(--border);display:none;';
+    const main = document.querySelector('main');
+    if (main && main.parentNode) {
+      main.parentNode.insertBefore(sidebar, main);
+      main.parentNode.insertBefore(handle, main);
+    }
+    // toggle button in header
+    const toggle = document.createElement('button');
+    toggle.textContent = 'Sidebar';
+    toggle.style.fontSize = '12px';
+    toggle.style.padding = '4px 8px';
+    const controls = document.querySelector('.controls');
+    if (controls) controls.appendChild(toggle);
+    toggle.addEventListener('click', () => {
+      const show = sidebar.style.display === 'none';
+      sidebar.style.display = show ? 'block' : 'none';
+      handle.style.display = show ? 'block' : 'none';
+      toggle.textContent = show ? 'Hide sidebar' : 'Sidebar';
+    });
+    // resize
+    let dragging = false;
+    handle.addEventListener('mousedown', () => { dragging = true; });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = sidebar.getBoundingClientRect();
+      const newW = e.clientX - rect.left;
+      if (newW >= 160 && newW <= 360) sidebar.style.width = newW + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+  })();
+
+  loadModels();
+  loadProject();
+  loadSearchEngines();
+
+  // First-run wizard
+  (function() {
+    try {
+      if (localStorage.getItem('localai_firstRunDone')) return;
+    } catch (e) {}
+    const bd = document.createElement('div');
+    bd.id = 'firstRunBackdrop';
+    bd.className = 'modal-backdrop open';
+    bd.innerHTML = '<div class="modal" style="max-width:460px;">' +
+      '<h2>Welcome to LocalAI</h2>' +
+      '<p style="font-size:13px;color:var(--muted);">Quick setup checklist:</p>' +
+      '<ul style="font-size:13px;line-height:1.8;padding-left:18px;">' +
+      '<li>Ollama running on <code>127.0.0.1:11434</code></li>' +
+      '<li>At least one model pulled (e.g. <code>llama3.2:3b</code>)</li>' +
+      '<li>Open <b>Models</b> to pull recommended models</li>' +
+      '<li>Optional: set RE env vars for reverse-engineering tools</li>' +
+      '</ul>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button class="primary" id="firstRunOk">Get started</button>' +
+      '</div>' +
+      '</div>';
+    document.body.appendChild(bd);
+    document.getElementById('firstRunOk').addEventListener('click', function() {
+      bd.remove();
+      try { localStorage.setItem('localai_firstRunDone', '1'); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>
