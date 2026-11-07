@@ -77,14 +77,27 @@ REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
 
 The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
 
-## Installer / Backup
+## Installer (Windows Shell)
 
-A complete offline installer is available in the `D:\LocalAI-Installer\` directory (not included in this repo). It includes:
-- Interactive drive/path selection
-- Component scanning with version comparison
-- 15 individual pull scripts + pull-all.bat
-- Auto-start setup
-- MIT license
+A standard Windows-shell installer is included in the repo: **`install.vbs`**. It runs under `wscript.exe` (the standard Windows Script Host) — no PowerShell, no console window. It uses native Windows dialogs and:
+- Asks where to install (interactive folder selection) and copies the app files there
+- Checks for Node.js and Ollama and reports what's missing
+- Optionally pulls all recommended models in the proper order (llama3.2, qwen2.5, mistral, etc.)
+- Prompts whether to create a **desktop shortcut** (your selection)
+- Optionally launches LocalAI immediately after install
+- Writes an `install.log` for troubleshooting
+- Includes `uninstall.vbs` to remove shortcuts (and optionally the app folder)
+- Creates `.lnk` shortcuts via `WScript.Shell` (standard Windows shell)
+
+Run it by double-clicking `install.vbs`. Or from a command prompt:
+
+```
+wscript.exe install.vbs
+```
+
+The launcher itself is **`launcher.vbs`** (Windows Script Host / standard Windows shell) and is portable — it resolves all paths relative to its own location and starts Ollama, the web UI, and the Edge app window. Desktop shortcuts created by the installer point at `launcher.vbs`.
+
+> Note: `launch-gui.ps1`, `tray.ps1` and `start.bat` are kept for backwards compatibility, but the recommended path for novice users is `install.vbs` + `launcher.vbs`.
 
 ## Privacy
 
