@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.5</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.6</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.5</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.6</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -243,6 +243,10 @@
   <div class="modal">
     <button class="close-btn" id="compClose">&times;</button>
     <h2>Local AI Components</h2>
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+      <button id="compUpdateAllBtn" class="primary" style="font-size:12px;padding:4px 10px;">Update all</button>
+      <span id="compUpdateAllStatus" style="font-size:12px;color:var(--muted);"></span>
+    </div>
     <div id="compList">Loading...</div>
   </div>
 </div>
@@ -984,6 +988,35 @@
   document.getElementById('compBackdrop').addEventListener('click', (e) => {
     if (e.target.id === 'compBackdrop') document.getElementById('compBackdrop').classList.remove('open');
   });
+
+  const compUpdateAllBtn = document.getElementById('compUpdateAllBtn');
+  if (compUpdateAllBtn) {
+    compUpdateAllBtn.addEventListener('click', async () => {
+      const st = document.getElementById('compUpdateAllStatus');
+      compUpdateAllBtn.disabled = true;
+      st.textContent = 'Updating all...';
+      try {
+        const r = await fetch('/api/components');
+        const d = await r.json();
+        const comps = (d.components || []).filter(c => c.updateAvailable);
+        if (comps.length === 0) { st.textContent = 'All up to date.'; return; }
+        let done = 0;
+        for (const c of comps) {
+          st.textContent = 'Updating ' + (done + 1) + '/' + comps.length + ': ' + c.name + '...';
+          try {
+            await fetch('/api/component/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+          } catch (e) {}
+          done++;
+        }
+        st.textContent = 'Updated ' + done + ' component(s).';
+        await loadComponents();
+      } catch (e) {
+        st.textContent = 'Error: ' + e.message;
+      } finally {
+        compUpdateAllBtn.disabled = false;
+      }
+    });
+  }
 
   async function loadSearchEngines() {
     try {
