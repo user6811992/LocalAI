@@ -135,34 +135,39 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.4</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.5</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
-    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
-      <input type="checkbox" id="codingMode" checked /> Coding tools
-    </label>
-    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
-      <input type="checkbox" id="reMode" /> RE tools
-    </label>
-    <select id="model" title="Model"></select>
+    <span style="color:var(--border);">|</span>
+    <select id="model" title="Model" style="max-width:200px;"></select>
     <select id="systemPrompt" title="System prompt template">
       <option value="">Default</option>
     </select>
-    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>
     <select id="searchEngine" title="Search engine"></select>
-    <button id="instancesBtn" onclick="openInstances()">Instances</button>
-    <button id="modelsBtn">Models</button>
-    <button id="codeBtn">Code</button>
-    <button id="ragBtn">Docs</button>
-    <button id="reWorkspaceBtn">RE</button>
-    <button id="chatsBtn">Chats</button>
-    <button id="componentsBtn">Components</button>
-    <button id="aboutBtn" onclick="openAbout()">About</button>
-    <button id="refresh">Refresh</button>
-    <button id="clear">Clear</button>
-  <button id="exportChat">Export MD</button>
-  <button id="exportJson">Export JSON</button>
-  <button id="compareBtn">Compare</button>
-  <input id="chatSearch" placeholder="Search chat..." style="width:140px;font-size:12px;padding:4px 8px;" />
+    <span style="color:var(--border);">|</span>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
+      <input type="checkbox" id="codingMode" checked /> Code
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
+      <input type="checkbox" id="reMode" /> RE
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
+      <input type="checkbox" id="confirmTools" /> Confirm
+    </label>
+    <span style="color:var(--border);">|</span>
+    <button id="modelsBtn" style="padding:4px 8px;font-size:12px;">Models</button>
+    <button id="componentsBtn" style="padding:4px 8px;font-size:12px;">Components</button>
+    <button id="instancesBtn" onclick="openInstances()" style="padding:4px 8px;font-size:12px;">Instances</button>
+    <button id="ragBtn" style="padding:4px 8px;font-size:12px;">Docs</button>
+    <button id="codeBtn" style="padding:4px 8px;font-size:12px;">Code</button>
+    <button id="reWorkspaceBtn" style="padding:4px 8px;font-size:12px;">RE</button>
+    <button id="chatsBtn" style="padding:4px 8px;font-size:12px;">Chats</button>
+    <button id="compareBtn" style="padding:4px 8px;font-size:12px;">Compare</button>
+    <span style="color:var(--border);">|</span>
+    <button id="refresh" style="padding:4px 8px;font-size:12px;">Refresh</button>
+    <button id="clear" style="padding:4px 8px;font-size:12px;">Clear</button>
+    <button id="exportChat" style="padding:4px 8px;font-size:12px;">Export</button>
+    <button id="aboutBtn" onclick="openAbout()" style="padding:4px 8px;font-size:12px;">About</button>
+    <input id="chatSearch" placeholder="Search..." style="width:120px;font-size:12px;padding:4px 8px;" />
   </div>
   <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
     <span style="font-size:12px;color:var(--muted);">Project:</span>
@@ -207,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.9.4</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.9.5</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
