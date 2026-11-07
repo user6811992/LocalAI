@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.6</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.7</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.6</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.7</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -243,8 +243,9 @@
   <div class="modal">
     <button class="close-btn" id="compClose">&times;</button>
     <h2>Local AI Components</h2>
-    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;">
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button id="compUpdateAllBtn" class="primary" style="font-size:12px;padding:4px 10px;">Update all</button>
+      <button id="compRefreshBtn" style="font-size:12px;padding:4px 10px;">Refresh versions</button>
       <span id="compUpdateAllStatus" style="font-size:12px;color:var(--muted);"></span>
     </div>
     <div id="compList">Loading...</div>
@@ -1014,6 +1015,27 @@
         st.textContent = 'Error: ' + e.message;
       } finally {
         compUpdateAllBtn.disabled = false;
+      }
+    });
+  }
+
+  const compRefreshBtn = document.getElementById('compRefreshBtn');
+  if (compRefreshBtn) {
+    compRefreshBtn.addEventListener('click', async () => {
+      const st = document.getElementById('compUpdateAllStatus');
+      compRefreshBtn.disabled = true;
+      st.textContent = 'Refreshing versions...';
+      try {
+        const r = await fetch('/api/components?refresh=1');
+        const d = await r.json();
+        const comps = d.components || [];
+        const avail = comps.filter(c => c.updateAvailable).length;
+        st.textContent = 'Versions refreshed. ' + avail + ' update(s) available.';
+        await loadComponents();
+      } catch (e) {
+        st.textContent = 'Refresh failed: ' + e.message;
+      } finally {
+        compRefreshBtn.disabled = false;
       }
     });
   }

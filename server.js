@@ -874,6 +874,20 @@ async function getOllamaVersion() {
   } catch (e) { return null; }
 }
 
+async function getLatestOllamaVersion() {
+  try {
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      https.get('https://api.github.com/repos/ollama/ollama/releases/latest', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+        let buf = '';
+        r.on('data', (c) => (buf += c));
+        r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+      }).on('error', reject);
+    });
+    return (data && data.tag_name) ? data.tag_name.replace(/^v/, '') : null;
+  } catch (e) { return null; }
+}
+
 function getReaAgentVersion() {
   const env = Object.assign({}, process.env, { PATH: (process.env.PATH || '') });
   // try rea --version
@@ -926,10 +940,11 @@ async function getCachedVersions() {
     return _versionCache;
   }
   const ollamaVer = await getOllamaVersion();
+  const ollamaLatest = await getLatestOllamaVersion();
   const reaVer = getReaAgentVersion();
   const reaLatest = getLatestReaAgentVersion();
   const reaRepo = getReaRepoVersions();
-  _versionCache = { ollamaVer, reaVer, reaLatest, reaRepo };
+  _versionCache = { ollamaVer, ollamaLatest, reaVer, reaLatest, reaRepo };
   _versionCacheTime = now;
   return _versionCache;
 }
@@ -957,7 +972,9 @@ async function getComponents() {
     } catch (e) {
       ollamaStatus = 'unreachable: ' + (e.message || e);
     }
-    const ollamaVer = (await getCachedVersions()).ollamaVer;
+    const _cv2 = await getCachedVersions();
+    const ollamaVer = _cv2.ollamaVer;
+    const ollamaLatest = _cv2.ollamaLatest;
     comps.push({
       id: 'ollama-backend',
       name: 'Ollama backend',
@@ -965,9 +982,9 @@ async function getComponents() {
       status: ollamaStatus,
       detail: OLLAMA,
       version: ollamaVer || 'unknown',
-      latest: null,
-      updateAvailable: false,
-      about: 'Local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + '.',
+      latest: ollamaLatest,
+      updateAvailable: !!(ollamaVer && ollamaLatest && ollamaVer !== ollamaLatest),
+      about: 'Local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + (ollamaLatest ? ' (latest: ' + ollamaLatest + ')' : '') + '.',
     });
     for (const m of models) {
       comps.push({
@@ -1131,8 +1148,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/api/components' && req.method === 'GET') {
+  if (req.url.startsWith('/api/components') && req.method === 'GET') {
     try {
+      const u = new URL(req.url, 'http://localhost');
+      if (u.searchParams.get('refresh') === '1') invalidateVersionCache();
       const comps = await getComponents();
       json(res, 200, { components: comps });
     } catch (e) { json(res, 500, { error: e.message || String(e) }); }
@@ -1159,7 +1178,12 @@ const server = http.createServer(async (req, res) => {
       if (id === 'ollama-backend') {
         try {
           const r = await fetch(OLLAMA + '/api/tags');
-          result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s).' } : { ok: false, message: 'HTTP ' + r.status };
+          const cv = await getCachedVersions();
+          if (cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest) {
+            result = { ok: false, message: 'Update available: ' + cv.ollamaLatest + ' (installed: ' + cv.ollamaVer + '). Download from https://ollama.com/download' };
+          } else {
+            result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'HTTP ' + r.status };
+          }
         } catch (e) { result = { ok: false, message: String(e.message || e) }; }
       } else if (id.startsWith('model:')) {
         const modelName = id.slice('model:'.length);
