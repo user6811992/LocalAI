@@ -1,65 +1,102 @@
-# Local AI (Ollama) - Setup & Access
+# LocalAI
 
-This machine runs a local LLM via Ollama, exposed on your LAN so your iPhone/iPad and Windows devices can use it.
+A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat interface, search engine integration, model management, and reverse-engineering tools. Runs entirely on your machine — no cloud, no telemetry.
 
-## Server (this PC)
-- Ollama API:  http://192.168.1.249:11434
-- Web chat UI: http://192.168.1.249:8080
-- Model: llama3.1:8b (CPU, ~5-10 tok/s)
+## Features
 
-Files:
-- C:\Users\Poonjab\Documents\LocalAI\server.js   (web UI + proxy)
-- C:\Users\Poonjab\Documents\LocalAI\public\index.html
-- C:\Users\Poonjab\Documents\LocalAI\start.bat    (manual start)
-- C:\Users\Poonjab\Documents\LocalAI\launcher.vbs (silent auto-start at login)
+- **Chat UI** — clean, responsive web interface with thinking-block display, Markdown rendering, and code highlighting
+- **Model management** — pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list
+- **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
+- **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
+- **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
+- **PWA** — installable as a progressive web app on mobile and desktop
+- **Mobile-friendly** — safe-area insets, touch targets, install hint banner
+- **No telemetry** — zero phone-home, analytics, or tracking code
+- **Portable** — auto-generates paths on install, no hardcoded usernames
 
-Auto-start: a shortcut in the Startup folder runs launcher.vbs at login.
+## Supported Models
 
-## Use from any device (browser)
-Open http://192.168.1.249:8080 on phone or PC browser. Works on iOS Safari / Windows Edge.
+Tested with:
+- `llama3.2:3b`, `qwen2.5:14b`, `qwen2.5-coder:14b`, `mistral:7b`, `phi3:mini`, `gemma2:9b`
+- Uncensored: `huihui_ai/qwen2.5-coder-abliterate:7b`, `huihui_ai/deepseek-r1-abliterated:8b`
+- Vision: `moondream`, `gemma3:4b`
+- Embeddings: `nomic-embed-text`
 
-## Use from iOS (native apps)
-Install one of these from the App Store, then set the server URL to http://192.168.1.249:11434
-- Enchanted (free) - Settings -> Server URL
-- Msty
-- ChatterUI
-- Shortcuts: use "Get contents of URL" to POST to http://192.168.1.249:11434/api/generate
+## Quick Start
 
-Note: iOS must be on the same Wi-Fi. For access away from home, set up a tunnel (Tailscale / Cloudflare Tunnel) - see below.
+### Prerequisites
+- [Node.js](https://nodejs.org) 18+
+- [Ollama](https://ollama.com/download) installed and running
 
-## Use from Windows (native apps)
-- Msty, LM Studio, Chatbox, AnythingLLM, Jan
-- Set OpenAI-compatible base URL: http://192.168.1.249:11434/v1
-  (API key can be anything, e.g. "ollama")
+### Install
+```bash
+git clone https://github.com/user6811992/LocalAI.git
+cd LocalAI
+npm install
+```
 
-## Remote access (optional, outside LAN)
-Install Tailscale on this PC and your devices for a private VPN, then use the Tailscale IP.
-Or run a Cloudflare Tunnel: cloudflared tunnel --url http://localhost:11434
+### Run
+```bash
+# Start Ollama (if not running)
+ollama serve
 
-## Add more models
-  ollama pull qwen2.5:7b
-  ollama pull mistral:7b
-  ollama pull phi3:mini
-  ollama pull nomic-embed-text
+# Start the web UI
+node server.js
+```
 
-## Reverse Engineering (REA)
-- REA CLI installed: `rea --version` → 6.8.0
-- MCP server config: `C:\Users\Poonjab\Documents\LocalAI\mcp-config.json` (import into Msty/LM Studio/Cursor/Claude Desktop/AnythingLLM).
-- Web UI has an "RE tools" checkbox → enables agent mode with 229 RE tools (binaries, JS/Electron, websites, Android, firmware, etc.).
-- Registered REA MCP in OpenCode (this environment) automatically.
-- **Ghidra 12.1.4** installed at `C:\Ghidra\ghidra_12.1.4_PUBLIC` (GHIDRA_INSTALL_DIR set). JDK 21 set.
-- **jadx 1.5.6** at `C:\jadx\bin`; jadx-headless-mcp 0.7.1 JAR at `C:\Tools\jadx-mcp`.
-- **Kuna 1.987** Windows binary at `C:\Kuna\...` (REA_KUNA_COMMAND set), but REA's Kuna provider is not supported on Windows (process-tree ownership unverified). Kuna Ghidra plugin available for Ghidra GUI (version-locked to Ghidra 12.1.2; use "Install Anyway" with 12.1.4).
-- **IDA Pro** and **Hopper** are commercial/optional: Hopper is macOS-only; IDA requires `REA_IDA_MCP_CONFIG` pointing to an upstream IDA MCP registration. Not freely installable.
-- `rea doctor` → healthy: true, environment_healthy: true.
+Open http://127.0.0.1:8080 in your browser.
 
-- If devices can't connect: check Windows Firewall rules "Ollama API 11434" and "Local AI Web UI 8080".
-- If Ollama not running: run start.bat.
-- IP may change: find it with `ipconfig`. Update clients if needed. Consider setting a static IP / DHCP reservation on your router.
+### Pull a model
+```bash
+ollama pull llama3.2:3b
+```
+Or use the **Models** button in the web UI.
 
-## Desktop GUI (Windows)
-- launch-gui.ps1: starts services if needed and opens an app-like window via Edge.
-- Desktop + Start Menu shortcut: 'Local AI'.
-- tray.ps1: system tray icon with Open/Exit; auto-starts at login.
-- To pin to taskbar: launch once, then right-click the taskbar icon and choose Pin to taskbar.
+## Remote Access
 
+### Same Wi-Fi (LAN)
+Open `http://<your-pc-ip>:8080` on any device on the same network.
+
+### Tailscale (recommended for remote)
+Install [Tailscale](https://tailscale.com) on your PC and devices for a private VPN. Both will get `100.x.x.x` addresses.
+
+### Cloudflare Quick Tunnel (no domain needed)
+```bash
+cloudflared tunnel --url http://localhost:8080
+```
+
+## Reverse Engineering Tools
+
+Requires [REA](https://github.com/...) installed separately. Set the following environment variables:
+
+```bash
+GHIDRA_INSTALL_DIR=C:\Ghidra\ghidra_12.1.4_PUBLIC
+JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot
+REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
+```
+
+The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
+
+## Installer / Backup
+
+A complete offline installer is available in the `D:\LocalAI-Installer\` directory (not included in this repo). It includes:
+- Interactive drive/path selection
+- Component scanning with version comparison
+- 15 individual pull scripts + pull-all.bat
+- Auto-start setup
+- MIT license
+
+## Privacy
+
+- No telemetry, analytics, or tracking
+- No cloud dependencies — everything runs locally
+- No hardcoded identifiers — paths auto-generate on install
+- `search-config.json` ships with empty keys — add your own
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions welcome! Please open an issue or pull request.
