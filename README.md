@@ -1,5 +1,7 @@
 # LocalAI
 
+![Version](https://img.shields.io/github/v/release/user6811992/LocalAI) ![License](https://img.shields.io/github/license/user6811992/LocalAI)
+
 A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat interface, search engine integration, model management, and reverse-engineering tools. Runs entirely on your machine — no cloud, no telemetry.
 
 ## Features
