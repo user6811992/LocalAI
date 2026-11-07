@@ -140,10 +140,11 @@ Then re-run `install.vbs`.
 
 Special thanks to:
 
-- **OpenCode** — the AI coding agent harness that helped build, debug, and ship this project (installer, launcher, UI features, and more).
-- **Beam.ai** — the model provider powering the coding/reasoning assistance behind this work.
-- **Ollama** — for making local LLMs easy to run.
-- **HuggingFace** — for the model hub and open weights.
+- **[OpenCode](https://opencode.ai)** - the AI coding agent harness that helped build, debug, and ship this project (installer, launcher, UI features, and more).
+- **[Beam.ai](https://beam.ai)** - the model provider powering the coding/reasoning assistance behind this work.
+- **[Ollama](https://ollama.com)** - for making local LLMs easy to run.
+- **[HuggingFace](https://huggingface.co)** - for the model hub and open weights.
+- **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
 - All other contributors, testers, and the open-source community.
 
 ## License
