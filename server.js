@@ -1388,6 +1388,148 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url.startsWith('/api/hf-search') && req.method === 'GET') {
+    try {
+      const u = new URL(req.url, 'http://localhost');
+      const q = (u.searchParams.get('q') || '').trim();
+      const https = require('https');
+      const apiUrl = 'https://huggingface.co/api/models?search=' + encodeURIComponent(q) + '&filter=gguf&sort=downloads&direction=-1&limit=20';
+      const data = await new Promise((resolve, reject) => {
+        https.get(apiUrl, { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+          let buf = '';
+          r.on('data', (c) => (buf += c));
+          r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+        }).on('error', reject);
+      });
+      const items = (Array.isArray(data) ? data : []).map((m) => ({
+        id: m.id || m.modelId,
+        downloads: m.downloads || 0,
+        likes: m.likes || 0,
+        tags: m.tags || [],
+      }));
+      json(res, 200, { items });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- RAG (document upload + retrieval) ----------
+  const RAG_FILE = path.join(__dirname, 'rag-store.json');
+  function loadRag() {
+    try { return JSON.parse(fs.readFileSync(RAG_FILE, 'utf8')); } catch (e) { return { docs: [], chunks: [] }; }
+  }
+  function saveRag(store) {
+    try { fs.writeFileSync(RAG_FILE, JSON.stringify(store)); } catch (e) {}
+  }
+  function cosine(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
+    return dot / (Math.sqrt(na)*Math.sqrt(nb) + 1e-9);
+  }
+  async function embedText(text) {
+    try {
+      const r = await ollamaRequest('/api/embeddings', { model: 'nomic-embed-text', prompt: text.slice(0, 4000) });
+      return r.embedding || null;
+    } catch (e) { return null; }
+  }
+
+  if (req.url === '/api/rag-docs' && req.method === 'GET') {
+    const store = loadRag();
+    json(res, 200, { docs: store.docs.map(d => ({ id: d.id, name: d.name, chunks: d.chunks })) });
+    return;
+  }
+
+  if (req.url === '/api/rag-upload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, content, type } = JSON.parse(body || '{}');
+      if (!name || !content) { json(res, 400, { ok: false, message: 'name and content required' }); return; }
+      let text = '';
+      if (type === 'pdf') {
+        try {
+          const pdfParse = require('pdf-parse');
+          const buf = Buffer.from(content, 'base64');
+          const data = await pdfParse(buf);
+          text = data.text || '';
+        } catch (e) { text = ''; json(res, 500, { ok: false, message: 'PDF parse failed: ' + e.message }); return; }
+      } else {
+        text = Buffer.from(content, 'base64').toString('utf8');
+      }
+      if (!text.trim()) { json(res, 400, { ok: false, message: 'No text extracted' }); return; }
+      // chunk
+      const chunks = [];
+      const size = 800;
+      for (let i = 0; i < text.length; i += size) {
+        chunks.push(text.slice(i, i + size));
+      }
+      const store = loadRag();
+      const docId = 'doc_' + Date.now();
+      const doc = { id: docId, name, chunks: chunks.length };
+      store.docs.push(doc);
+      // embed chunks
+      for (let i = 0; i < chunks.length; i++) {
+        const emb = await embedText(chunks[i]);
+        store.chunks.push({ docId, idx: i, text: chunks[i], embedding: emb });
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, message: 'Indexed ' + chunks.length + ' chunks from ' + name, docId });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-query' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { query, topK } = JSON.parse(body || '{}');
+      const k = topK || 5;
+      const store = loadRag();
+      if (!store.chunks.length) { json(res, 200, { chunks: [] }); return; }
+      const qEmb = await embedText(query || '');
+      let scored = store.chunks.map(c => ({ text: c.text, docId: c.docId, score: qEmb && c.embedding ? cosine(qEmb, c.embedding) : 0 }));
+      scored.sort((a, b) => b.score - a.score);
+      json(res, 200, { chunks: scored.slice(0, k).map(s => s.text) });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-clear' && req.method === 'POST') {
+    saveRag({ docs: [], chunks: [] });
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.url === '/api/run-code' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { lang, code } = JSON.parse(body || '{}');
+      const { exec } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const tmp = path.join(os.tmpdir(), 'localai-run-' + Date.now());
+      let cmd = '';
+      if (lang === 'python') {
+        const f = tmp + '.py';
+        fs.writeFileSync(f, code || '');
+        cmd = 'python "' + f + '"';
+      } else if (lang === 'javascript' || lang === 'js') {
+        const f = tmp + '.js';
+        fs.writeFileSync(f, code || '');
+        cmd = 'node "' + f + '"';
+      } else {
+        json(res, 400, { ok: false, message: 'Unsupported language. Use python or javascript.' }); return;
+      }
+      const result = await new Promise((resolve) => {
+        exec(cmd, { timeout: 15000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          // cleanup
+          try { fs.unlinkSync(tmp + (lang === 'python' ? '.py' : '.js')); } catch (_) {}
+          resolve({ ok: !err, stdout: (stdout || '').slice(0, 4000), stderr: (stderr || '').slice(0, 2000), code: err ? (err.code || 1) : 0 });
+        });
+      });
+      json(res, 200, result);
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     try {
       const body = await readBody(req);
