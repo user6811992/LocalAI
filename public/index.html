@@ -181,6 +181,7 @@
     <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
     <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
     <button id="send" class="primary">Send</button>
+    <button id="stopBtn" title="Stop generating" style="padding:6px 10px;display:none;">Stop</button>
   </div>
   <div id="status" class="status"></div>
 </footer>
@@ -457,6 +458,7 @@
 
   let messages = [];
   let generating = false;
+  let currentAbort = null;
   let attachments = [];
   let messageQueue = [];
   let inputHistory = [];
@@ -782,6 +784,9 @@
     const requestOptions = Object.keys(genOpts).length ? genOpts : undefined;
     generating = true;
     sendBtn.disabled = true;
+    const stopBtn = document.getElementById('stopBtn');
+    if (stopBtn) stopBtn.style.display = 'inline-block';
+    currentAbort = new AbortController();
     const assistantDiv = addMsg('assistant', '');
     const contentEl = assistantDiv.querySelector('.content');
     const typing = document.createElement('span');
@@ -806,6 +811,7 @@
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: currentAbort ? currentAbort.signal : undefined,
           body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
@@ -856,6 +862,7 @@
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: currentAbort ? currentAbort.signal : undefined,
           body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
@@ -897,6 +904,12 @@
         status.className = 'status';
       }
     } catch (e) {
+      if (e && e.name === 'AbortError') {
+        contentEl.textContent = (contentEl.textContent || '') + '\\n[stopped]';
+        status.textContent = 'Stopped.';
+        status.className = 'status err';
+        return;
+      }
       const msg = (e && e.message) ? e.message : String(e);
       const friendly = /failed to fetch/i.test(msg)
         ? 'Network error: could not reach the LocalAI server. Is it running? (node server.js)'
@@ -907,6 +920,9 @@
     } finally {
       clearInterval(timerInterval);
       if (timerEl && timerEl.parentNode) timerEl.remove();
+      const sb = document.getElementById('stopBtn');
+      if (sb) sb.style.display = 'none';
+      currentAbort = null;
       generating = false;
       sendBtn.disabled = false;
       input.focus();
@@ -923,6 +939,17 @@
   }
 
   sendBtn.addEventListener('click', send);
+  const stopBtn = document.getElementById('stopBtn');
+  if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+      if (currentAbort) { currentAbort.abort(); }
+      generating = false;
+      sendBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      status.textContent = 'Stopped.';
+      status.className = 'status err';
+    });
+  }
   document.getElementById('queueBtn').addEventListener('click', () => {
     const t = input.value.trim();
     if (!t && attachments.length === 0) return;
