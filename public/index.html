@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.7</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.8</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -175,7 +175,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.5.7</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.5.8</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -208,6 +208,10 @@
       <div style="margin-top:8px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Installed models:</div>
         <div id="installedModels" style="font-size:12px;color:var(--muted);"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <button id="scanDrivesBtn" style="font-size:12px;padding:4px 8px;">Scan drives for models</button>
+        <div id="scanResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:160px;overflow:auto;"></div>
       </div>
     </div>
   </div>
@@ -986,6 +990,32 @@
   document.getElementById('modelsClose').addEventListener('click', () => {
     document.getElementById('modelsBackdrop').classList.remove('open');
   });
+  const scanBtn = document.getElementById('scanDrivesBtn');
+  if (scanBtn) {
+    scanBtn.addEventListener('click', async () => {
+      const res = document.getElementById('scanResults');
+      res.textContent = 'Scanning drives (this may take a while)...';
+      scanBtn.disabled = true;
+      try {
+        const r = await fetch('/api/scan-models');
+        const d = await r.json();
+        const items = d.found || [];
+        if (items.length === 0) { res.textContent = 'No models or stores found.'; return; }
+        res.innerHTML = '';
+        items.forEach(it => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '4px';
+          const size = it.size ? ' (' + (it.size / 1e9).toFixed(1) + ' GB)' : '';
+          div.textContent = (it.type === 'gguf' ? '📄 ' : '📦 ') + it.label + size + ' — ' + it.path;
+          res.appendChild(div);
+        });
+      } catch (e) {
+        res.textContent = 'Scan failed: ' + e.message;
+      } finally {
+        scanBtn.disabled = false;
+      }
+    });
+  }
   document.getElementById('modelsBackdrop').addEventListener('click', (e) => {
     if (e.target.id === 'modelsBackdrop') document.getElementById('modelsBackdrop').classList.remove('open');
   });

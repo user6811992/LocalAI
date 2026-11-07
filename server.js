@@ -1258,6 +1258,44 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url === '/api/scan-models' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const found = [];
+      // Ollama default models dir
+      const ollamaModels = path.join(process.env.USERPROFILE || '', '.ollama', 'models');
+      if (fs.existsSync(ollamaModels)) {
+        found.push({ type: 'ollama-store', path: ollamaModels, label: 'Ollama model store' });
+      }
+      // Scan drives for GGUF files (up to 4 levels deep, skip system dirs)
+      const skip = new Set(['Windows', 'Program Files', 'Program Files (x86)', 'ProgramData', '$Recycle.Bin', 'System Volume Information', 'node_modules', '.git']);
+      function walk(dir, depth) {
+        if (depth > 4) return;
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+        for (const e of entries) {
+          if (skip.has(e.name)) continue;
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) walk(full, depth + 1);
+          else if (e.isFile() && e.name.toLowerCase().endsWith('.gguf')) {
+            try { const st = fs.statSync(full); found.push({ type: 'gguf', path: full, label: e.name, size: st.size }); } catch (_) {}
+          }
+        }
+      }
+      // scan drive roots
+      const os = require('os');
+      // enumerate drives via fs (try A-Z)
+      for (let c = 65; c <= 90; c++) {
+        const letter = String.fromCharCode(c);
+        const root = letter + ':\\';
+        try { if (fs.existsSync(root)) walk(root, 0); } catch (_) {}
+      }
+      json(res, 200, { found });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     try {
       const body = await readBody(req);
