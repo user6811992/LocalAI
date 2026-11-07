@@ -914,19 +914,41 @@ function getLatestReaAgentVersion() {
   } catch (e) { return null; }
 }
 
-function getReaRepoVersions() {
+async function getReaRepoVersions() {
   const reaRepoPath = path.join(__dirname, 'repos', 'rea');
-  let current = null, behind = null, remote = null;
-  if (!fs.existsSync(reaRepoPath)) return { current: null, remote: null, behind: 0 };
+  let current = null, remote = null, behind = 0;
+  // current: local clone HEAD (if present)
+  if (fs.existsSync(reaRepoPath)) {
+    try {
+      const { execFileSync } = require('child_process');
+      current = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', timeout: 15000 }).trim();
+    } catch (e) {}
+  }
+  // remote: latest commit on GitHub (morluto/rea)
   try {
-    const { execFileSync } = require('child_process');
-    current = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', timeout: 15000 }).trim();
-    // fetch remote (best effort)
-    try { execFileSync('git', ['-C', reaRepoPath, 'fetch', '--quiet', '--depth=1'], { encoding: 'utf8', timeout: 30000 }); } catch (e) {}
-    remote = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--short', 'origin/main'], { encoding: 'utf8', timeout: 15000 }).trim();
-    const count = execFileSync('git', ['-C', reaRepoPath, 'rev-list', '--count', 'HEAD..origin/main'], { encoding: 'utf8', timeout: 15000 }).trim();
-    behind = parseInt(count, 10) || 0;
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      https.get('https://api.github.com/repos/morluto/rea/commits?per_page=1', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+        let buf = '';
+        r.on('data', (c) => (buf += c));
+        r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+      }).on('error', reject);
+    });
+    if (Array.isArray(data) && data.length) {
+      remote = (data[0].sha || '').slice(0, 7);
+    }
   } catch (e) {}
+  // behind count: if we have both, compare (best effort via git if local clone exists)
+  if (current && remote && fs.existsSync(reaRepoPath)) {
+    try {
+      const { execFileSync } = require('child_process');
+      try { execFileSync('git', ['-C', reaRepoPath, 'fetch', '--quiet', '--depth=1'], { encoding: 'utf8', timeout: 30000, stdio: ['ignore','ignore','ignore'] }); } catch (e) {}
+      const count = execFileSync('git', ['-C', reaRepoPath, 'rev-list', '--count', 'HEAD..origin/main'], { encoding: 'utf8', timeout: 15000 }).trim();
+      behind = parseInt(count, 10) || 0;
+    } catch (e) { behind = (current !== remote) ? 1 : 0; }
+  } else if (current && remote) {
+    behind = (current !== remote) ? 1 : 0;
+  }
   return { current, remote, behind };
 }
 
@@ -944,7 +966,7 @@ async function getCachedVersions() {
   const ollamaLatest = await getLatestOllamaVersion();
   const reaVer = getReaAgentVersion();
   const reaLatest = getLatestReaAgentVersion();
-  const reaRepo = getReaRepoVersions();
+  const reaRepo = await getReaRepoVersions();
   _versionCache = { ollamaVer, ollamaLatest, reaVer, reaLatest, reaRepo };
   _versionCacheTime = now;
   return _versionCache;
@@ -1017,8 +1039,8 @@ async function getComponents() {
     let reaRepoStatus = 'not cloned';
     let reaRepoAbout = 'Source repo not present at ' + reaRepoPath;
     if (!fs.existsSync(reaRepoPath)) {
-      reaRepoStatus = 'not installed';
-      reaRepoAbout = 'REA source repo not cloned. Clone from https://github.com/morluto/rea into ' + reaRepoPath;
+      reaRepoStatus = 'not cloned';
+      reaRepoAbout = 'REA source repo not cloned locally.\\nLatest on GitHub: ' + ((_cv && _cv.reaRepo && _cv.reaRepo.remote) || 'unknown') + '\\nClone from https://github.com/morluto/rea';
     } else {
       try {
         const { execFileSync } = require('child_process');
@@ -1038,7 +1060,7 @@ async function getComponents() {
       kind: 'repo',
       status: reaRepoStatus,
       detail: reaRepoPath,
-      version: _rrv.current || 'unknown',
+      version: _rrv.current || (_rrv.remote ? 'remote: ' + _rrv.remote : 'unknown'),
       latest: _rrv.remote || null,
       updateAvailable: (_rrv.behind || 0) > 0,
       about: reaRepoAbout + '\\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
