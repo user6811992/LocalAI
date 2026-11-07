@@ -1177,11 +1177,23 @@ const server = http.createServer(async (req, res) => {
       let result = { ok: false, message: 'Unknown component' };
       if (id === 'ollama-backend') {
         try {
-          const r = await fetch(OLLAMA + '/api/tags');
           const cv = await getCachedVersions();
           if (cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest) {
-            result = { ok: false, message: 'Update available: ' + cv.ollamaLatest + ' (installed: ' + cv.ollamaVer + '). Download from https://ollama.com/download' };
+            // Attempt update via winget
+            const { exec } = require('child_process');
+            const wg = await new Promise((resolve) => {
+              exec('winget upgrade Ollama.Ollama --accept-package-agreements --accept-source-agreements --silent', { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+                resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+              });
+            });
+            if (wg.ok) {
+              invalidateVersionCache();
+              result = { ok: true, message: 'Ollama updated via winget. Restart may be required. ' + wg.out.slice(0, 300) };
+            } else {
+              result = { ok: false, message: 'winget update failed. Update manually from https://ollama.com/download. ' + (wg.err || wg.out).slice(0, 300) };
+            }
           } else {
+            const r = await fetch(OLLAMA + '/api/tags');
             result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'HTTP ' + r.status };
           }
         } catch (e) { result = { ok: false, message: String(e.message || e) }; }
