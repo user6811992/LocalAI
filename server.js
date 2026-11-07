@@ -917,6 +917,7 @@ function getLatestReaAgentVersion() {
 function getReaRepoVersions() {
   const reaRepoPath = path.join(__dirname, 'repos', 'rea');
   let current = null, behind = null, remote = null;
+  if (!fs.existsSync(reaRepoPath)) return { current: null, remote: null, behind: 0 };
   try {
     const { execFileSync } = require('child_process');
     current = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', timeout: 15000 }).trim();
@@ -1015,15 +1016,20 @@ async function getComponents() {
     const reaRepoPath = path.join(__dirname, 'repos', 'rea');
     let reaRepoStatus = 'not cloned';
     let reaRepoAbout = 'Source repo not present at ' + reaRepoPath;
-    try {
-      const { execFileSync } = require('child_process');
-      const branch = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8', timeout: 15000 }).trim();
-      const commit = execFileSync('git', ['-C', reaRepoPath, 'log', '-1', '--format=%h %s'], { encoding: 'utf8', timeout: 15000 }).trim();
-      const dirty = execFileSync('git', ['-C', reaRepoPath, 'status', '--porcelain'], { encoding: 'utf8', timeout: 15000 }).trim();
-      reaRepoStatus = branch + (dirty ? ' (dirty)' : ' (clean)');
-      reaRepoAbout = 'Local clone of https://github.com/morluto/rea\\nPath: ' + reaRepoPath + '\\nLatest: ' + commit;
-    } catch (e) {
-      reaRepoStatus = 'error: ' + (e.message || e).slice(0, 120);
+    if (!fs.existsSync(reaRepoPath)) {
+      reaRepoStatus = 'not installed';
+      reaRepoAbout = 'REA source repo not cloned. Clone from https://github.com/morluto/rea into ' + reaRepoPath;
+    } else {
+      try {
+        const { execFileSync } = require('child_process');
+        const branch = execFileSync('git', ['-C', reaRepoPath, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8', timeout: 15000 }).trim();
+        const commit = execFileSync('git', ['-C', reaRepoPath, 'log', '-1', '--format=%h %s'], { encoding: 'utf8', timeout: 15000 }).trim();
+        const dirty = execFileSync('git', ['-C', reaRepoPath, 'status', '--porcelain'], { encoding: 'utf8', timeout: 15000 }).trim();
+        reaRepoStatus = branch + (dirty ? ' (dirty)' : ' (clean)');
+        reaRepoAbout = 'Local clone of https://github.com/morluto/rea\\nPath: ' + reaRepoPath + '\\nLatest: ' + commit;
+      } catch (e) {
+        reaRepoStatus = 'error: ' + (e.message || e).slice(0, 120);
+      }
     }
     const _rrv = _cv.reaRepo;
     comps.push({
@@ -1179,18 +1185,56 @@ const server = http.createServer(async (req, res) => {
         try {
           const cv = await getCachedVersions();
           if (cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest) {
-            // Attempt update via winget
+            // Attempt update: try winget first, then download+run installer
             const { exec } = require('child_process');
+            const https = require('https');
+            const fs = require('fs');
+            const path = require('path');
+            const os = require('os');
+            // Try winget
             const wg = await new Promise((resolve) => {
-              exec('winget upgrade Ollama.Ollama --accept-package-agreements --accept-source-agreements --silent', { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+              exec('winget upgrade Ollama.Ollama --accept-package-agreements --accept-source-agreements --silent', { timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
                 resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
               });
             });
             if (wg.ok) {
               invalidateVersionCache();
-              result = { ok: true, message: 'Ollama updated via winget. Restart may be required. ' + wg.out.slice(0, 300) };
+              result = { ok: true, message: 'Ollama updated via winget. Restart may be required. ' + wg.out.slice(0, 200) };
             } else {
-              result = { ok: false, message: 'winget update failed. Update manually from https://ollama.com/download. ' + (wg.err || wg.out).slice(0, 300) };
+              // Fallback: download installer and run it
+              const installerPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
+              try {
+                await new Promise((resolve, reject) => {
+                  const file = fs.createWriteStream(installerPath);
+                  function get(url) {
+                    https.get(url, { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+                      if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) {
+                        get(r.headers.location);
+                        return;
+                      }
+                      if (r.statusCode !== 200) { reject(new Error('HTTP ' + r.statusCode)); return; }
+                      r.pipe(file);
+                      file.on('finish', () => { file.close(); resolve(); });
+                    }).on('error', reject);
+                  }
+                  get('https://ollama.com/download/OllamaSetup.exe');
+                });
+                // Run installer (silent)
+                const inst = await new Promise((resolve) => {
+                  exec('"' + installerPath + '" /S', { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+                    resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+                  });
+                });
+                try { fs.unlinkSync(installerPath); } catch (_) {}
+                if (inst.ok) {
+                  invalidateVersionCache();
+                  result = { ok: true, message: 'Ollama installer ran. Restart Ollama/server to apply. ' + inst.out.slice(0, 200) };
+                } else {
+                  result = { ok: false, message: 'Installer failed: ' + (inst.err || inst.out).slice(0, 300) + '. Update manually: https://ollama.com/download' };
+                }
+              } catch (e) {
+                result = { ok: false, message: 'Download failed: ' + (e.message || e) + '. Update manually: https://ollama.com/download' };
+              }
             }
           } else {
             const r = await fetch(OLLAMA + '/api/tags');
