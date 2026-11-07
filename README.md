@@ -100,6 +100,31 @@ The launcher itself is **`launcher.vbs`** (Windows Script Host / standard Window
 
 > Note: `launch-gui.ps1`, `tray.ps1` and `start.bat` are kept for backwards compatibility, but the recommended path for novice users is `install.vbs` + `launcher.vbs`.
 
+## Troubleshooting (Windows)
+
+### "Windows protected your PC" (SmartScreen)
+The installer (`install.vbs`) and launcher are not code-signed, so SmartScreen may warn on first run.
+
+- Click **More info** then **Run anyway**.
+- Or right-click the file → **Properties** → check **Unblock** → OK, then run.
+
+Code signing is not included in this project; if you need it, sign the `.vbs` files with your own certificate (`signtool`).
+
+### Ollama / Node not found
+The installer checks for `node` and `ollama` on PATH. If missing, install them:
+- Node.js: https://nodejs.org
+- Ollama: https://ollama.com/download
+
+Then re-run `install.vbs`.
+
+## Screenshots
+
+![Main UI](docs/screenshots/main.png)
+
+![Models dialog](docs/screenshots/models.png)
+
+![About dialog](docs/screenshots/about.png)
+
 ## Privacy
 
 - No telemetry, analytics, or tracking
