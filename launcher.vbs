@@ -58,13 +58,19 @@ Dim portOpen
 portOpen = False
 Dim http
 Set http = CreateObject("MSXML2.XMLHTTP")
+http.setTimeouts 2000, 2000, 2000, 2000
+On Error Resume Next
 http.Open "GET", "http://127.0.0.1:8080/", False
 http.Send
-If http.Status = 200 Then portOpen = True
+If Err.Number = 0 And http.Status = 200 Then portOpen = True
+On Error GoTo 0
 
 If Not portOpen Then
-  wshShell.Run "cmd /c cd /d """ & base & """ && node server.js", 0, False
-  WScript.Sleep 3000
+  Dim nodeExe
+  nodeExe = "node"
+  If fso.FileExists("C:\Program Files\nodejs\node.exe") Then nodeExe = """C:\Program Files\nodejs\node.exe"""
+  wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js", 0, False
+  WScript.Sleep 4000
 End If
 
 ' Launch app window in Edge
