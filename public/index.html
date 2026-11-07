@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.1</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.2</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -172,12 +172,12 @@
 <div id="aboutBackdrop" class="modal-backdrop">
   <div class="modal">
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
-    <h2>Local AI — About</h2>
+    <h2>Local AI ï¿½ About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.5.1</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.5.2</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
-      <div><b>Models:</b> <span id="aboutModels">—</span></div>
+      <div><b>Models:</b> <span id="aboutModels">ï¿½</span></div>
       <div><b>Search engines:</b> 8 keyless + LangSearch</div>
       <div><b>Features:</b> Chat, agent mode (coding + RE tools), memory, skills, components manager, right-click menu, PWA, Tailscale remote access, AdGuard DNS filtering.</div>
       <div style="margin-top:8px;color:var(--muted);font-size:12px;">Built for reverse engineering and local AI experimentation. Uncensored models included. Data stays on your machine.</div>
@@ -251,7 +251,7 @@
       chip.appendChild(name);
       const rm = document.createElement('span');
       rm.className = 'chip-remove';
-      rm.textContent = '×';
+      rm.textContent = 'ï¿½';
       rm.addEventListener('click', () => { attachments.splice(idx, 1); renderAttachments(); });
       chip.appendChild(rm);
       el.appendChild(chip);
@@ -269,7 +269,7 @@
       chip.appendChild(t);
       const rm = document.createElement('span');
       rm.className = 'chip-remove';
-      rm.textContent = '×';
+      rm.textContent = 'ï¿½';
       rm.addEventListener('click', () => { messageQueue.splice(idx, 1); renderQueue(); });
       chip.appendChild(rm);
       el.appendChild(chip);
@@ -512,8 +512,12 @@
         status.className = 'status';
       }
     } catch (e) {
-      contentEl.textContent = 'Error: ' + e.message;
-      status.textContent = 'Error: ' + e.message;
+      const msg = (e && e.message) ? e.message : String(e);
+      const friendly = /failed to fetch/i.test(msg)
+        ? 'Network error: could not reach the LocalAI server. Is it running? (node server.js)'
+        : msg;
+      contentEl.textContent = 'Error: ' + friendly;
+      status.textContent = 'Error: ' + friendly;
       status.className = 'status err';
     } finally {
       generating = false;
@@ -604,8 +608,8 @@
         ver.className = 'comp-detail';
         let vText = 'Version: ' + (c.version || '?');
         if (c.latest) vText += '  (latest: ' + c.latest + ')';
-        if (c.updateAvailable) vText += '  — update available';
-        else if (c.latest) vText += '  — up to date';
+        if (c.updateAvailable) vText += '  ï¿½ update available';
+        else if (c.latest) vText += '  ï¿½ up to date';
         ver.textContent = vText;
         if (c.updateAvailable) ver.style.color = 'var(--accent)';
         const actions = document.createElement('div');
@@ -627,8 +631,8 @@
               let txt = (dd.about || '');
               txt += '\\nVersion: ' + (dd.version || '?');
               if (dd.latest) txt += ' (latest: ' + dd.latest + ')';
-              if (dd.updateAvailable) txt += ' — update available';
-              else if (dd.latest) txt += ' — up to date';
+              if (dd.updateAvailable) txt += ' ï¿½ update available';
+              else if (dd.latest) txt += ' ï¿½ up to date';
               txt += (dd.detail ? '\\n\\nDetail: ' + dd.detail : '') + '\\nStatus: ' + dd.status;
               aboutDiv.textContent = txt;
             } catch (e) { aboutDiv.textContent = 'Error: ' + e.message; }

@@ -4,6 +4,10 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 8080;
+
+// Prevent a single request error from crashing the whole server
+process.on('uncaughtException', (e) => { console.error('uncaughtException:', e && e.stack || e); });
+process.on('unhandledRejection', (e) => { console.error('unhandledRejection:', e && e.stack || e); });
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
@@ -1066,8 +1070,8 @@ function proxyToOllama(req, res) {
     proxyRes.pipe(res);
   });
   proxyReq.on('error', (e) => {
-    res.statusCode = 502;
-    res.end('Ollama proxy error: ' + e.message);
+    if (!res.headersSent) { res.statusCode = 502; }
+    try { res.end('Ollama proxy error: ' + e.message); } catch (_) {}
   });
   req.pipe(proxyReq);
 }
