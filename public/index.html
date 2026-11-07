@@ -194,6 +194,7 @@
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>
         <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>
+        <button id="clearCacheBtn" style="font-size:12px;padding:6px 10px;">Clear cache & reload</button>
         <span id="updateStatus" style="font-size:12px;color:var(--muted);"></span>
       </div>
     </div>
@@ -966,17 +967,39 @@
         });
         updateBtn.addEventListener('click', async () => {
           updateBtn.disabled = true;
-          updateBtn.textContent = 'Updating…';
+          updateBtn.textContent = 'Updating...';
+          const st = status;
           try {
             const rr = await fetch('/api/component/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
             const dd = await rr.json();
-            status.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));
-            status.className = dd.ok ? 'status' : 'status err';
-            await loadComponents();
+            if (dd.async) {
+              st.textContent = c.name + ': ' + dd.message;
+              st.className = 'status';
+              // poll for completion
+              const poll = setInterval(async () => {
+                try {
+                  const pr = await fetch('/api/component/update-status');
+                  const pd = await pr.json();
+                  st.textContent = c.name + ': ' + (pd.status || 'working...') + (pd.result ? ' — ' + (pd.result.message || '') : '');
+                  if (!pd.running && pd.result) {
+                    clearInterval(poll);
+                    st.className = pd.result.ok ? 'status' : 'status err';
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = 'Update';
+                    await loadComponents();
+                  }
+                } catch (e) {}
+              }, 3000);
+            } else {
+              st.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));
+              st.className = dd.ok ? 'status' : 'status err';
+              updateBtn.disabled = false;
+              updateBtn.textContent = 'Update';
+              await loadComponents();
+            }
           } catch (e) {
-            status.textContent = c.name + ': ' + e.message;
-            status.className = 'status err';
-          } finally {
+            st.textContent = c.name + ': ' + e.message;
+            st.className = 'status err';
             updateBtn.disabled = false;
             updateBtn.textContent = 'Update';
           }
@@ -1057,7 +1080,24 @@
           st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + '...';
           try {
             const endpoint = c.installed === false ? '/api/component/install' : '/api/component/update';
-            await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const rr = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            if (dd.async) {
+              // wait for background job to finish
+              await new Promise((resolve) => {
+                const poll = setInterval(async () => {
+                  try {
+                    const pr = await fetch('/api/component/update-status');
+                    const pd = await pr.json();
+                    st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + ' — ' + (pd.status || 'working...');
+                    if (!pd.running && pd.result) {
+                      clearInterval(poll);
+                      resolve();
+                    }
+                  } catch (e) {}
+                }, 3000);
+              });
+            }
           } catch (e) {}
           done++;
         }
@@ -1303,6 +1343,25 @@
 
   document.getElementById('checkUpdateBtn').addEventListener('click', checkUpdate);
   document.getElementById('doUpdateBtn').addEventListener('click', doUpdate);
+  const clearCacheBtn = document.getElementById('clearCacheBtn');
+  if (clearCacheBtn) {
+    clearCacheBtn.addEventListener('click', async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) await reg.unregister();
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) await caches.delete(k);
+        }
+        localStorage.removeItem('localai_cachedVersion');
+        location.reload();
+      } catch (e) {
+        document.getElementById('updateStatus').textContent = 'Clear failed: ' + e.message;
+      }
+    });
+  }
   document.getElementById('aboutClose').addEventListener('click', () => {
     document.getElementById('aboutBackdrop').classList.remove('open');
   });
@@ -1585,6 +1644,31 @@
       }
     });
   }
+
+  // Auto-clear stale service worker cache when version changes
+  (async function checkVersion() {
+    try {
+      const r = await fetch('/api/version');
+      const d = await r.json();
+      const serverVer = d.version || '';
+      const cachedVer = localStorage.getItem('localai_cachedVersion') || '';
+      if (serverVer && cachedVer && serverVer !== cachedVer) {
+        // Version changed: unregister service worker and clear caches, then reload
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) await reg.unregister();
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) await caches.delete(k);
+        }
+        localStorage.setItem('localai_cachedVersion', serverVer);
+        location.reload();
+        return;
+      }
+      if (serverVer) localStorage.setItem('localai_cachedVersion', serverVer);
+    } catch (e) {}
+  })();
 
   loadModels();
   loadProject();

@@ -1218,12 +1218,92 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Background update job state
+  if (!global._updateJob) global._updateJob = { running: false, status: '', result: null };
+
+  if (req.url === '/api/component/update-status' && req.method === 'GET') {
+    json(res, 200, global._updateJob);
+    return;
+  }
+
   if (req.url === '/api/component/update' && req.method === 'POST') {
     try {
       const body = await readBody(req);
       const { id } = JSON.parse(body || '{}');
       let result = { ok: false, message: 'Unknown component' };
       if (id === 'ollama-backend') {
+        const cv = await getCachedVersions();
+        if (!(cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest)) {
+          const r = await fetch(OLLAMA + '/api/tags');
+          result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'HTTP ' + r.status };
+          json(res, 200, result);
+          return;
+        }
+        // Run update in background
+        if (global._updateJob.running) {
+          json(res, 200, { ok: true, message: 'Update already in progress: ' + global._updateJob.status, async: true });
+          return;
+        }
+        global._updateJob = { running: true, status: 'Starting Ollama update...', result: null };
+        (async () => {
+          try {
+            const { exec } = require('child_process');
+            const https = require('https');
+            const fs = require('fs');
+            const path = require('path');
+            const os = require('os');
+            global._updateJob.status = 'Trying winget...';
+            const wg = await new Promise((resolve) => {
+              exec('winget upgrade Ollama.Ollama --accept-package-agreements --accept-source-agreements --silent', { timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+                resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+              });
+            });
+            if (wg.ok) {
+              invalidateVersionCache();
+              global._updateJob.result = { ok: true, message: 'Ollama updated via winget. Restart may be required.' };
+            } else {
+              global._updateJob.status = 'Downloading installer...';
+              const installerPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
+              try {
+                await new Promise((resolve, reject) => {
+                  const file = fs.createWriteStream(installerPath);
+                  function get(url) {
+                    https.get(url, { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+                      if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) { get(r.headers.location); return; }
+                      if (r.statusCode !== 200) { reject(new Error('HTTP ' + r.statusCode)); return; }
+                      r.pipe(file);
+                      file.on('finish', () => { file.close(); resolve(); });
+                    }).on('error', reject);
+                  }
+                  get('https://ollama.com/download/OllamaSetup.exe');
+                });
+                global._updateJob.status = 'Running installer...';
+                const inst = await new Promise((resolve) => {
+                  exec('"' + installerPath + '" /S', { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+                    resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+                  });
+                });
+                try { fs.unlinkSync(installerPath); } catch (_) {}
+                if (inst.ok) {
+                  invalidateVersionCache();
+                  global._updateJob.result = { ok: true, message: 'Ollama installer completed. Restart Ollama/server to apply.' };
+                } else {
+                  global._updateJob.result = { ok: false, message: 'Installer failed: ' + (inst.err || inst.out).slice(0, 300) };
+                }
+              } catch (e) {
+                global._updateJob.result = { ok: false, message: 'Download failed: ' + (e.message || e) + '. Update manually: https://ollama.com/download' };
+              }
+            }
+          } catch (e) {
+            global._updateJob.result = { ok: false, message: String(e.message || e) };
+          } finally {
+            global._updateJob.running = false;
+            global._updateJob.status = 'Done';
+          }
+        })();
+        json(res, 200, { ok: true, message: 'Ollama update started in background. This may take several minutes. Check status below.', async: true });
+        return;
+      } else if (id.startsWith('model:')) {
         try {
           const cv = await getCachedVersions();
           if (cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest) {
@@ -1292,6 +1372,7 @@ const server = http.createServer(async (req, res) => {
             else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
           });
         });
+      } else if (id === 're-tools') {
       } else if (id === 're-tools') {
         // Update rea-agents from npm, then reconnect MCP
         const { exec } = require('child_process');
