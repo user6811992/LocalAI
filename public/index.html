@@ -24,16 +24,16 @@
     --danger: #ff6b6b;
   }
   body.light {
-    --bg: #f5f6f8;
+    --bg: #f0f2f5;
     --panel: #ffffff;
-    --panel2: #eef0f4;
-    --border: #d8dce3;
+    --panel2: #e4e7ec;
+    --border: #c9ced6;
     --text: #1a1d23;
     --muted: #5a6270;
     --accent: #2563eb;
     --accent2: #7c3aed;
-    --user: #dbeafe;
-    --assistant: #f3f4f6;
+    --user: #bfdbfe;
+    --assistant: #e5e7eb;
     --danger: #dc2626;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -92,6 +92,10 @@
     border-radius: 10px; padding: 10px 12px; font-size: 16px; font-family: inherit;
     -webkit-overflow-scrolling: touch;
   }
+  .msg, .msg.user, .msg.assistant { background-clip: padding-box; }
+  .msg.user { background: var(--user) !important; }
+  .msg.assistant { background: var(--assistant) !important; border: 1px solid var(--border); }
+  .msg .content { background: transparent; }
   .status { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .status.err { color: var(--danger); }
   .meta { display: flex; gap: 12px; align-items: center; }
@@ -131,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.8.0</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.8.1</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
@@ -200,7 +204,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.8.0</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.8.1</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
