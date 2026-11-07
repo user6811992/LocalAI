@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.14</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.15</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.14</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.15</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -530,7 +530,8 @@
   function addMsg(role, content, thinking) {
     const div = document.createElement('div');
     div.className = 'msg ' + role;
-    div.innerHTML = '<div class="role">' + role + '</div>';
+    const ts = new Date().toLocaleTimeString();
+    div.innerHTML = '<div class="role">' + role + ' <span class="msg-ts" style="font-size:10px;color:var(--muted);font-weight:normal;margin-left:6px;">' + ts + '</span></div>';
     if (thinking) {
       const det = document.createElement('details');
       det.className = 'thinking-block';
@@ -639,6 +640,18 @@
     typing.className = 'typing';
     typing.innerHTML = '<span></span><span></span><span></span>';
     contentEl.appendChild(typing);
+    const timerEl = document.createElement('span');
+    timerEl.className = 'working-timer';
+    timerEl.style.fontSize = '11px';
+    timerEl.style.color = 'var(--muted)';
+    timerEl.style.marginLeft = '8px';
+    timerEl.textContent = '0s';
+    contentEl.appendChild(timerEl);
+    const startTime = Date.now();
+    const timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timerEl.textContent = elapsed + 's';
+    }, 1000);
 
     try {
       if (useAgent) {
@@ -744,6 +757,8 @@
       status.textContent = 'Error: ' + friendly;
       status.className = 'status err';
     } finally {
+      clearInterval(timerInterval);
+      if (timerEl && timerEl.parentNode) timerEl.remove();
       generating = false;
       sendBtn.disabled = false;
       input.focus();
