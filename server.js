@@ -1232,6 +1232,7 @@ function serveStatic(req, res) {
     if (err) { res.statusCode = 404; res.end('Not found'); return; }
     const ext = path.extname(filePath).toLowerCase();
     res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.end(data);
   });
 }

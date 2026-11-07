@@ -1,5 +1,5 @@
 // Local AI service worker — app-shell cache + network-first for API
-const CACHE = 'local-ai-v7';
+const CACHE = 'local-ai-v8';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -29,17 +29,14 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
-  // Other assets: cache-first, then network
+  // All other assets: network-first, then cache (ensures updates load)
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const net = fetch(e.request).then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || net;
-    })
+    fetch(e.request).then((res) => {
+      if (res && res.status === 200 && res.type === 'basic') {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
