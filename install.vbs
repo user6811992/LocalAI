@@ -19,6 +19,16 @@ modelSize = Array("~2.0 GB", "~1.3 GB", "~9.0 GB", "~9.0 GB", _
                   "~3.8 GB", "~8.9 GB", "~9.0 GB", _
                   "~0.3 GB", "~1.7 GB")
 
+' Resolve ollama binary path
+Function ResolveOllama()
+  Dim cand
+  cand = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Ollama\ollama.exe"
+  If fso.FileExists(cand) Then ResolveOllama = cand : Exit Function
+  If fso.FileExists("C:\Program Files\Ollama\ollama.exe") Then ResolveOllama = "C:\Program Files\Ollama\ollama.exe" : Exit Function
+  If ExeExists("ollama") Then ResolveOllama = "ollama" : Exit Function
+  ResolveOllama = "ollama"
+End Function
+
 ' ---------- helpers ----------
 Function ExeExists(name)
   Dim exec, out
@@ -245,7 +255,7 @@ If pullModels Then
       MsgBox "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ":" & vbCrLf & m & "  (" & modelSize(i) & ")" & vbCrLf & vbCrLf & _
              "Please wait. This may take several minutes.", vbInformation, "Pulling models"
       On Error Resume Next
-      rc = sh.Run("cmd /c ollama pull " & m, 1, True)
+      rc = sh.Run("cmd /c """ & ResolveOllama() & """ pull " & m, 1, True)
       If Err.Number <> 0 Then
         MsgBox "Error pulling " & m & ": " & Err.Description, vbExclamation, "LocalAI Installer"
       ElseIf rc <> 0 Then

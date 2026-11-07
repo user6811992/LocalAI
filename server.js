@@ -12,6 +12,25 @@ const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
 
+// Resolve the ollama binary (may not be on PATH on Windows)
+function resolveOllamaBin() {
+  if (process.env.OLLAMA_BIN && fs.existsSync(process.env.OLLAMA_BIN)) return process.env.OLLAMA_BIN;
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama', 'ollama.exe'),
+    'C:\\Program Files\\Ollama\\ollama.exe',
+    'C:\\Program Files (x86)\\Ollama\\ollama.exe',
+  ];
+  for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
+  // try where
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('where ollama', { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+    const first = (out || '').trim().split(/\r?\n/)[0];
+    if (first && fs.existsSync(first)) return first;
+  } catch (_) {}
+  return 'ollama';
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -1135,7 +1154,7 @@ const server = http.createServer(async (req, res) => {
         const modelName = id.slice('model:'.length);
         const { exec } = require('child_process');
         result = await new Promise((resolve) => {
-          exec('ollama pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
             if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
             else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
           });
@@ -1247,7 +1266,7 @@ const server = http.createServer(async (req, res) => {
       const modelName = name.trim();
       const { exec } = require('child_process');
       const result = await new Promise((resolve) => {
-        exec('ollama pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
+        exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 600000, maxBuffer: 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
           if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
           else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
         });
