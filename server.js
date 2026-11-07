@@ -1558,6 +1558,7 @@ const server = http.createServer(async (req, res) => {
       autoExtractMemories(result.messages || messages || []).catch(() => {});
       json(res, 200, result);
     } catch (e) {
+      console.error('agent error:', e && e.stack || e);
       json(res, 500, { error: e.message || String(e) });
     }
     return;
