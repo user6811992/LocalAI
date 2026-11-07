@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.2</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.3</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.2</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.3</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -339,6 +339,8 @@
   let generating = false;
   let attachments = [];
   let messageQueue = [];
+  let inputHistory = [];
+  let historyIndex = -1;
 
   function renderAttachments() {
     const el = document.getElementById('attachPreview');
@@ -603,6 +605,7 @@
     }
     const rawText = input.value.trim();
     if (!rawText && attachments.length === 0) return;
+    if (rawText) { inputHistory.push(rawText); historyIndex = -1; }
     const atts = attachments.slice();
     // RAG: fetch relevant chunks from indexed docs
     let ragContext = '';
@@ -744,6 +747,7 @@
   document.getElementById('queueBtn').addEventListener('click', () => {
     const t = input.value.trim();
     if (!t && attachments.length === 0) return;
+    if (t) { inputHistory.push(t); historyIndex = -1; }
     const queuedText = buildMessageText(t);
     messageQueue.push({ text: queuedText, attachments: attachments.slice() });
     input.value = '';
@@ -754,6 +758,44 @@
   });
   input.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); return; }
+    // Arrow-key history recall (like a terminal)
+    if (e.key === 'ArrowUp') {
+      if (input.value === '' || input.selectionStart === 0) {
+        if (inputHistory.length > 0 && historyIndex > 0) {
+          e.preventDefault();
+          historyIndex--;
+          input.value = inputHistory[historyIndex];
+          input.selectionStart = input.selectionEnd = input.value.length;
+          input.dispatchEvent(new Event('input'));
+        } else if (inputHistory.length > 0 && historyIndex === -1) {
+          e.preventDefault();
+          historyIndex = inputHistory.length - 1;
+          input.value = inputHistory[historyIndex];
+          input.selectionStart = input.selectionEnd = input.value.length;
+          input.dispatchEvent(new Event('input'));
+        }
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      if (historyIndex >= 0 && (input.selectionStart === input.value.length)) {
+        e.preventDefault();
+        historyIndex++;
+        if (historyIndex >= inputHistory.length) {
+          historyIndex = -1;
+          input.value = '';
+        } else {
+          input.value = inputHistory[historyIndex];
+        }
+        input.selectionStart = input.selectionEnd = input.value.length;
+        input.dispatchEvent(new Event('input'));
+      }
+      return;
+    }
+    // reset history browsing on normal typing
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      historyIndex = -1;
+    }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
       // fallback: read clipboard manually
       try {
