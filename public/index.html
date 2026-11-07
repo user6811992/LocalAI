@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.18</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.19</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.18</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.19</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1424,14 +1424,32 @@
     try {
       const r = await fetch('/api/tags');
       const d = await r.json();
-      const names = (d.models || []).map(m => m.name);
-      document.getElementById('installedModels').textContent = names.join(', ') || '(none)';
+      const models = d.models || [];
+      const el = document.getElementById('installedModels');
+      el.innerHTML = '';
+      if (models.length === 0) { el.textContent = '(none)'; return; }
+      models.forEach(m => {
+        const span = document.createElement('span');
+        span.style.marginRight = '8px';
+        const a = document.createElement('a');
+        a.href = 'https://ollama.com/library/' + m.name.split(':')[0];
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = m.name;
+        a.style.color = 'var(--accent)';
+        span.appendChild(a);
+        el.appendChild(span);
+      });
     } catch (e) { document.getElementById('installedModels').textContent = 'error: ' + e.message; }
   }
   function renderQuickPulls() {
     const container = document.getElementById('quickPulls');
     container.innerHTML = '';
     quickModels.forEach(m => {
+      const wrap = document.createElement('span');
+      wrap.style.display = 'inline-flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '2px';
       const b = document.createElement('button');
       b.textContent = m;
       b.style.fontSize = '12px';
@@ -1440,7 +1458,16 @@
         document.getElementById('pullModelName').value = m;
         document.getElementById('pullModelBtn').click();
       });
-      container.appendChild(b);
+      wrap.appendChild(b);
+      const link = document.createElement('a');
+      link.href = 'https://ollama.com/library/' + m.split(':')[0];
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = '🔗';
+      link.style.fontSize = '11px';
+      link.title = 'Inspect on Ollama';
+      wrap.appendChild(link);
+      container.appendChild(wrap);
     });
   }
   document.getElementById('modelsBtn').addEventListener('click', openModels);
@@ -1467,7 +1494,13 @@
           div.style.borderBottom = '1px solid var(--border)';
           const name = document.createElement('div');
           name.style.fontWeight = '600';
-          name.textContent = it.id;
+          const link = document.createElement('a');
+          link.href = 'https://huggingface.co/' + it.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = it.id;
+          link.style.color = 'var(--accent)';
+          name.appendChild(link);
           div.appendChild(name);
           const meta = document.createElement('div');
           meta.style.fontSize = '11px';
