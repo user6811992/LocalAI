@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.19</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.20</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.19</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.20</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1330,7 +1330,20 @@
       const r = await fetch('/api/update', { method: 'POST' });
       const d = await r.json();
       if (d.ok) {
-        st.textContent = d.message + ' Please restart the server.';
+        st.textContent = d.message + ' Clearing cache and reloading...';
+        // Auto-clear service worker cache and reload to pick up new version
+        try {
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) await reg.unregister();
+          }
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            for (const k of keys) await caches.delete(k);
+          }
+          localStorage.removeItem('localai_cachedVersion');
+        } catch (e) {}
+        setTimeout(() => location.reload(), 1500);
       } else {
         st.textContent = 'Update failed: ' + (d.message || d.error || 'unknown');
       }
