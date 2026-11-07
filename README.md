@@ -98,6 +98,24 @@ REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
 
 The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
 
+## Installer (Linux / macOS)
+
+A bash installer is included: **`install.sh`**. Works on Linux and macOS.
+
+```
+bash install.sh
+```
+
+It provides:
+- Interactive install location selection
+- Prerequisite checks (Node.js, Ollama)
+- Optional model pull (recommended models in order)
+- Desktop shortcut (`.desktop` on Linux, `.command` on macOS)
+- Optional auto-start (systemd user service on Linux, launchd on macOS)
+- Optional immediate launch
+
+Uninstall with `bash uninstall.sh`.
+
 ## Installer (Windows Shell)
 
 A standard Windows-shell installer is included in the repo: **`install.vbs`**. It runs under `wscript.exe` (the standard Windows Script Host) — no PowerShell, no console window. It uses native Windows dialogs and:
