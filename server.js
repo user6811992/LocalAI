@@ -1335,6 +1335,19 @@ const server = http.createServer(async (req, res) => {
       const { exec } = require('child_process');
       const isGit = fs.existsSync(path.join(__dirname, '.git'));
       let output = '';
+      // Files that contain user data/API keys (gitignored, but back up just in case)
+      const userDataFiles = ['search-config.json', 'memory.json', 'skills.json'];
+      const backupDir = path.join(__dirname, '.update-backup');
+      try { if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true }); } catch (_) {}
+      // Back up user data before update
+      const backedUp = [];
+      for (const f of userDataFiles) {
+        const src = path.join(__dirname, f);
+        if (fs.existsSync(src)) {
+          try { fs.copyFileSync(src, path.join(backupDir, f)); backedUp.push(f); } catch (_) {}
+        }
+      }
+      if (backedUp.length) output += 'Backed up user data: ' + backedUp.join(', ') + '\\n';
       if (isGit) {
         output += 'Running git pull...\\n';
         const pullRes = await new Promise((resolve) => {
@@ -1357,6 +1370,16 @@ const server = http.createServer(async (req, res) => {
       });
       output += npmRes.out + '\\n';
       if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed: ' + (npmRes.err || npmRes.out), output }); return; }
+      // Restore user data if it was overwritten (gitignored files shouldn't be, but be safe)
+      const restored = [];
+      for (const f of userDataFiles) {
+        const backup = path.join(backupDir, f);
+        const target = path.join(__dirname, f);
+        if (fs.existsSync(backup) && !fs.existsSync(target)) {
+          try { fs.copyFileSync(backup, target); restored.push(f); } catch (_) {}
+        }
+      }
+      if (restored.length) output += 'Restored user data: ' + restored.join(', ') + '\\n';
       // read new version
       let newVersion = 'unknown';
       try { newVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
