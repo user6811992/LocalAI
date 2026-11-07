@@ -1,10 +1,26 @@
 // Local AI service worker — app-shell cache + network-first for API
-const CACHE = 'local-ai-v8';
+const CACHE = 'local-ai-v9';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
+// Self-destruct: unregister this SW and clear all caches so users always get fresh content
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
   self.skipWaiting();
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    (async () => {
+      // Delete all caches
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      // Unregister this service worker
+      await self.registration.unregister();
+      // Notify all clients to reload
+      const clients = await self.clients.matchAll();
+      for (const client of clients) {
+        client.postMessage({ type: 'sw-unregistered' });
+      }
+    })()
+  );
 });
 
 self.addEventListener('activate', (e) => {
