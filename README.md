@@ -1,6 +1,6 @@
 # LocalAI
 
-![Version](https://img.shields.io/github/v/release/user6811992/LocalAI) ![License](https://img.shields.io/github/license/user6811992/LocalAI)
+![Version](https://img.shields.io/github/v/release/user6811992/LocalAI) ![License](https://img.shields.io/github/license/user6811992/LocalAI) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink)](https://github.com/sponsors/user6811992)
 
 A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat interface, search engine integration, model management, and reverse-engineering tools. Runs entirely on your machine — no cloud, no telemetry.
 
@@ -203,6 +203,13 @@ Special thanks to:
 - **[HuggingFace](https://huggingface.co)** - for the model hub and open weights.
 - **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
 - All other contributors, testers, and the open-source community.
+
+## Support
+
+If you find LocalAI useful, consider sponsoring the project:
+
+- [GitHub Sponsors](https://github.com/sponsors/user6811992) — recurring or one-time
+- Star the repo to help others discover it
 
 ## License
 
