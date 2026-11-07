@@ -210,7 +210,7 @@ If you find LocalAI useful, consider sponsoring the project:
 
 - [GitHub Sponsors](https://github.com/sponsors/user6811992) — recurring or one-time
 - Star the repo to help others discover it
-- See [GRANTS.md](GRANTS.md) for open-source grant opportunities
+
 
 ## License
 
