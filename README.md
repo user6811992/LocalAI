@@ -136,6 +136,16 @@ Then re-run `install.vbs`.
 - No hardcoded identifiers — paths auto-generate on install
 - `search-config.json` ships with empty keys — add your own
 
+## Acknowledgments
+
+Special thanks to:
+
+- **OpenCode** — the AI coding agent harness that helped build, debug, and ship this project (installer, launcher, UI features, and more).
+- **Beam.ai** — the model provider powering the coding/reasoning assistance behind this work.
+- **Ollama** — for making local LLMs easy to run.
+- **HuggingFace** — for the model hub and open weights.
+- All other contributors, testers, and the open-source community.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
