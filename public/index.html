@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.0</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.1</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
@@ -153,6 +153,7 @@
     <button id="modelsBtn">Models</button>
     <button id="codeBtn">Code</button>
     <button id="ragBtn">Docs</button>
+    <button id="chatsBtn">Chats</button>
     <button id="componentsBtn">Components</button>
     <button id="aboutBtn" onclick="openAbout()">About</button>
     <button id="refresh">Refresh</button>
@@ -204,7 +205,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.9.0</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.9.1</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -248,6 +249,20 @@
       <div style="margin-top:10px;">
         <button id="scanDrivesBtn" style="font-size:12px;padding:4px 8px;">Scan drives for models</button>
         <div id="scanResults" style="font-size:12px;color:var(--muted);margin-top:6px;max-height:160px;overflow:auto;"></div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Generation options:</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+          <label>Temperature: <input type="range" id="optTemp" min="0" max="2" step="0.1" value="0.7" style="width:120px;" /> <span id="optTempVal">0.7</span></label>
+          <label>Top-p: <input type="range" id="optTopP" min="0" max="1" step="0.05" value="0.9" style="width:120px;" /> <span id="optTopPVal">0.9</span></label>
+          <label>Num ctx: <input type="number" id="optNumCtx" value="4096" style="width:80px;" /></label>
+          <label>Keep alive: <input type="text" id="optKeepAlive" value="5m" style="width:80px;" placeholder="5m" /></label>
+        </div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Running models (Ollama ps):</div>
+        <div id="ollamaPs" style="font-size:12px;color:var(--muted);"></div>
+        <button id="refreshPsBtn" style="font-size:11px;padding:2px 6px;margin-top:4px;">Refresh</button>
       </div>
       <div style="margin-top:10px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Search HuggingFace (GGUF):</div>
@@ -328,6 +343,18 @@
         <pre id="compareOutB" style="background:var(--panel2);padding:8px;border-radius:6px;min-height:120px;max-height:300px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="chatsBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <button class="close-btn" id="chatsClose">&times;</button>
+    <h2>Saved Chats</h2>
+    <div style="margin-bottom:8px;display:flex;gap:8px;">
+      <button id="newChatBtn" class="primary" style="font-size:12px;">New chat</button>
+      <button id="saveChatBtn" style="font-size:12px;">Save current</button>
+    </div>
+    <div id="chatsList" style="max-height:300px;overflow:auto;font-size:12px;"></div>
   </div>
 </div>
 
@@ -587,6 +614,32 @@
     });
   }
 
+  // TTS: read last assistant reply aloud
+  const ttsBtn = document.getElementById('ttsBtn');
+  if (ttsBtn) {
+    ttsBtn.addEventListener('click', () => {
+      // find last assistant message
+      const msgs = chat.querySelectorAll('.msg.assistant');
+      if (msgs.length === 0) { status.textContent = 'No reply to read.'; status.className = 'status err'; return; }
+      const last = msgs[msgs.length - 1];
+      const text = (last.querySelector('.content') ? last.querySelector('.content').textContent : last.textContent) || '';
+      if (!text.trim()) { status.textContent = 'Empty reply.'; status.className = 'status err'; return; }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 1.0; u.pitch = 1.0;
+        u.onend = () => { status.textContent = 'Finished reading.'; status.className = 'status'; };
+        u.onerror = (e) => { status.textContent = 'TTS error: ' + e.error; status.className = 'status err'; };
+        window.speechSynthesis.speak(u);
+        status.textContent = 'Reading aloud...';
+        status.className = 'status';
+      } else {
+        status.textContent = 'TTS not supported in this browser.';
+        status.className = 'status err';
+      }
+    });
+  }
+
   // Paste support (text + images)
   input.addEventListener('paste', (e) => {
     const cd = e.clipboardData;
@@ -720,6 +773,13 @@
 
     const model = modelSel.value;
     const useAgent = document.getElementById('codingMode').checked || document.getElementById('reMode').checked;
+    // Collect generation options
+    const genOpts = {};
+    const ot = document.getElementById('optTemp'); if (ot) genOpts.temperature = parseFloat(ot.value);
+    const op = document.getElementById('optTopP'); if (op) genOpts.top_p = parseFloat(op.value);
+    const oc = document.getElementById('optNumCtx'); if (oc) genOpts.num_ctx = parseInt(oc.value, 10);
+    const ok = document.getElementById('optKeepAlive'); const keepAlive = ok ? ok.value : '5m';
+    const requestOptions = Object.keys(genOpts).length ? genOpts : undefined;
     generating = true;
     sendBtn.disabled = true;
     const assistantDiv = addMsg('assistant', '');
@@ -746,7 +806,7 @@
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked })
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
           let t = '';
@@ -796,7 +856,7 @@
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true })
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
           let t = '';
@@ -1675,6 +1735,79 @@
     });
   }
 
+  // Generation options sliders
+  const optTemp = document.getElementById('optTemp');
+  const optTopP = document.getElementById('optTopP');
+  if (optTemp) {
+    optTemp.addEventListener('input', () => { document.getElementById('optTempVal').textContent = optTemp.value; saveOptions(); });
+  }
+  if (optTopP) {
+    optTopP.addEventListener('input', () => { document.getElementById('optTopPVal').textContent = optTopP.value; saveOptions(); });
+  }
+  const optNumCtx = document.getElementById('optNumCtx');
+  if (optNumCtx) optNumCtx.addEventListener('change', saveOptions);
+  const optKeepAlive = document.getElementById('optKeepAlive');
+  if (optKeepAlive) optKeepAlive.addEventListener('change', saveOptions);
+
+  function loadOptions() {
+    try {
+      const o = JSON.parse(localStorage.getItem('localai_options') || '{}');
+      if (o.temperature !== undefined && optTemp) { optTemp.value = o.temperature; document.getElementById('optTempVal').textContent = o.temperature; }
+      if (o.top_p !== undefined && optTopP) { optTopP.value = o.top_p; document.getElementById('optTopPVal').textContent = o.top_p; }
+      if (o.num_ctx !== undefined && optNumCtx) optNumCtx.value = o.num_ctx;
+      if (o.keep_alive !== undefined && optKeepAlive) optKeepAlive.value = o.keep_alive;
+    } catch (e) {}
+  }
+  function saveOptions() {
+    const o = {
+      temperature: parseFloat(optTemp ? optTemp.value : 0.7),
+      top_p: parseFloat(optTopP ? optTopP.value : 0.9),
+      num_ctx: parseInt(optNumCtx ? optNumCtx.value : 4096, 10),
+      keep_alive: optKeepAlive ? optKeepAlive.value : '5m',
+    };
+    try { localStorage.setItem('localai_options', JSON.stringify(o)); } catch (e) {}
+  }
+  loadOptions();
+
+  // Ollama ps
+  async function loadOllamaPs() {
+    const el = document.getElementById('ollamaPs');
+    if (!el) return;
+    try {
+      const r = await fetch('/api/ollama-ps');
+      const d = await r.json();
+      const models = d.models || [];
+      if (models.length === 0) { el.textContent = '(none running)'; return; }
+      el.innerHTML = '';
+      models.forEach(m => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        div.textContent = m.name + ' — ' + (m.size ? (m.size/1e9).toFixed(1) + ' GB' : '') + ' — expires in ' + (m.expires_at || '?');
+        const unloadBtn = document.createElement('button');
+        unloadBtn.textContent = 'Unload';
+        unloadBtn.style.fontSize = '10px';
+        unloadBtn.style.padding = '1px 4px';
+        unloadBtn.style.marginLeft = '6px';
+        unloadBtn.addEventListener('click', async () => {
+          await fetch('/api/ollama-unload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: m.name }) });
+          loadOllamaPs();
+        });
+        div.appendChild(unloadBtn);
+        el.appendChild(div);
+      });
+    } catch (e) { el.textContent = 'Error: ' + e.message; }
+  }
+  const refreshPsBtn = document.getElementById('refreshPsBtn');
+  if (refreshPsBtn) {
+    refreshPsBtn.addEventListener('click', loadOllamaPs);
+  }
+  // load ps when models modal opens
+  const origOpenModels = openModels;
+  openModels = function() {
+    origOpenModels();
+    loadOllamaPs();
+  };
+
   const scanBtn = document.getElementById('scanDrivesBtn');
   if (scanBtn) {
     scanBtn.addEventListener('click', async () => {
@@ -1983,6 +2116,91 @@
     });
     document.addEventListener('mouseup', () => { dragging = false; });
   })();
+
+  // Chats handlers
+  async function loadChatsList() {
+    const el = document.getElementById('chatsList');
+    if (!el) return;
+    try {
+      const r = await fetch('/api/chats');
+      const d = await r.json();
+      el.innerHTML = '';
+      (d.chats || []).forEach(c => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid var(--border);';
+        const title = document.createElement('span');
+        title.style.flex = '1';
+        title.style.cursor = 'pointer';
+        title.textContent = c.title + ' (' + (c.updated || '').slice(0,10) + ')';
+        title.addEventListener('click', async () => {
+          try {
+            const rr = await fetch('/api/chats/' + c.id);
+            const dd = await rr.json();
+            messages = dd.messages || [];
+            chat.innerHTML = '';
+            messages.forEach(m => addMsg(m.role, m.content));
+            document.getElementById('chatsBackdrop').classList.remove('open');
+            status.textContent = 'Loaded: ' + dd.title;
+            status.className = 'status';
+          } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+        });
+        row.appendChild(title);
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.style.fontSize = '12px';
+        delBtn.style.padding = '2px 6px';
+        delBtn.addEventListener('click', async () => {
+          await fetch('/api/chats/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+          loadChatsList();
+        });
+        row.appendChild(delBtn);
+        el.appendChild(row);
+      });
+      if (!d.chats || d.chats.length === 0) el.textContent = '(no saved chats)';
+    } catch (e) { el.textContent = 'Error: ' + e.message; }
+  }
+  const chatsBtn = document.getElementById('chatsBtn');
+  if (chatsBtn) {
+    chatsBtn.addEventListener('click', () => {
+      document.getElementById('chatsBackdrop').classList.add('open');
+      loadChatsList();
+    });
+  }
+  const chatsClose = document.getElementById('chatsClose');
+  if (chatsClose) {
+    chatsClose.addEventListener('click', () => {
+      document.getElementById('chatsBackdrop').classList.remove('open');
+    });
+  }
+  const chatsBackdrop = document.getElementById('chatsBackdrop');
+  if (chatsBackdrop) {
+    chatsBackdrop.addEventListener('click', (e) => {
+      if (e.target.id === 'chatsBackdrop') chatsBackdrop.classList.remove('open');
+    });
+  }
+  const newChatBtn = document.getElementById('newChatBtn');
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+      messages = [];
+      chat.innerHTML = '';
+      status.textContent = 'New chat started.';
+      status.className = 'status';
+      document.getElementById('chatsBackdrop').classList.remove('open');
+    });
+  }
+  const saveChatBtn = document.getElementById('saveChatBtn');
+  if (saveChatBtn) {
+    saveChatBtn.addEventListener('click', async () => {
+      const title = prompt('Chat title:', 'Chat ' + new Date().toLocaleString());
+      if (!title) return;
+      try {
+        const r = await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, messages }) });
+        const d = await r.json();
+        if (d.ok) { status.textContent = 'Saved: ' + title; status.className = 'status'; loadChatsList(); }
+        else { status.textContent = 'Save failed.'; status.className = 'status err'; }
+      } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+    });
+  }
 
   loadModels();
   loadProject();

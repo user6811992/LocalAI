@@ -862,6 +862,8 @@ async function runAgent(model, messages, maxIter, opts) {
         messages: msgs,
         tools: (toolsSupported && tools.length) ? tools : undefined,
         stream: true,
+        options: opts.options || undefined,
+        keep_alive: opts.keep_alive,
       }, (chunk) => {
         if (chunk.type === 'token') {
           streamedText += chunk.content;
@@ -878,7 +880,7 @@ async function runAgent(model, messages, maxIter, opts) {
       const errText = (r.data && r.data.error) ? String(r.data.error) : JSON.stringify(r.data);
       if (/does not support tools/i.test(errText)) {
         toolsSupported = false;
-        r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false });
+        r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false, options: opts.options || undefined, keep_alive: opts.keep_alive });
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
         const msg = r.data.message || {};
         msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
@@ -1936,6 +1938,98 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ---------- Ollama controls ----------
+  if (req.url === '/api/ollama-info' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
+      const d = await r.json();
+      json(res, 200, { info: d });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-ps' && req.method === 'GET') {
+    try {
+      const r = await fetch(OLLAMA + '/api/ps');
+      if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
+      const d = await r.json();
+      json(res, 200, d);
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-delete' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      const r = await fetch(OLLAMA + '/api/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!r.ok) { const t = await r.text(); json(res, r.status, { error: t || ('HTTP ' + r.status) }); return; }
+      json(res, 200, { ok: true, message: 'Deleted ' + name });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-unload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      // Unload by sending a chat with keep_alive=0
+      const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, messages: [], keep_alive: 0 }) });
+      json(res, 200, { ok: r.ok, message: r.ok ? 'Unloaded ' + name : 'HTTP ' + r.status });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- Multi-chat persistence ----------
+  const CHATS_FILE = path.join(__dirname, 'chats.json');
+  function loadChats() { try { return JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8')); } catch (e) { return []; } }
+  function saveChats(chats) { try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {} }
+
+  if (req.url === '/api/chats' && req.method === 'GET') {
+    const chats = loadChats();
+    json(res, 200, { chats: chats.map(c => ({ id: c.id, title: c.title, updated: c.updated })) });
+    return;
+  }
+  if (req.url === '/api/chats' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id, title, messages } = JSON.parse(body || '{}');
+      const chats = loadChats();
+      const chatId = id || ('chat_' + Date.now());
+      const existing = chats.findIndex(c => c.id === chatId);
+      const entry = { id: chatId, title: title || 'Untitled', messages: messages || [], updated: new Date().toISOString() };
+      if (existing >= 0) chats[existing] = entry; else chats.unshift(entry);
+      // keep last 50
+      if (chats.length > 50) chats.length = 50;
+      saveChats(chats);
+      json(res, 200, { ok: true, id: chatId });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/chats/delete' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const chats = loadChats().filter(c => c.id !== id);
+      saveChats(chats);
+      json(res, 200, { ok: true });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url.startsWith('/api/chats/') && req.method === 'GET') {
+    const id = req.url.split('/').pop();
+    const chat = loadChats().find(c => c.id === id);
+    if (!chat) { json(res, 404, { error: 'not found' }); return; }
+    json(res, 200, chat);
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     // SSE streaming
     res.writeHead(200, {
@@ -1949,10 +2043,12 @@ const server = http.createServer(async (req, res) => {
     req.on('close', () => { aborted = true; });
     try {
       const body = await readBody(req);
-      const { model, messages, includeRe, includeCoding } = JSON.parse(body || '{}');
+      const { model, messages, includeRe, includeCoding, options, keep_alive } = JSON.parse(body || '{}');
       const result = await runAgent(model, messages || [], undefined, {
         includeRe: includeRe !== false,
         includeCoding: includeCoding !== false,
+        options: options || undefined,
+        keep_alive: keep_alive,
         onEvent: (ev) => { if (!aborted) sendEvent(ev); },
       });
       if (!aborted) {
