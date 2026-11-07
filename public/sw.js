@@ -1,5 +1,5 @@
 // Local AI service worker — app-shell cache + network-first for API
-const CACHE = 'local-ai-v6';
+const CACHE = 'local-ai-v7';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -23,18 +23,10 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(e.request).catch(() => new Response(JSON.stringify({ error: 'offline' }), { headers: { 'Content-Type': 'application/json' } })));
     return;
   }
-  // App shell: network-first for HTML navigations, then cache
+  // App shell HTML: network-only (never cache, so updates always load)
   const isNav = e.request.mode === 'navigate' || e.request.destination === 'document';
   if (isNav) {
-    e.respondWith(
-      fetch(e.request).then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => caches.match(e.request))
-    );
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
   // Other assets: cache-first, then network
