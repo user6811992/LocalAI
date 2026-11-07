@@ -1096,7 +1096,7 @@ async function getComponents() {
       installed: ollamaStatus === 'connected',
       installUrl: 'https://ollama.com/download',
       homepage: 'https://ollama.com',
-      about: 'Local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + (ollamaLatest ? ' (latest: ' + ollamaLatest + ')' : '') + '.',
+      about: 'AegisAI - local LLM server at ' + OLLAMA + '. Models: ' + models.length + '. Version: ' + (ollamaVer || 'unknown') + (ollamaLatest ? ' (latest: ' + ollamaLatest + ')' : '') + '.',
     });
     for (const m of models) {
       comps.push({
@@ -2179,7 +2179,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Local AI web UI: http://0.0.0.0:${PORT}`);
+  console.log(`AegisAI web UI: http://0.0.0.0:${PORT}`);
   console.log(`Ollama backend: ${OLLAMA}`);
   if (!getAuthToken()) {
     console.warn('WARNING: No auth token set. Set LOCALAI_TOKEN env var or auth.json for LAN security.');

@@ -1,4 +1,4 @@
-# LocalAI
+# AegisAI
 
 ![Version](https://img.shields.io/github/v/release/user6811992/LocalAI) ![License](https://img.shields.io/github/license/user6811992/LocalAI) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink)](https://github.com/sponsors/user6811992)
 

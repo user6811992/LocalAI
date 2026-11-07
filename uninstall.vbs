@@ -18,12 +18,12 @@ If confirm = vbCancel Then WScript.Quit 0
 ' Remove shortcuts
 Dim removed
 removed = ""
-If fso.FileExists(sh.SpecialFolders("Desktop") & "\LocalAI.lnk") Then
-  fso.DeleteFile sh.SpecialFolders("Desktop") & "\LocalAI.lnk", True
+If fso.FileExists(sh.SpecialFolders("Desktop") & "\AegisAI.lnk") Then
+  fso.DeleteFile sh.SpecialFolders("Desktop") & "\AegisAI.lnk", True
   removed = removed & "Desktop shortcut removed." & vbCrLf
 End If
-If fso.FileExists(sh.SpecialFolders("Startup") & "\LocalAI.lnk") Then
-  fso.DeleteFile sh.SpecialFolders("Startup") & "\LocalAI.lnk", True
+If fso.FileExists(sh.SpecialFolders("Startup") & "\AegisAI.lnk") Then
+  fso.DeleteFile sh.SpecialFolders("Startup") & "\AegisAI.lnk", True
   removed = removed & "Startup shortcut removed." & vbCrLf
 End If
 If removed = "" Then removed = "No shortcuts found." & vbCrLf

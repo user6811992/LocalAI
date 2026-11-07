@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="/icon.svg" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Local AI</title>
+<title>AegisAI</title>
 <style>
   :root {
     --bg: #0f1115;
@@ -130,12 +130,12 @@
   <button onclick="document.getElementById('installHint').style.display='none'" style="margin-left:12px;background:transparent;border:1px solid #0b1220;color:#0b1220;padding:2px 8px;border-radius:6px;">Dismiss</button>
 </div>
 <header>
-  <h1>Local AI</h1>
+  <h1>AegisAI</h1>
   <div class="meta">
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.9.9</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.0.0</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -210,9 +210,9 @@
 <div id="aboutBackdrop" class="modal-backdrop">
   <div class="modal">
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
-    <h2>Local AI � About</h2>
+    <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.9.9</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.0.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -286,7 +286,7 @@
 <div id="compBackdrop" class="modal-backdrop">
   <div class="modal">
     <button class="close-btn" id="compClose">&times;</button>
-    <h2>Local AI Components</h2>
+    <h2>AegisAI Components</h2>
     <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button id="compUpdateAllBtn" class="primary" style="font-size:12px;padding:4px 10px;">Update all</button>
       <button id="compRefreshBtn" style="font-size:12px;padding:4px 10px;">Refresh versions</button>
@@ -1119,7 +1119,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'localai-chat-' + Date.now() + '.md';
+    a.download = 'aegisai-chat-' + Date.now() + '.md';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1136,7 +1136,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'localai-chat-' + Date.now() + '.json';
+      a.download = 'aegisai-chat-' + Date.now() + '.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

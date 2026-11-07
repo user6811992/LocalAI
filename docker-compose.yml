@@ -9,7 +9,7 @@ services:
       - ollama_data:/root/.ollama
     restart: unless-stopped
 
-  localai:
+  aegisai:
     build: .
     ports:
       - "8080:8080"
