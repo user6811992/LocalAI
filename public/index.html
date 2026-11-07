@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.10</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.7.11</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -183,7 +183,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.7.10</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.7.11</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -920,6 +920,10 @@
         updateBtn.textContent = 'Update';
         updateBtn.className = 'primary';
         if (c.updateAvailable) updateBtn.style.borderColor = 'var(--accent)';
+        const installBtn = document.createElement('button');
+        installBtn.textContent = 'Install';
+        installBtn.className = 'primary';
+        if (c.installed === false) installBtn.style.borderColor = 'var(--accent)';
         const aboutDiv = document.createElement('div');
         aboutDiv.className = 'comp-about';
         aboutDiv.style.display = 'none';
@@ -960,8 +964,38 @@
             updateBtn.textContent = 'Update';
           }
         });
+        installBtn.addEventListener('click', async () => {
+          installBtn.disabled = true;
+          installBtn.textContent = 'Installing...';
+          try {
+            const rr = await fetch('/api/component/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            status.textContent = c.name + ': ' + (dd.message || (dd.ok ? 'OK' : 'failed'));
+            status.className = dd.ok ? 'status' : 'status err';
+            if (dd.ok) {
+              // For components with an install URL, also open it
+              if (c.installUrl && !dd.message.includes('installed') && !dd.message.includes('Cloned')) {
+                window.open(c.installUrl, '_blank');
+              }
+            }
+            await loadComponents();
+          } catch (e) {
+            status.textContent = c.name + ': ' + e.message;
+            status.className = 'status err';
+            if (c.installUrl) window.open(c.installUrl, '_blank');
+          } finally {
+            installBtn.disabled = false;
+            installBtn.textContent = 'Install';
+          }
+        });
         actions.appendChild(aboutBtn);
-        actions.appendChild(updateBtn);
+        if (c.installed === false) {
+          actions.appendChild(installBtn);
+          updateBtn.style.display = 'none';
+        } else {
+          actions.appendChild(updateBtn);
+          installBtn.style.display = 'none';
+        }
         row.appendChild(head);
         row.appendChild(detail);
         row.appendChild(ver);
@@ -999,13 +1033,14 @@
       try {
         const r = await fetch('/api/components');
         const d = await r.json();
-        const comps = (d.components || []).filter(c => c.updateAvailable);
+        const comps = (d.components || []).filter(c => c.updateAvailable || c.installed === false);
         if (comps.length === 0) { st.textContent = 'All up to date.'; return; }
         let done = 0;
         for (const c of comps) {
-          st.textContent = 'Updating ' + (done + 1) + '/' + comps.length + ': ' + c.name + '...';
+          st.textContent = (c.installed === false ? 'Installing ' : 'Updating ') + (done + 1) + '/' + comps.length + ': ' + c.name + '...';
           try {
-            await fetch('/api/component/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const endpoint = c.installed === false ? '/api/component/install' : '/api/component/update';
+            await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
           } catch (e) {}
           done++;
         }
