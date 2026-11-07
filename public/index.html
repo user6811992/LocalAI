@@ -118,7 +118,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.5.9</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v1.6.0</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);">
       <input type="checkbox" id="codingMode" checked /> Coding tools
     </label>
@@ -175,13 +175,18 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>Local AI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v1.5.9</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v1.6.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
       <div><b>Search engines:</b> 8 keyless + LangSearch</div>
       <div><b>Features:</b> Chat, agent mode (coding + RE tools), memory, skills, components manager, right-click menu, PWA, Tailscale remote access, AdGuard DNS filtering.</div>
       <div style="margin-top:8px;color:var(--muted);font-size:12px;">Built for reverse engineering and local AI experimentation. Uncensored models included. Data stays on your machine.</div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>
+        <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>
+        <span id="updateStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -904,7 +909,57 @@
       const d = await r.json();
       document.getElementById('aboutModels').textContent = (d.models || []).length + ' installed';
     } catch (e) { document.getElementById('aboutModels').textContent = 'unknown'; }
+    // refresh version info
+    try {
+      const r = await fetch('/api/version');
+      const d = await r.json();
+      document.getElementById('aboutVersion').textContent = 'v' + (d.version || '?');
+    } catch (e) {}
   }
+
+  async function checkUpdate() {
+    const st = document.getElementById('updateStatus');
+    const btn = document.getElementById('doUpdateBtn');
+    st.textContent = 'Checking...';
+    try {
+      const r = await fetch('/api/check-update');
+      const d = await r.json();
+      if (d.hasUpdate) {
+        st.textContent = 'New version available: ' + d.latest + ' (current: v' + d.current + ')';
+        btn.disabled = false;
+      } else {
+        st.textContent = 'Up to date (v' + d.current + ').';
+        btn.disabled = true;
+      }
+    } catch (e) {
+      st.textContent = 'Check failed: ' + e.message;
+      btn.disabled = true;
+    }
+  }
+
+  async function doUpdate() {
+    const st = document.getElementById('updateStatus');
+    const btn = document.getElementById('doUpdateBtn');
+    const cbtn = document.getElementById('checkUpdateBtn');
+    btn.disabled = true; cbtn.disabled = true;
+    st.textContent = 'Updating... (this may take a minute)';
+    try {
+      const r = await fetch('/api/update', { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) {
+        st.textContent = d.message + ' Please restart the server.';
+      } else {
+        st.textContent = 'Update failed: ' + (d.message || d.error || 'unknown');
+      }
+    } catch (e) {
+      st.textContent = 'Update failed: ' + e.message;
+    } finally {
+      cbtn.disabled = false;
+    }
+  }
+
+  document.getElementById('checkUpdateBtn').addEventListener('click', checkUpdate);
+  document.getElementById('doUpdateBtn').addEventListener('click', doUpdate);
   document.getElementById('aboutClose').addEventListener('click', () => {
     document.getElementById('aboutBackdrop').classList.remove('open');
   });
