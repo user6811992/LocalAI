@@ -822,6 +822,8 @@ function ollamaStream(path, bodyObj, onChunk) {
       }
     );
     req.on('error', reject);
+    // 2-minute timeout for streaming
+    req.setTimeout(120000, () => { req.destroy(new Error('Ollama stream timeout (120s)')); });
     req.write(data);
     req.end();
   });
@@ -884,7 +886,7 @@ async function runAgent(model, messages, maxIter, opts) {
   if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
   if (includeCoding) tools.push(...codingToolsAsOllama());
   const log = [];
-  const relevant = await searchMemory((messages[messages.length-1] && messages[messages.length-1].content) || '', 5);
+  const relevant = await searchMemory((messages[messages.length-1] && messages[messages.length-1].content) || '', 3);
   const memBlock = relevant.length ? '\n\nRelevant memories from past interactions:\n' + relevant.map((m) => '- ' + m.text).join('\n') : '';
   const systemMsg = { role: 'system', content: 'You are a local AI assistant with hands-on capabilities and persistent memory. You have CODING tools (files, shell, git, web, pdf, screenshots, memory, skills) and REVERSE ENGINEERING tools (REA). Use them to act, not just talk. You learn from past interactions (memories below) and from web searches. Save durable facts with memory_save. Save reusable procedures with skill_save, and reuse them with skill_run. Always explain what you did.' + memBlock };
   let finalThinking = '';
@@ -947,9 +949,11 @@ async function runAgent(model, messages, maxIter, opts) {
       }
     }
     if (!toolCalls.length) {
-      msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
-      if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
-      return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
+      const content = msg.content || '';
+      const thinking = msg.thinking || finalThinking || '';
+      msgs.push({ role: 'assistant', content: content, thinking: thinking });
+      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, toolsDisabled: !toolsSupported });
+      return { messages: msgs, final: content, thinking: thinking, toolLog: log, toolsDisabled: !toolsSupported };
     }
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
