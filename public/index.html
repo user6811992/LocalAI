@@ -1208,6 +1208,10 @@
         installBtn.textContent = 'Install';
         installBtn.className = 'primary';
         if (c.installed === false) installBtn.style.borderColor = 'var(--accent)';
+        const reconnectBtn = document.createElement('button');
+        reconnectBtn.textContent = 'Reconnect';
+        reconnectBtn.style.fontSize = '11px';
+        reconnectBtn.style.padding = '2px 6px';
         const aboutDiv = document.createElement('div');
         aboutDiv.className = 'comp-about';
         aboutDiv.style.display = 'none';
@@ -1296,6 +1300,28 @@
             installBtn.textContent = 'Install';
           }
         });
+        // Reconnect handler for RE tools
+        if (c.id === 're-tools') {
+          reconnectBtn.addEventListener('click', async () => {
+            reconnectBtn.disabled = true;
+            reconnectBtn.textContent = 'Connecting...';
+            try {
+              const rr = await fetch('/api/reconnect-mcp', { method: 'POST' });
+              const dd = await rr.json();
+              status.textContent = 'RE tools: ' + (dd.ready ? 'ready (' + dd.tools + ' tools)' : 'failed: ' + dd.error);
+              status.className = dd.ready ? 'status' : 'status err';
+              await loadComponents();
+            } catch (e) {
+              status.textContent = 'Reconnect error: ' + e.message;
+              status.className = 'status err';
+            } finally {
+              reconnectBtn.disabled = false;
+              reconnectBtn.textContent = 'Reconnect';
+            }
+          });
+          actions.appendChild(reconnectBtn);
+        }
+
         actions.appendChild(aboutBtn);
         if (c.installed === false) {
           actions.appendChild(installBtn);
