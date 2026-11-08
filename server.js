@@ -2227,7 +2227,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // Sanitize model name: lowercase, only a-z0-9._-
-      const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/^-+|-+$/g, '');
+      const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'model';
       if (!safeName || !/^[a-z0-9]/.test(safeName)) {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
@@ -2247,7 +2247,9 @@ const server = http.createServer(async (req, res) => {
         try { fs.unlinkSync(tmpModelfile); } catch (_) {}
         console.log('Import stderr:', (stderr || '').slice(0, 300));
         console.log('Import err:', err ? err.message : 'none');
-        json(res, 200, { ok: !err, message: (stderr || err?.message || 'done').slice(0, 500), name: safeName });
+        // Strip ANSI escape codes from output
+        const cleanOut = (stderr || err?.message || 'done').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[\?[0-9]*[hl]/g, '').trim();
+        json(res, 200, { ok: !err, message: cleanOut.slice(0, 200), name: safeName });
       });
       return;
   }
