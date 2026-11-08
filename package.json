@@ -1,6 +1,6 @@
 {
   "name": "aegisai",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "AegisAI - local AI web UI with Ollama backend",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
