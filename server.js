@@ -2212,6 +2212,20 @@ const server = http.createServer(async (req, res) => {
         json(res, 400, { ok: false, message: 'File not found: ' + modelPath });
         return;
       }
+      const stat = fs.statSync(modelPath);
+      if (stat.size < 1000) {
+        json(res, 400, { ok: false, message: 'File too small (' + stat.size + ' bytes). Not a valid GGUF.' });
+        return;
+      }
+      // Verify GGUF magic bytes
+      const magicBuf = Buffer.alloc(4);
+      const fd = fs.openSync(modelPath, 'r');
+      fs.readSync(fd, magicBuf, 0, 4, 0);
+      fs.closeSync(fd);
+      if (magicBuf.toString('ascii') !== 'GGUF') {
+        json(res, 400, { ok: false, message: 'Not a valid GGUF file (magic: ' + magicBuf.toString('hex') + '). File may be corrupted or not a GGUF model.' });
+        return;
+      }
       // Sanitize model name: lowercase, only a-z0-9._-
       const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/^-+|-+$/g, '');
       if (!safeName || !/^[a-z0-9]/.test(safeName)) {
@@ -2221,13 +2235,21 @@ const server = http.createServer(async (req, res) => {
       // Use forward slashes in Modelfile (Ollama prefers them)
       const posixPath = modelPath.replace(/\\\\/g, '/');
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
-      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\\n');
+      // Write Modelfile with FROM directive (quoted path for spaces)
+      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\\n', 'utf8');
+      console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
+      console.log('Import: file size:', stat.size, 'path:', modelPath);
       const { exec } = require('child_process');
       const ollamaBin = resolveOllamaBin();
+      const cmd = JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(safeName) + ' -f "' + tmpModelfile + '"';
+      console.log('Import: running:', cmd);
       const result = await new Promise((resolve) => {
-        exec(JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(safeName) + ' -f "' + tmpModelfile + '"', { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+        exec(cmd, { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
           try { fs.unlinkSync(tmpModelfile); } catch (_) {}
-          if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
+          console.log('Import stdout:', (stdout || '').slice(0, 500));
+          console.log('Import stderr:', (stderr || '').slice(0, 500));
+          console.log('Import err:', err ? err.message : 'none');
+          if (err) resolve({ ok: false, message: (stderr || err.message || 'exit code ' + (err.code || '?')).slice(0, 500) });
           else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500), name: safeName });
         });
       });
