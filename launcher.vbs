@@ -73,7 +73,24 @@ If Not portOpen Then
   WScript.Sleep 4000
 End If
 
-' Launch app window in Edge
-wshShell.Run "msedge --app=http://127.0.0.1:8080 --window-size=1200,800", 1, False
+' Launch app window - try Edge, Chrome, then default browser
+Dim browserCmd
+browserCmd = ""
+If fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Microsoft\Edge\Application\msedge.exe") Then
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Microsoft\Edge\Application\msedge.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Microsoft\Edge\Application\msedge.exe") Then
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Microsoft\Edge\Application\msedge.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Google\Chrome\Application\chrome.exe") Then
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Google\Chrome\Application\chrome.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Google\Chrome\Application\chrome.exe") Then
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Google\Chrome\Application\chrome.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+End If
+
+If browserCmd <> "" Then
+  wshShell.Run browserCmd, 1, False
+Else
+  ' Fall back to default browser
+  wshShell.Run "http://127.0.0.1:8080", 1, False
+End If
 
 On Error GoTo 0
