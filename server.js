@@ -66,8 +66,22 @@ function resolveReaBin() {
 
 async function initMcp() {
   try {
-    const { Client } = require('@modelcontextprotocol/sdk/client');
-    const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
+    let Client, StdioClientTransport;
+    try {
+      const sdk = require('@modelcontextprotocol/sdk/client');
+      Client = sdk.Client;
+      const stdio = require('@modelcontextprotocol/sdk/client/stdio.js');
+      StdioClientTransport = stdio.StdioClientTransport;
+    } catch (e) {
+      // Try alternate require paths
+      try {
+        const sdk = require('@modelcontextprotocol/sdk');
+        Client = sdk.Client;
+        StdioClientTransport = sdk.StdioClientTransport;
+      } catch (e2) {
+        throw new Error('MCP SDK not installed. Run: npm install in the AegisAI folder. (' + (e.message || e) + ')');
+      }
+    }
     const reaBin = resolveReaBin();
     console.log('Using rea binary:', reaBin);
     const transport = new StdioClientTransport({
@@ -901,7 +915,8 @@ async function runAgent(model, messages, maxIter, opts) {
     }
     if (r.status !== 200) {
       const errText = (r.data && r.data.error) ? String(r.data.error) : JSON.stringify(r.data);
-      if (/does not support tools/i.test(errText)) {
+      // Retry without tools on any 400 error (model may not support tools or tools payload too large)
+      if (r.status === 400 || /does not support tools/i.test(errText) || /invalid/i.test(errText)) {
         toolsSupported = false;
         r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false, options: opts.options || undefined, keep_alive: opts.keep_alive });
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
