@@ -1747,7 +1747,7 @@
       link.href = 'https://ollama.com/library/' + m.split(':')[0];
       link.target = '_blank';
       link.rel = 'noopener';
-      link.textContent = '🔗';
+      link.textContent = '[open]';
       link.style.fontSize = '11px';
       link.title = 'Inspect on Ollama';
       wrap.appendChild(link);
@@ -1909,8 +1909,34 @@
         items.forEach(it => {
           const div = document.createElement('div');
           div.style.marginBottom = '4px';
+          div.style.display = 'flex';
+          div.style.alignItems = 'center';
+          div.style.gap = '6px';
           const size = it.size ? ' (' + (it.size / 1e9).toFixed(1) + ' GB)' : '';
-          div.textContent = (it.type === 'gguf' ? '📄 ' : '📦 ') + it.label + size + ' — ' + it.path;
+          const label = document.createElement('span');
+          label.style.flex = '1';
+          label.textContent = (it.type === 'gguf' ? '[file] ' : '[dir] ') + it.label + size + ' - ' + it.path;
+          div.appendChild(label);
+          if (it.type === 'gguf') {
+            const importBtn = document.createElement('button');
+            importBtn.textContent = 'Import';
+            importBtn.style.fontSize = '10px';
+            importBtn.style.padding = '1px 4px';
+            importBtn.addEventListener('click', async () => {
+              const name = prompt('Model name for import:', it.label.replace('.gguf', '').toLowerCase().replace(/[^a-z0-9._-]/g, '-'));
+              if (!name) return;
+              importBtn.disabled = true;
+              importBtn.textContent = 'Importing...';
+              try {
+                const r = await fetch('/api/import-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: it.path, name }) });
+                const d = await r.json();
+                if (d.ok) { alert('Imported: ' + name); await loadInstalledModels(); await loadModels(); }
+                else { alert('Import failed: ' + (d.message || 'unknown')); }
+              } catch (e) { alert('Error: ' + e.message); }
+              finally { importBtn.disabled = false; importBtn.textContent = 'Import'; }
+            });
+            div.appendChild(importBtn);
+          }
           res.appendChild(div);
         });
       } catch (e) {
