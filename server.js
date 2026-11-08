@@ -1709,11 +1709,14 @@ const server = http.createServer(async (req, res) => {
     try {
       const fs = require('fs');
       const path = require('path');
+      const { exec } = require('child_process');
       const isGit = fs.existsSync(path.join(__dirname, '.git'));
       let output = '';
+      // Files that contain user data/API keys (gitignored, but back up just in case)
       const userDataFiles = ['search-config.json', 'memory.json', 'skills.json', 'chats.json', 'rag-store.json', 'auth.json'];
       const backupDir = path.join(__dirname, '.update-backup');
       try { if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true }); } catch (_) {}
+      // Back up user data before update
       const backedUp = [];
       for (const f of userDataFiles) {
         const src = path.join(__dirname, f);
@@ -1721,6 +1724,7 @@ const server = http.createServer(async (req, res) => {
           try { fs.copyFileSync(src, path.join(backupDir, f)); backedUp.push(f); } catch (_) {}
         }
       }
+      // Back up workspace (user's RE work)
       const wsSrc = path.join(__dirname, 'workspace');
       if (fs.existsSync(wsSrc)) {
         try {
@@ -1730,46 +1734,44 @@ const server = http.createServer(async (req, res) => {
           backedUp.push('workspace/');
         } catch (_) {}
       }
-      if (backedUp.length) output += 'Backed up user data: ' + backedUp.join(', ') + '\n';
+      if (backedUp.length) output += 'Backed up user data: ' + backedUp.join(', ') + '\\n';
       if (isGit) {
-        output += 'Stashing local changes...\n';
+        output += 'Stashing local changes...\\n';
         await new Promise((resolve) => {
-          const { exec } = require('child_process');
           exec('git stash', { cwd: __dirname, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-            output += (stdout || '') + (stderr || '') + '\n';
+            output += (stdout || '') + (stderr || '') + '\\n';
             resolve();
           });
         });
-        output += 'Cleaning untracked files...\n';
+        output += 'Cleaning untracked files...\\n';
         await new Promise((resolve) => {
-          const { exec } = require('child_process');
           exec('git clean -fd', { cwd: __dirname, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-            output += (stdout || '') + (stderr || '') + '\n';
+            output += (stdout || '') + (stderr || '') + '\\n';
             resolve();
           });
         });
-        output += 'Fetching latest...\n';
+        output += 'Fetching latest...\\n';
         const pullRes = await new Promise((resolve) => {
-          const { exec } = require('child_process');
           exec('git fetch origin && git reset --hard origin/master', { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
             resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
           });
         });
-        output += pullRes.out + '\n';
+        output += pullRes.out + '\\n';
         if (!pullRes.ok) { json(res, 500, { ok: false, message: 'Update failed: ' + (pullRes.err || pullRes.out), output }); return; }
       } else {
         json(res, 400, { ok: false, message: 'Not a git repository. Please re-install from the latest release zip.' });
         return;
       }
-      output += 'Running npm install...\n';
+      // npm install
+      output += 'Running npm install...\\n';
       const npmRes = await new Promise((resolve) => {
-        const { exec } = require('child_process');
         exec('npm install', { cwd: __dirname, timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
           resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
         });
       });
-      output += npmRes.out + '\n';
+      output += npmRes.out + '\\n';
       if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed: ' + (npmRes.err || npmRes.out), output }); return; }
+      // Restore user data
       const restored = [];
       for (const f of userDataFiles) {
         const backup = path.join(backupDir, f);
@@ -1787,7 +1789,8 @@ const server = http.createServer(async (req, res) => {
           restored.push('workspace/');
         } catch (_) {}
       }
-      if (restored.length) output += 'Restored user data: ' + restored.join(', ') + '\n';
+      if (restored.length) output += 'Restored user data: ' + restored.join(', ') + '\\n';
+      // read new version
       let newVersion = 'unknown';
       try { newVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
       json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Restart the server to apply.', version: newVersion, output });
@@ -1795,6 +1798,379 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url.startsWith('/api/hf-search') && req.method === 'GET') {
+    try {
+      const u = new URL(req.url, 'http://localhost');
+      const q = (u.searchParams.get('q') || '').trim();
+      const https = require('https');
+      const apiUrl = 'https://huggingface.co/api/models?search=' + encodeURIComponent(q) + '&filter=gguf&sort=downloads&direction=-1&limit=20';
+      const data = await new Promise((resolve, reject) => {
+        https.get(apiUrl, { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+          let buf = '';
+          r.on('data', (c) => (buf += c));
+          r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+        }).on('error', reject);
+      });
+      const items = (Array.isArray(data) ? data : []).map((m) => ({
+        id: m.id || m.modelId,
+        downloads: m.downloads || 0,
+        likes: m.likes || 0,
+        tags: m.tags || [],
+      }));
+      json(res, 200, { items });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- RAG (document upload + retrieval) with collections ----------
+  const RAG_FILE = path.join(__dirname, 'rag-store.json');
+  function loadRag() {
+    try {
+      const d = JSON.parse(fs.readFileSync(RAG_FILE, 'utf8'));
+      if (!d.collections) d.collections = { default: { docs: d.docs || [], chunks: d.chunks || [] } };
+      if (!d.activeCollection) d.activeCollection = 'default';
+      return d;
+    } catch (e) { return { collections: { default: { docs: [], chunks: [] } }, activeCollection: 'default' }; }
+  }
+  function saveRag(store) {
+    try { fs.writeFileSync(RAG_FILE, JSON.stringify(store)); } catch (e) {}
+  }
+  function getCollection(store, name) {
+    name = name || store.activeCollection || 'default';
+    if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+    return store.collections[name];
+  }
+  function cosine(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
+    return dot / (Math.sqrt(na)*Math.sqrt(nb) + 1e-9);
+  }
+  async function embedText(text) {
+    try {
+      const r = await ollamaRequest('/api/embeddings', { model: 'nomic-embed-text', prompt: text.slice(0, 4000) });
+      return r.embedding || null;
+    } catch (e) { return null; }
+  }
+
+  if (req.url === '/api/rag-collections' && req.method === 'GET') {
+    const store = loadRag();
+    const names = Object.keys(store.collections);
+    json(res, 200, { collections: names, active: store.activeCollection });
+    return;
+  }
+
+  if (req.url === '/api/rag-collections' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, action } = JSON.parse(body || '{}');
+      const store = loadRag();
+      if (action === 'create' && name) {
+        if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+        store.activeCollection = name;
+      } else if (action === 'switch' && name) {
+        if (!store.collections[name]) store.collections[name] = { docs: [], chunks: [] };
+        store.activeCollection = name;
+      } else if (action === 'delete' && name && name !== 'default') {
+        delete store.collections[name];
+        if (store.activeCollection === name) store.activeCollection = 'default';
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, active: store.activeCollection, collections: Object.keys(store.collections) });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-docs' && req.method === 'GET') {
+    const u = new URL(req.url, 'http://localhost');
+    const coll = u.searchParams.get('collection') || null;
+    const store = loadRag();
+    const col = getCollection(store, coll);
+    json(res, 200, { collection: coll || store.activeCollection, docs: col.docs.map(d => ({ id: d.id, name: d.name, chunks: d.chunks })) });
+    return;
+  }
+
+  if (req.url === '/api/rag-chunks' && req.method === 'GET') {
+    const u = new URL(req.url, 'http://localhost');
+    const coll = u.searchParams.get('collection') || null;
+    const store = loadRag();
+    const col = getCollection(store, coll);
+    json(res, 200, { collection: coll || store.activeCollection, chunks: col.chunks.map((c, i) => ({ idx: i, docId: c.docId, text: c.text, hasEmbedding: !!c.embedding })) });
+    return;
+  }
+
+  if (req.url === '/api/rag-upload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, content, type, collection } = JSON.parse(body || '{}');
+      if (!name || !content) { json(res, 400, { ok: false, message: 'name and content required' }); return; }
+      let text = '';
+      if (type === 'pdf') {
+        try {
+          const pdfParse = require('pdf-parse');
+          const buf = Buffer.from(content, 'base64');
+          const data = await pdfParse(buf);
+          text = data.text || '';
+        } catch (e) { text = ''; json(res, 500, { ok: false, message: 'PDF parse failed: ' + e.message }); return; }
+      } else {
+        text = Buffer.from(content, 'base64').toString('utf8');
+      }
+      if (!text.trim()) { json(res, 400, { ok: false, message: 'No text extracted' }); return; }
+      const chunks = [];
+      const size = 800;
+      for (let i = 0; i < text.length; i += size) {
+        chunks.push(text.slice(i, i + size));
+      }
+      const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      const col = getCollection(store, coll);
+      const docId = 'doc_' + Date.now();
+      const doc = { id: docId, name, chunks: chunks.length };
+      col.docs.push(doc);
+      for (let i = 0; i < chunks.length; i++) {
+        const emb = await embedText(chunks[i]);
+        col.chunks.push({ docId, idx: i, text: chunks[i], embedding: emb });
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, message: 'Indexed ' + chunks.length + ' chunks from ' + name + ' into "' + coll + '"', docId, collection: coll });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-query' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { query, topK, collection } = JSON.parse(body || '{}');
+      const k = topK || 5;
+      const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      const col = getCollection(store, coll);
+      if (!col.chunks.length) { json(res, 200, { chunks: [], collection: coll }); return; }
+      const qEmb = await embedText(query || '');
+      let scored = col.chunks.map(c => ({ text: c.text, docId: c.docId, score: qEmb && c.embedding ? cosine(qEmb, c.embedding) : 0 }));
+      scored.sort((a, b) => b.score - a.score);
+      const topChunks = scored.slice(0, k);
+      // include doc names for citations
+      const citations = topChunks.map(c => {
+        const doc = col.docs.find(d => d.id === c.docId);
+        return { text: c.text, docName: doc ? doc.name : 'unknown', score: c.score };
+      });
+      json(res, 200, { chunks: topChunks.map(s => s.text), citations, collection: coll });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/rag-clear' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { collection } = JSON.parse(body || '{}');
+      const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      if (store.collections[coll]) {
+        store.collections[coll] = { docs: [], chunks: [] };
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, collection: coll });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/run-code' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { lang, code } = JSON.parse(body || '{}');
+      const { exec } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const tmp = path.join(os.tmpdir(), 'localai-run-' + Date.now());
+      let cmd = '';
+      if (lang === 'python') {
+        const f = tmp + '.py';
+        fs.writeFileSync(f, code || '');
+        cmd = 'python "' + f + '"';
+      } else if (lang === 'javascript' || lang === 'js') {
+        const f = tmp + '.js';
+        fs.writeFileSync(f, code || '');
+        cmd = 'node "' + f + '"';
+      } else {
+        json(res, 400, { ok: false, message: 'Unsupported language. Use python or javascript.' }); return;
+      }
+      const result = await new Promise((resolve) => {
+        exec(cmd, { timeout: 15000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          // cleanup
+          try { fs.unlinkSync(tmp + (lang === 'python' ? '.py' : '.js')); } catch (_) {}
+          resolve({ ok: !err, stdout: (stdout || '').slice(0, 4000), stderr: (stderr || '').slice(0, 2000), code: err ? (err.code || 1) : 0 });
+        });
+      });
+      json(res, 200, result);
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/component/install' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const { exec } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+      let result = { ok: false, message: 'Unknown component' };
+      if (id === 're-tools') {
+        const r = await new Promise((resolve) => {
+          exec('npm install -g rea-agents@latest', { timeout: 300000, maxBuffer: 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
+            resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+          });
+        });
+        result = r.ok ? { ok: true, message: 'REA tools installed. Restart server to connect. ' + r.out.slice(0, 200) } : { ok: false, message: 'Install failed: ' + (r.err || r.out).slice(0, 300) };
+      } else if (id === 'rea-repo') {
+        const reaRepoPath = path.join(__dirname, 'repos', 'rea');
+        if (fs.existsSync(reaRepoPath)) {
+          result = { ok: true, message: 'Already cloned at ' + reaRepoPath };
+        } else {
+          fs.mkdirSync(path.join(__dirname, 'repos'), { recursive: true });
+          const r = await new Promise((resolve) => {
+            exec('git clone https://github.com/morluto/rea "' + reaRepoPath + '"', { timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+              resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+            });
+          });
+          result = r.ok ? { ok: true, message: 'Cloned REA repo. ' + r.out.slice(0, 200) } : { ok: false, message: 'Clone failed: ' + (r.err || r.out).slice(0, 300) };
+        }
+      } else if (id === 'ollama-backend') {
+        result = { ok: false, message: 'Install Ollama from https://ollama.com/download' };
+      } else {
+        result = { ok: false, message: 'No auto-installer for this component. See the About/Install URL.' };
+      }
+      invalidateVersionCache();
+      json(res, 200, result);
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- Ollama controls ----------
+  if (req.url === '/api/ollama-info' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
+      const d = await r.json();
+      json(res, 200, { info: d });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-ps' && req.method === 'GET') {
+    try {
+      const r = await fetch(OLLAMA + '/api/ps');
+      if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
+      const d = await r.json();
+      json(res, 200, d);
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-delete' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      const r = await fetch(OLLAMA + '/api/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!r.ok) { const t = await r.text(); json(res, r.status, { error: t || ('HTTP ' + r.status) }); return; }
+      json(res, 200, { ok: true, message: 'Deleted ' + name });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/ollama-unload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      if (!name) { json(res, 400, { error: 'model name required' }); return; }
+      // Unload by sending a chat with keep_alive=0
+      const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, messages: [], keep_alive: 0 }) });
+      json(res, 200, { ok: r.ok, message: r.ok ? 'Unloaded ' + name : 'HTTP ' + r.status });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- Multi-chat persistence ----------
+  const CHATS_FILE = path.join(__dirname, 'chats.json');
+  function loadChats() { try { return JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8')); } catch (e) { return []; } }
+  function saveChats(chats) { try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {} }
+
+  if (req.url === '/api/chats' && req.method === 'GET') {
+    const chats = loadChats();
+    json(res, 200, { chats: chats.map(c => ({ id: c.id, title: c.title, updated: c.updated })) });
+    return;
+  }
+  if (req.url === '/api/chats' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id, title, messages } = JSON.parse(body || '{}');
+      const chats = loadChats();
+      const chatId = id || ('chat_' + Date.now());
+      const existing = chats.findIndex(c => c.id === chatId);
+      const entry = { id: chatId, title: title || 'Untitled', messages: messages || [], updated: new Date().toISOString() };
+      if (existing >= 0) chats[existing] = entry; else chats.unshift(entry);
+      // keep last 50
+      if (chats.length > 50) chats.length = 50;
+      saveChats(chats);
+      json(res, 200, { ok: true, id: chatId });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/chats/delete' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const chats = loadChats().filter(c => c.id !== id);
+      saveChats(chats);
+      json(res, 200, { ok: true });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url.startsWith('/api/chats/') && req.method === 'GET') {
+    const id = req.url.split('/').pop();
+    const chat = loadChats().find(c => c.id === id);
+    if (!chat) { json(res, 404, { error: 'not found' }); return; }
+    json(res, 200, chat);
+    return;
+  }
+
+  // ---------- RE workspace: binary upload ----------
+  if (req.url === '/api/re-upload' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name, content } = JSON.parse(body || '{}');
+      if (!name || !content) { json(res, 400, { ok: false, message: 'name and content required' }); return; }
+      const fs = require('fs');
+      const path = require('path');
+      const wsDir = path.join(__dirname, 'workspace', 're');
+      if (!fs.existsSync(wsDir)) fs.mkdirSync(wsDir, { recursive: true });
+      const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = path.join(wsDir, safeName);
+      fs.writeFileSync(filePath, Buffer.from(content, 'base64'));
+      json(res, 200, { ok: true, path: filePath, message: 'Uploaded ' + safeName });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/re-files' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const wsDir = path.join(__dirname, 'workspace', 're');
+      if (!fs.existsSync(wsDir)) { json(res, 200, { files: [] }); return; }
+      const files = fs.readdirSync(wsDir).map(f => {
+        try { const st = fs.statSync(path.join(wsDir, f)); return { name: f, size: st.size, path: path.join(wsDir, f) }; } catch (e) { return null; }
+      }).filter(Boolean);
+      json(res, 200, { files });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- Import GGUF model into Ollama ----------
   if (req.url === '/api/import-model' && req.method === 'POST') {
     try {
       const body = await readBody(req);
