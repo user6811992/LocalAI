@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.0.4</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.0.5</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.0.4</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.0.5</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1956,8 +1956,8 @@
               try {
                 const r = await fetch('/api/import-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: it.path, name }) });
                 const d = await r.json();
-                if (d.ok) { alert('Imported: ' + name); await loadInstalledModels(); await loadModels(); }
-                else { alert('Import failed: ' + (d.message || 'unknown')); }
+                if (d.ok) { alert('Imported as: ' + (d.name || name) + '\n' + (d.message || '')); await loadInstalledModels(); await loadModels(); }
+                else { alert('Import failed: ' + (d.message || 'unknown error')); }
               } catch (e) { alert('Error: ' + e.message); }
               finally { importBtn.disabled = false; importBtn.textContent = 'Import'; }
             });
