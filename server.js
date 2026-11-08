@@ -1788,8 +1788,47 @@ const server = http.createServer(async (req, res) => {
         output += pullRes.out + '\\n';
         if (!pullRes.ok) { json(res, 500, { ok: false, message: 'Update failed: ' + (pullRes.err || pullRes.out), output }); return; }
       } else {
-        json(res, 400, { ok: false, message: 'Not a git repository. Please re-install from the latest release zip.' });
-        return;
+        // Not a git repo (installed from release zip) - download latest release and extract
+        output += 'Not a git repo. Downloading latest release...\\n';
+        try {
+          const https = require('https');
+          const os = require('os');
+          // Get latest release info
+          const releaseInfo = await new Promise((resolve, reject) => {
+            https.get('https://api.github.com/repos/user6811992/LocalAI/releases/latest', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+              let buf = '';
+              r.on('data', (c) => (buf += c));
+              r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
+            }).on('error', reject);
+          });
+          const zipUrl = (releaseInfo.assets && releaseInfo.assets[0] && releaseInfo.assets[0].browser_download_url) || null;
+          if (!zipUrl) { json(res, 400, { ok: false, message: 'No release zip found. Please re-install from https://github.com/user6811992/LocalAI/releases', output }); return; }
+          output += 'Downloading ' + releaseInfo.tag_name + '...\\n';
+          const zipPath = path.join(os.tmpdir(), 'aegisai-update.zip');
+          await new Promise((resolve, reject) => {
+            const file = fs.createWriteStream(zipPath);
+            https.get(zipUrl, (r) => {
+              r.pipe(file);
+              file.on('finish', () => { file.close(); resolve(); });
+            }).on('error', (e) => { fs.unlinkSync(zipPath); reject(e); });
+          });
+          output += 'Extracting...\\n';
+          const isWin = process.platform === 'win32';
+          const extractCmd = isWin
+            ? 'powershell -NoProfile -Command "Expand-Archive -Path \\"' + zipPath + '\\" -DestinationPath \\"' + __dirname + '\\" -Force"'
+            : 'unzip -o "' + zipPath + '" -d "' + __dirname + '"';
+          const extractRes = await new Promise((resolve) => {
+            exec(extractCmd, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+              resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+            });
+          });
+          output += extractRes.out + '\\n';
+          try { fs.unlinkSync(zipPath); } catch (_) {}
+          if (!extractRes.ok) { json(res, 500, { ok: false, message: 'Extraction failed: ' + (extractRes.err || extractRes.out), output }); return; }
+          output += 'Update extracted successfully. Restart the server to apply.\\n';
+        } catch (e) {
+          json(res, 500, { ok: false, message: 'Update failed: ' + (e.message || String(e)), output }); return;
+        }
       }
       // npm install
       output += 'Running npm install...\\n';
