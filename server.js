@@ -2227,7 +2227,10 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // Sanitize model name: lowercase, only a-z0-9._-
-      const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'model';
+      let safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
+      // Ensure name starts with a letter (Ollama requirement)
+      if (safeName && !/^[a-z]/.test(safeName)) safeName = 'm' + safeName;
+      if (!safeName) safeName = 'imported-model';
       if (!safeName || !/^[a-z0-9]/.test(safeName)) {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;

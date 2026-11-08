@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.0.9</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.0</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.0.9</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.0</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1949,8 +1949,9 @@
             importBtn.style.fontSize = '10px';
             importBtn.style.padding = '1px 4px';
             importBtn.addEventListener('click', async () => {
-              const suggested = it.label.replace(/\.gguf$/i, '').toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || 'imported-model';
-              const name = prompt('Model name for import (lowercase, letters/numbers/dots/hyphens only):', suggested);
+              const suggested = it.label.replace(/\.gguf$/i, '').toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 62);
+              const finalSuggested = /^[a-z]/.test(suggested) ? suggested : 'm' + suggested || 'imported-model';
+              const name = prompt('Model name for import (lowercase, letters/numbers/dots/hyphens only):', finalSuggested || 'imported-model');
               if (!name) return;
               importBtn.disabled = true;
               importBtn.textContent = 'Importing...';
