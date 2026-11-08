@@ -5,7 +5,22 @@ set -e
 
 # ---------- helpers ----------
 say() { echo ""; echo "==> $*"; }
-ask() { read -r -p "$1 [y/N]: " ans; case "$ans" in [yY]|[yY][eE][sS]) return 0;; *) return 1;; esac; }
+ask() {
+  # Read from /dev/tty if available (works even when piped), fall back to stdin
+  if [ -t 0 ]; then
+    read -r -p "$1 [y/N]: " ans
+  elif [ -r /dev/tty ]; then
+    read -r -p "$1 [y/N]: " ans < /dev/tty
+  else
+    # Non-interactive: check env var (e.g., AEGIS_YES=1) or default to N
+    if [ "${AEGIS_YES:-}" = "1" ] || [ "${AEGIS_YES:-}" = "yes" ]; then
+      ans="y"
+    else
+      ans="n"
+    fi
+  fi
+  case "$ans" in [yY]|[yY][eE][sS]) return 0;; *) return 1;; esac
+}
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -22,7 +37,13 @@ fi
 
 # ---------- choose install location ----------
 DEFAULT_DEST="$HOME/AegisAI"
-read -r -p "Install location [$DEFAULT_DEST]: " DEST
+if [ -t 0 ]; then
+  read -r -p "Install location [$DEFAULT_DEST]: " DEST
+elif [ -r /dev/tty ]; then
+  read -r -p "Install location [$DEFAULT_DEST]: " DEST < /dev/tty
+else
+  DEST=""
+fi
 DEST="${DEST:-$DEFAULT_DEST}"
 if [ ! -d "$DEST" ]; then
   mkdir -p "$DEST"
