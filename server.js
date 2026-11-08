@@ -2137,6 +2137,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ---------- Import GGUF model into Ollama ----------
+  if (req.url === '/api/import-model' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { path: modelPath, name } = JSON.parse(body || '{}');
+      if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
+      const fs = require('fs');
+      const os = require('os');
+      const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
+      fs.writeFileSync(tmpModelfile, 'FROM ' + modelPath + '\\n');
+      const { exec } = require('child_process');
+      const ollamaBin = resolveOllamaBin();
+      const result = await new Promise((resolve) => {
+        exec(JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(name) + ' -f "' + tmpModelfile + '"', { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+          try { fs.unlinkSync(tmpModelfile); } catch (_) {}
+          if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
+          else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
+        });
+      });
+      json(res, 200, result);
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     // SSE streaming
     res.writeHead(200, {
