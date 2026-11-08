@@ -2201,12 +2201,12 @@ const server = http.createServer(async (req, res) => {
 
   // ---------- Import GGUF model into Ollama ----------
   if (req.url === '/api/import-model' && req.method === 'POST') {
-    try {
       const body = await readBody(req);
       const { path: modelPath, name } = JSON.parse(body || '{}');
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
       const fs = require('fs');
       const os = require('os');
+      const path = require('path');
       // Verify file exists
       if (!fs.existsSync(modelPath)) {
         json(res, 400, { ok: false, message: 'File not found: ' + modelPath });
@@ -2233,29 +2233,23 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // Use forward slashes in Modelfile (Ollama prefers them)
-      const posixPath = modelPath.replace(/\\\\/g, '/');
+      const posixPath = modelPath.replace(/\\/g, '/');
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
       // Write Modelfile with FROM directive (quoted path for spaces)
-      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\\n', 'utf8');
+      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\n', 'utf8');
       console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
       console.log('Import: file size:', stat.size, 'path:', modelPath);
       const { exec } = require('child_process');
       const ollamaBin = resolveOllamaBin();
       const cmd = JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(safeName) + ' -f "' + tmpModelfile + '"';
       console.log('Import: running:', cmd);
-      const result = await new Promise((resolve) => {
-        exec(cmd, { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-          try { fs.unlinkSync(tmpModelfile); } catch (_) {}
-          console.log('Import stdout:', (stdout || '').slice(0, 500));
-          console.log('Import stderr:', (stderr || '').slice(0, 500));
-          console.log('Import err:', err ? err.message : 'none');
-          if (err) resolve({ ok: false, message: (stderr || err.message || 'exit code ' + (err.code || '?')).slice(0, 500) });
-          else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500), name: safeName });
-        });
+      exec(cmd, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+        try { fs.unlinkSync(tmpModelfile); } catch (_) {}
+        console.log('Import stderr:', (stderr || '').slice(0, 300));
+        console.log('Import err:', err ? err.message : 'none');
+        json(res, 200, { ok: !err, message: (stderr || err?.message || 'done').slice(0, 500), name: safeName });
       });
-      json(res, 200, result);
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
-    return;
+      return;
   }
 
   if (req.url === '/api/agent' && req.method === 'POST') {
