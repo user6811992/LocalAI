@@ -2207,15 +2207,22 @@ const server = http.createServer(async (req, res) => {
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
       const fs = require('fs');
       const os = require('os');
+      // Sanitize model name: lowercase, only a-z0-9._-
+      const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/^-+|-+$/g, '');
+      if (!safeName || !/^[a-z0-9]/.test(safeName)) {
+        json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
+        return;
+      }
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
-      fs.writeFileSync(tmpModelfile, 'FROM ' + modelPath + '\\n');
+      // Quote the path in case it has spaces
+      fs.writeFileSync(tmpModelfile, 'FROM "' + modelPath + '"\\n');
       const { exec } = require('child_process');
       const ollamaBin = resolveOllamaBin();
       const result = await new Promise((resolve) => {
-        exec(JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(name) + ' -f "' + tmpModelfile + '"', { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+        exec(JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(safeName) + ' -f "' + tmpModelfile + '"', { timeout: 600000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
           try { fs.unlinkSync(tmpModelfile); } catch (_) {}
           if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
-          else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
+          else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500), name: safeName });
         });
       });
       json(res, 200, result);

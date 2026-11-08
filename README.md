@@ -164,6 +164,8 @@ Then re-run `install.vbs`.
 
 ![Models dialog](docs/screenshots/models.png)
 
+![Components dialog](docs/screenshots/components.png)
+
 ![About dialog](docs/screenshots/about.png)
 
 ## Security / Auth
