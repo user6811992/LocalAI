@@ -2207,15 +2207,21 @@ const server = http.createServer(async (req, res) => {
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
       const fs = require('fs');
       const os = require('os');
+      // Verify file exists
+      if (!fs.existsSync(modelPath)) {
+        json(res, 400, { ok: false, message: 'File not found: ' + modelPath });
+        return;
+      }
       // Sanitize model name: lowercase, only a-z0-9._-
       const safeName = name.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '-').replace(/^-+|-+$/g, '');
       if (!safeName || !/^[a-z0-9]/.test(safeName)) {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
       }
+      // Use forward slashes in Modelfile (Ollama prefers them)
+      const posixPath = modelPath.replace(/\\\\/g, '/');
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
-      // Quote the path in case it has spaces
-      fs.writeFileSync(tmpModelfile, 'FROM "' + modelPath + '"\\n');
+      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\\n');
       const { exec } = require('child_process');
       const ollamaBin = resolveOllamaBin();
       const result = await new Promise((resolve) => {
