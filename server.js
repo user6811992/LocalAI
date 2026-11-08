@@ -47,14 +47,33 @@ let mcpTools = []; // MCP tool descriptors
 let mcpReady = false;
 let mcpError = null;
 
+function resolveReaBin() {
+  if (process.env.REA_BIN && fs.existsSync(process.env.REA_BIN)) return process.env.REA_BIN;
+  const candidates = [
+    path.join(process.env.APPDATA || '', 'npm', 'rea.cmd'),
+    path.join(process.env.APPDATA || '', 'npm', 'rea'),
+    'C:\\\\Program Files\\rea\\rea.exe',
+  ];
+  for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('where rea', { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+    const first = (out || '').trim().split(/\\r?\\n/)[0];
+    if (first && fs.existsSync(first)) return first;
+  } catch (_) {}
+  return 'rea';
+}
+
 async function initMcp() {
   try {
     const { Client } = require('@modelcontextprotocol/sdk/client');
     const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
+    const reaBin = resolveReaBin();
+    console.log('Using rea binary:', reaBin);
     const transport = new StdioClientTransport({
-      command: 'rea',
+      command: reaBin,
       args: ['--mcp'],
-      env: Object.assign({}, process.env, { PATH: process.env.PATH || '' }),
+      env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') + ';' + path.dirname(reaBin) }),
       stderr: 'pipe',
     });
     const client = new Client({ name: 'local-ai', version: '1.0.0' }, { capabilities: {} });
@@ -68,6 +87,10 @@ async function initMcp() {
     mcpError = e && e.message ? e.message : String(e);
     mcpReady = false;
     console.error('REA MCP init failed:', mcpError);
+    // Provide helpful hint
+    if (/not recognized|ENOENT|not found/i.test(mcpError)) {
+      mcpError += ' — REA (rea-agents) may not be installed. Run: npm install -g rea-agents';
+    }
   }
 }
 
@@ -1362,6 +1385,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url === '/api/reconnect-mcp' && req.method === 'POST') {
+    mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
+    await initMcp();
+    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length });
+    return;
+  }
+
   if (req.url === '/api/component/update' && req.method === 'POST') {
     try {
       const body = await readBody(req);
@@ -1508,7 +1538,6 @@ const server = http.createServer(async (req, res) => {
             else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
           });
         });
-      } else if (id === 're-tools') {
       } else if (id === 're-tools') {
         // Update rea-agents from npm, then reconnect MCP
         const { exec } = require('child_process');
