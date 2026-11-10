@@ -166,7 +166,7 @@ function mcpToolsAsOllama() {
     type: 'function',
     function: {
       name: t.name,
-      description: t.description || '',
+      description: (t.description || '').slice(0, 120),
       parameters: t.inputSchema || { type: 'object', properties: {} },
     },
   }));
@@ -177,7 +177,7 @@ function mcpToolsAsOllama() {
         type: 'function',
         function: {
           name: 'are_' + t.name,
-          description: (t.description || '') + ' [from awesome-reverse-engineered index]',
+          description: ((t.description || '') + ' [from awesome-reverse-engineered index]').slice(0, 120),
           parameters: t.inputSchema || { type: 'object', properties: {} },
         },
       });
@@ -248,7 +248,7 @@ const codingToolsDef = [
 function codingToolsAsOllama() {
   return codingToolsDef.map((t) => ({
     type: 'function',
-    function: { name: t.name, description: t.description, parameters: t.parameters },
+    function: { name: t.name, description: (t.description || '').slice(0, 120), parameters: t.parameters },
   }));
 }
 
