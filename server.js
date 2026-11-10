@@ -1469,6 +1469,17 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, { loaded: !!areDataCache, loading: areDataLoading, count: Array.isArray(areDataCache) ? areDataCache.length : 0 });
     return;
   }
+  if (req.url === '/api/are-data-refresh' && req.method === 'POST') {
+    try {
+      const fs = require('fs');
+      // Delete cached file to force re-download
+      if (fs.existsSync(ARE_DATA_FILE)) fs.unlinkSync(ARE_DATA_FILE);
+      areDataCache = null;
+      const data = await loadAreData();
+      json(res, 200, { ok: true, count: Array.isArray(data) ? data.length : 0 });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
   if (req.url === '/api/are-readme' && req.method === 'POST') {
     try {
       const body = await readBody(req);
