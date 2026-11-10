@@ -871,7 +871,6 @@ function ollamaStream(path, bodyObj, onChunk) {
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
-              console.log('parsed obj.message:', JSON.stringify(obj.message).substring(0, 100));
               if (obj.message) {
                 if (obj.message.content) {
                   fullContent += obj.message.content;
