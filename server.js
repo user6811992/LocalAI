@@ -968,9 +968,27 @@ async function runAgent(model, messages, maxIter, opts) {
   if (includeCoding) tools.push(...codingToolsAsOllama());
   if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
   // Limit total tools to avoid overwhelming small-context models
-  const MAX_TOOLS = 20;
-  if (tools.length > MAX_TOOLS) {
-    tools.length = MAX_TOOLS;
+  // Limit tools: keep all coding + ARE tools, cap RE tools at 10
+  if (includeRe && mcpReady) {
+    const codingLen = includeCoding ? codingToolsDef.length : 0;
+    const areLen = areReady ? areTools.length : 0;
+    const reLimit = Math.max(0, 40 - codingLen - areLen);
+    // Rebuild tools with limited RE tools
+    const newTools = [];
+    if (includeCoding) newTools.push(...codingToolsAsOllama());
+    if (areReady) {
+      for (const t of areTools) {
+        newTools.push({ type: 'function', function: { name: 'are_' + t.name, description: ((t.description || '') + ' [from awesome-reverse-engineered index]').slice(0, 120), parameters: t.inputSchema || { type: 'object', properties: {} } } });
+      }
+    }
+    // Add only first N RE tools
+    const reTools = mcpTools.slice(0, reLimit).map((t) => ({
+      type: 'function',
+      function: { name: t.name, description: (t.description || '').slice(0, 120), parameters: t.inputSchema || { type: 'object', properties: {} } },
+    }));
+    newTools.push(...reTools);
+    tools.length = 0;
+    tools.push(...newTools);
   }
   const log = [];
   const memBlock = '';

@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.21</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.22</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.21</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.22</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -794,6 +794,7 @@
   }
 
   async function send() {
+    console.log('send() called, generating:', generating);
     if (generating) {
       // queue instead of dropping
       const t = input.value.trim();
@@ -808,7 +809,8 @@
       return;
     }
     const rawText = input.value.trim();
-    if (!rawText && attachments.length === 0) return;
+    console.log('send: rawText=', rawText, 'attachments=', attachments.length);
+    if (!rawText && attachments.length === 0) { console.log('send: early return (empty)'); return; }
     if (rawText) { inputHistory.push(rawText); historyIndex = -1; }
     const atts = attachments.slice();
     // RAG: fetch relevant chunks from indexed docs
@@ -819,7 +821,8 @@
       const rd = await rr.json();
       if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
       if (rd.citations) ragCitations = rd.citations;
-    } catch (e) {}
+      console.log('send: RAG done, chunks:', rd.chunks ? rd.chunks.length : 0);
+    } catch (e) { console.log('send: RAG error:', e.message); }
     const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
     input.value = '';
     attachments = [];
@@ -865,6 +868,7 @@
 
     try {
       if (useAgent) {
+        console.log('Agent path: fetching /api/agent');
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -876,7 +880,9 @@
           try { t = await res.text(); } catch (e) { t = ''; }
           throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
         }
+        console.log('Agent: res.ok=', res.ok, 'status=', res.status);
         const data = await res.json();
+        console.log('Agent: parsed data, final length:', (data.final || '').length);
         const finalText = data.final || '';
         const thinkingText = data.thinking || '';
         contentEl.textContent = finalText;
