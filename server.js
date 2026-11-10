@@ -865,12 +865,13 @@ function ollamaStream(path, bodyObj, onChunk) {
         let done = false;
         res.on('data', (c) => {
           buf += c.toString();
-          const lines = buf.split('\\n');
+          const lines = buf.split('\n');
           buf = lines.pop();
           for (const line of lines) {
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
+              console.log('parsed obj.message:', JSON.stringify(obj.message).substring(0, 100));
               if (obj.message) {
                 if (obj.message.content) {
                   fullContent += obj.message.content;
@@ -973,10 +974,9 @@ async function runAgent(model, messages, maxIter, opts) {
     tools.length = MAX_TOOLS;
   }
   const log = [];
-  const relevant = await searchMemory((messages[messages.length-1] && messages[messages.length-1].content) || '', 3);
-  const memBlock = relevant.length ? '\n\nRelevant memories from past interactions:\n' + relevant.map((m) => '- ' + m.text).join('\n') : '';
-  const areHint = areReady ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects. ALWAYS search this index BEFORE starting reverse engineering work to avoid duplicating existing efforts.' : '';
-  const systemMsg = { role: 'system', content: 'You are a local AI assistant with hands-on capabilities and persistent memory. You have CODING tools (files, shell, git, web, pdf, screenshots, memory, skills) and REVERSE ENGINEERING tools (REA).' + areHint + ' Use them to act, not just talk. You learn from past interactions (memories below) and from web searches. Save durable facts with memory_save. Save reusable procedures with skill_save, and reuse them with skill_run. Always explain what you did.' + memBlock };
+  const memBlock = '';
+  const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
+  const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint };
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
   let toolsSupported = true;
