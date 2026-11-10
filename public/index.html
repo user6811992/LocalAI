@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.7</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.8</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.7</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.8</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -397,6 +397,14 @@
       <div id="reStatus" class="status"></div>
       <div style="font-size:13px;font-weight:600;margin-top:8px;">Uploaded binaries:</div>
       <div id="reFiles" style="font-size:12px;color:var(--muted);max-height:200px;overflow:auto;"></div>
+      <hr style="border-color:var(--border);margin:8px 0;">
+      <div style="font-size:13px;font-weight:600;">Search reverse-engineered projects (17,000+ index):</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" id="areSearchInput" placeholder="Search by product, vendor, protocol..." style="flex:1;font-size:12px;padding:4px 6px;" />
+        <button id="areSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
+      </div>
+      <div id="areSearchResults" style="font-size:12px;color:var(--muted);max-height:250px;overflow:auto;margin-top:4px;"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Data from <a href="https://github.com/alexgaoth/awesome-reverse-engineered" target="_blank" style="color:var(--accent);">awesome-reverse-engineered</a> by Alex Gao (CC0 data, MIT code). Search before you reverse engineer!</div>
     </div>
   </div>
 </div>
@@ -2538,6 +2546,39 @@
     reWorkspaceBackdrop.addEventListener('click', (e) => {
       if (e.target.id === 'reWorkspaceBackdrop') reWorkspaceBackdrop.classList.remove('open');
     });
+  }
+  // ARE search handler
+  const areSearchBtn = document.getElementById('areSearchBtn');
+  const areSearchInput = document.getElementById('areSearchInput');
+  const areSearchResults = document.getElementById('areSearchResults');
+  if (areSearchBtn && areSearchInput && areSearchResults) {
+    const doAreSearch = async () => {
+      const q = areSearchInput.value.trim();
+      if (!q) { areSearchResults.textContent = 'Enter a search term.'; return; }
+      areSearchResults.textContent = 'Searching...';
+      try {
+        const r = await fetch('/api/are-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, limit: 15 }) });
+        const d = await r.json();
+        if (!d.ok) { areSearchResults.textContent = 'Error: ' + (d.message || 'unknown'); return; }
+        if (d.count === 0) { areSearchResults.textContent = 'No results found.'; return; }
+        areSearchResults.innerHTML = '';
+        d.results.forEach(it => {
+          const div = document.createElement('div');
+          div.style.marginBottom = '6px';
+          div.style.padding = '4px';
+          div.style.borderBottom = '1px solid var(--border)';
+          const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
+          const lang = it.language ? ' [' + it.language + ']' : '';
+          const url = it.url ? '<a href="' + it.url + '" target="_blank" style="color:var(--accent);font-size:11px;">' + it.url + '</a>' : '';
+          div.innerHTML = '<b>' + (it.name || '') + '</b>' + stars + lang + '<br><span style="color:var(--muted);">' + (it.description || '').slice(0, 120) + '</span><br><span style="font-size:10px;color:var(--muted);">' + (it.category || '') + (it.health ? ' ' + it.health : '') + '</span><br>' + url;
+          areSearchResults.appendChild(div);
+        });
+      } catch (e) {
+        areSearchResults.textContent = 'Error: ' + e.message;
+      }
+    };
+    areSearchBtn.addEventListener('click', doAreSearch);
+    areSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAreSearch(); });
   }
   const reUploadBtn = document.getElementById('reUploadBtn');
   if (reUploadBtn) {
