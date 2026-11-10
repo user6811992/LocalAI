@@ -1418,6 +1418,17 @@ function rateLimit(ip) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, Authorization',
+      'Access-Control-Max-Age': '86400',
+    });
+    res.end();
+    return;
+  }
   // Rate limit
   const ip = req.socket.remoteAddress || 'unknown';
   if (rateLimit(ip)) {
