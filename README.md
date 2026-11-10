@@ -98,6 +98,16 @@ REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
 
 The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
 
+### Reverse-Engineered Project Search
+
+AegisAI includes a searchable index of **17,000+ reverse-engineered projects** from [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered) by Alex Gao. Access it via the **RE** button in the web UI:
+
+- Search by product name, vendor, or protocol
+- Filter by category (20 categories: RE Tooling, File Formats, Game Decompilations, etc.)
+- Preview project READMEs directly in the UI
+- Data is cached locally (~7.5MB) and refreshed automatically when older than 24 hours
+- Optional: set `GITHUB_TOKEN` env var for higher GitHub API rate limits (README previews)
+
 ## Installer (Linux / macOS)
 
 A bash installer is included: **`install.sh`**. Works on Linux and macOS.
@@ -204,7 +214,7 @@ Special thanks to:
 - **[Ollama](https://ollama.com)** - for making local LLMs easy to run.
 - **[HuggingFace](https://huggingface.co)** - for the model hub and open weights.
 - **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
-- **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search and project lookup help users find existing RE work before starting their own.
+- **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search, category browsing, README preview, and project lookup help users find existing RE work before starting their own. Data is cached locally and refreshed automatically when older than 24 hours.
 - All other contributors, testers, and the open-source community.
 
 ## Support
