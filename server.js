@@ -970,7 +970,8 @@ async function runAgent(model, messages, maxIter, opts) {
   const log = [];
   const relevant = await searchMemory((messages[messages.length-1] && messages[messages.length-1].content) || '', 3);
   const memBlock = relevant.length ? '\n\nRelevant memories from past interactions:\n' + relevant.map((m) => '- ' + m.text).join('\n') : '';
-  const systemMsg = { role: 'system', content: 'You are a local AI assistant with hands-on capabilities and persistent memory. You have CODING tools (files, shell, git, web, pdf, screenshots, memory, skills) and REVERSE ENGINEERING tools (REA). Use them to act, not just talk. You learn from past interactions (memories below) and from web searches. Save durable facts with memory_save. Save reusable procedures with skill_save, and reuse them with skill_run. Always explain what you did.' + memBlock };
+  const areHint = areReady ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects. ALWAYS search this index BEFORE starting reverse engineering work to avoid duplicating existing efforts.' : '';
+  const systemMsg = { role: 'system', content: 'You are a local AI assistant with hands-on capabilities and persistent memory. You have CODING tools (files, shell, git, web, pdf, screenshots, memory, skills) and REVERSE ENGINEERING tools (REA).' + areHint + ' Use them to act, not just talk. You learn from past interactions (memories below) and from web searches. Save durable facts with memory_save. Save reusable procedures with skill_save, and reuse them with skill_run. Always explain what you did.' + memBlock };
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
   let toolsSupported = true;
