@@ -965,8 +965,13 @@ async function runAgent(model, messages, maxIter, opts) {
   const onEvent = opts.onEvent || null;
   maxIter = maxIter || 8;
   const tools = [];
-  if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
   if (includeCoding) tools.push(...codingToolsAsOllama());
+  if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
+  // Limit total tools to avoid overwhelming small-context models
+  const MAX_TOOLS = 60;
+  if (tools.length > MAX_TOOLS) {
+    tools.length = MAX_TOOLS;
+  }
   const log = [];
   const relevant = await searchMemory((messages[messages.length-1] && messages[messages.length-1].content) || '', 3);
   const memBlock = relevant.length ? '\n\nRelevant memories from past interactions:\n' + relevant.map((m) => '- ' + m.text).join('\n') : '';
@@ -2547,6 +2552,26 @@ function ensureDefaultSkill() {
 }
 // Save default skill after a short delay (let MCP init finish)
 setTimeout(ensureDefaultSkill, 5000);
+
+// ---------- Nightly auto-refresh for ARE data ----------
+// Check every hour if data is older than 24 hours and refresh
+setInterval(async () => {
+  try {
+    const fs = require('fs');
+    if (!fs.existsSync(ARE_DATA_FILE)) return;
+    const stat = fs.statSync(ARE_DATA_FILE);
+    const ageHours = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60);
+    if (ageHours >= 24) {
+      console.log('ARE data is', ageHours.toFixed(1), 'hours old. Auto-refreshing...');
+      fs.unlinkSync(ARE_DATA_FILE);
+      areDataCache = null;
+      const data = await loadAreData();
+      if (data) console.log('ARE data auto-refreshed:', Array.isArray(data) ? data.length : 0, 'entries');
+    }
+  } catch (e) {
+    console.error('ARE auto-refresh failed:', e.message);
+  }
+}, 60 * 60 * 1000); // every hour
 
 // ---------- Awesome-RE data cache ----------
 const ARE_DATA_FILE = path.join(__dirname, 'data', 'are-entries.json');
