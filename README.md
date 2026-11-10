@@ -204,6 +204,7 @@ Special thanks to:
 - **[Ollama](https://ollama.com)** - for making local LLMs easy to run.
 - **[HuggingFace](https://huggingface.co)** - for the model hub and open weights.
 - **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
+- **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search and project lookup help users find existing RE work before starting their own.
 - All other contributors, testers, and the open-source community.
 
 ## Support
