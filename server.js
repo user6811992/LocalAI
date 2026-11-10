@@ -1469,6 +1469,35 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, { loaded: !!areDataCache, loading: areDataLoading, count: Array.isArray(areDataCache) ? areDataCache.length : 0 });
     return;
   }
+  if (req.url === '/api/are-readme' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { url } = JSON.parse(body || '{}');
+      if (!url) { json(res, 400, { ok: false, message: 'url required' }); return; }
+      // Extract owner/repo from GitHub URL
+      const m = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!m) { json(res, 400, { ok: false, message: 'Not a GitHub URL' }); return; }
+      const owner = m[1], repo = m[2].replace(/\.git$/, '');
+      const https = require('https');
+      const fetchReadme = (branch) => new Promise((resolve, reject) => {
+        const apiUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/readme' + (branch ? '?ref=' + branch : '');
+        const headers = { 'User-Agent': 'AegisAI', 'Accept': 'application/vnd.github.v3.raw' };
+        if (process.env.GITHUB_TOKEN) headers['Authorization'] = 'token ' + process.env.GITHUB_TOKEN;
+        https.get(apiUrl, { headers }, (r) => {
+          let buf = '';
+          r.on('data', (c) => (buf += c));
+          r.on('end', () => { if (r.statusCode === 200) resolve(buf); else reject(new Error('HTTP ' + r.statusCode)); });
+        }).on('error', reject);
+      });
+      let content = '';
+      try { content = await fetchReadme(''); }
+      catch (e) { try { content = await fetchReadme('main'); } catch (e2) { try { content = await fetchReadme('master'); } catch (e3) { content = 'Could not fetch README: ' + e3.message; } } }
+      // Truncate to 2000 chars
+      if (content.length > 2000) content = content.slice(0, 2000) + '\n... (truncated)';
+      json(res, 200, { ok: true, content });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
   if (req.url === '/api/project' && req.method === 'GET') {
     json(res, 200, { projectRoot });
     return;
