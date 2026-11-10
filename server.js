@@ -43,9 +43,15 @@ const MIME = {
 
 // ---------- MCP client (REA) ----------
 let mcpClient = null;
-let mcpTools = []; // MCP tool descriptors
+let mcpTools = []; // MCP tool descriptors (REA)
 let mcpReady = false;
 let mcpError = null;
+
+// Awesome-reverse-engineered MCP (optional, requires uv)
+let areClient = null;
+let areTools = [];
+let areReady = false;
+let areError = null;
 
 function resolveReaBin() {
   if (process.env.REA_BIN && fs.existsSync(process.env.REA_BIN)) return process.env.REA_BIN;
@@ -103,13 +109,60 @@ async function initMcp() {
     console.error('REA MCP init failed:', mcpError);
     // Provide helpful hint
     if (/not recognized|ENOENT|not found/i.test(mcpError)) {
-      mcpError += ' — REA (rea-agents) may not be installed. Run: npm install -g rea-agents';
+      mcpError += ' - REA (rea-agents) may not be installed. Run: npm install -g rea-agents';
     }
   }
 }
 
+async function initAwesomeReMcp() {
+  // Check if uv is available
+  try {
+    const { execSync } = require('child_process');
+    execSync('uv --version', { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+  } catch (_) {
+    areError = 'uv not found. Install from https://docs.astral.sh/uv/ to enable reverse-engineered project search.';
+    areReady = false;
+    console.log('Awesome-RE MCP skipped:', areError);
+    return;
+  }
+  try {
+    let Client, StdioClientTransport;
+    try {
+      const sdk = require('@modelcontextprotocol/sdk/client');
+      Client = sdk.Client;
+      const stdio = require('@modelcontextprotocol/sdk/client/stdio.js');
+      StdioClientTransport = stdio.StdioClientTransport;
+    } catch (e) {
+      try {
+        const sdk = require('@modelcontextprotocol/sdk');
+        Client = sdk.Client;
+        StdioClientTransport = sdk.StdioClientTransport;
+      } catch (e2) {
+        throw new Error('MCP SDK not installed. Run: npm install in the AegisAI folder.');
+      }
+    }
+    const transport = new StdioClientTransport({
+      command: 'uvx',
+      args: ['--from', 'git+https://github.com/alexgaoth/awesome-reverse-engineered#subdirectory=mcp', 'reverse-engineered-mcp'],
+      env: Object.assign({}, process.env),
+      stderr: 'pipe',
+    });
+    const client = new Client({ name: 'aegisai-are', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+    const res = await client.listTools();
+    areTools = res.tools || [];
+    areClient = client;
+    areReady = true;
+    console.log('Awesome-RE MCP ready. Tools:', areTools.length);
+  } catch (e) {
+    areError = e && e.message ? e.message : String(e);
+    areReady = false;
+    console.error('Awesome-RE MCP init failed:', areError);
+  }
+}
+
 function mcpToolsAsOllama() {
-  return mcpTools.map((t) => ({
+  const tools = mcpTools.map((t) => ({
     type: 'function',
     function: {
       name: t.name,
@@ -117,9 +170,38 @@ function mcpToolsAsOllama() {
       parameters: t.inputSchema || { type: 'object', properties: {} },
     },
   }));
+  // Add awesome-re tools (prefixed to avoid collisions)
+  if (areReady) {
+    for (const t of areTools) {
+      tools.push({
+        type: 'function',
+        function: {
+          name: 'are_' + t.name,
+          description: (t.description || '') + ' [from awesome-reverse-engineered index]',
+          parameters: t.inputSchema || { type: 'object', properties: {} },
+        },
+      });
+    }
+  }
+  return tools;
 }
 
 async function callMcpTool(name, args) {
+  // Route to awesome-re client if prefixed
+  if (name.startsWith('are_')) {
+    if (!areClient) throw new Error('Awesome-RE MCP not ready: ' + (areError || 'unknown'));
+    const origName = name.slice(4);
+    const r = await areClient.callTool({ name: origName, arguments: args || {} });
+    let text = '';
+    if (r && r.content) {
+      for (const c of r.content) {
+        if (c.type === 'text') text += c.text;
+        else text += JSON.stringify(c);
+      }
+    }
+    if (r && r.isError) text = 'ERROR: ' + text;
+    return text;
+  }
   if (!mcpClient) throw new Error('MCP not ready: ' + (mcpError || 'unknown'));
   const r = await mcpClient.callTool({ name, arguments: args || {} });
   // Normalize content to text
@@ -1352,7 +1434,13 @@ const server = http.createServer(async (req, res) => {
   }
   // Custom routes
   if (req.url === '/api/tools' && req.method === 'GET') {
-    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: mcpTools.map((t) => ({ name: t.name, description: t.description })) });
+    const allTools = mcpTools.map((t) => ({ name: t.name, description: t.description }));
+    if (areReady) {
+      for (const t of areTools) {
+        allTools.push({ name: 'are_' + t.name, description: (t.description || '') + ' [awesome-reverse-engineered]' });
+      }
+    }
+    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError });
     return;
   }
   if (req.url === '/api/project' && req.method === 'GET') {
@@ -1406,8 +1494,10 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === '/api/reconnect-mcp' && req.method === 'POST') {
     mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
+    areReady = false; areError = null; areClient = null; areTools = [];
     await initMcp();
-    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length });
+    await initAwesomeReMcp();
+    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length, areReady, areTools: areTools.length });
     return;
   }
 
@@ -2367,3 +2457,4 @@ server.listen(PORT, '0.0.0.0', () => {
 
 // Init MCP after server start
 initMcp();
+initAwesomeReMcp();
