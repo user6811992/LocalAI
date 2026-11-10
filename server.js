@@ -2525,6 +2525,29 @@ server.listen(PORT, '0.0.0.0', () => {
 initMcp();
 initAwesomeReMcp();
 
+// ---------- Default skill: search before RE ----------
+const DEFAULT_SKILL_NAME = 'search-before-re';
+function ensureDefaultSkill() {
+  try {
+    const fs = require('fs');
+    const skills = loadSkills();
+    if (skills.find((s) => s.name === DEFAULT_SKILL_NAME)) return; // already exists
+    const skill = {
+      name: DEFAULT_SKILL_NAME,
+      description: 'Search the awesome-reverse-engineered index (17,000+ projects) before starting any reverse engineering work. Avoids duplicating existing efforts.',
+      code: "print('Use are_search_reverse_engineered to find existing RE projects before starting new work.')",
+      created: new Date().toISOString(),
+    };
+    skills.push(skill);
+    saveSkills(skills);
+    console.log('Default skill saved:', DEFAULT_SKILL_NAME);
+  } catch (e) {
+    console.error('Failed to save default skill:', e.message);
+  }
+}
+// Save default skill after a short delay (let MCP init finish)
+setTimeout(ensureDefaultSkill, 5000);
+
 // ---------- Awesome-RE data cache ----------
 const ARE_DATA_FILE = path.join(__dirname, 'data', 'are-entries.json');
 const ARE_DATA_URL = 'https://raw.githubusercontent.com/alexgaoth/awesome-reverse-engineered/main/data/entries.json';
@@ -2534,15 +2557,21 @@ let areDataLoading = false;
 async function loadAreData() {
   if (areDataCache) return areDataCache;
   const fs = require('fs');
-  // Try local cache first
+  // Try local cache first (refresh if older than 24 hours)
   if (fs.existsSync(ARE_DATA_FILE)) {
     try {
-      const raw = fs.readFileSync(ARE_DATA_FILE, 'utf8');
-      areDataCache = JSON.parse(raw);
-      console.log('Awesome-RE data loaded from cache:', Array.isArray(areDataCache) ? areDataCache.length : 'unknown', 'entries');
-      return areDataCache;
+      const stat = fs.statSync(ARE_DATA_FILE);
+      const ageHours = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60);
+      if (ageHours < 24) {
+        const raw = fs.readFileSync(ARE_DATA_FILE, 'utf8');
+        areDataCache = JSON.parse(raw);
+        console.log('Awesome-RE data loaded from cache:', Array.isArray(areDataCache) ? areDataCache.length : 'unknown', 'entries', '(age:', ageHours.toFixed(1), 'h)');
+        return areDataCache;
+      } else {
+        console.log('Cached ARE data is', ageHours.toFixed(1), 'hours old. Will refresh.');
+      }
     } catch (e) {
-      console.error('Failed to parse cached ARE data:', e.message);
+      console.error('Failed to read cached ARE data:', e.message);
     }
   }
   // Download if not cached
@@ -2551,7 +2580,9 @@ async function loadAreData() {
   try {
     const https = require('https');
     const data = await new Promise((resolve, reject) => {
-      https.get(ARE_DATA_URL, (r) => {
+      const headers = { 'User-Agent': 'AegisAI' };
+      if (process.env.GITHUB_TOKEN) headers['Authorization'] = 'token ' + process.env.GITHUB_TOKEN;
+      https.get(ARE_DATA_URL, { headers }, (r) => {
         let buf = '';
         r.on('data', (c) => (buf += c));
         r.on('end', () => resolve(buf));
