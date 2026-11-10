@@ -968,7 +968,7 @@ async function runAgent(model, messages, maxIter, opts) {
   if (includeCoding) tools.push(...codingToolsAsOllama());
   if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
   // Limit total tools to avoid overwhelming small-context models
-  const MAX_TOOLS = 60;
+  const MAX_TOOLS = 20;
   if (tools.length > MAX_TOOLS) {
     tools.length = MAX_TOOLS;
   }
@@ -1000,6 +1000,7 @@ async function runAgent(model, messages, maxIter, opts) {
           if (onEvent) onEvent({ type: 'thinking', content: chunk.content });
         }
       });
+
     } catch (e) {
       throw new Error('Ollama error: ' + (e.message || String(e)));
     }
@@ -2477,16 +2478,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.url === '/api/agent' && req.method === 'POST') {
-    // SSE streaming
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    });
-    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); } catch (_) {} };
-    // abort handling
-    let aborted = false;
-    req.on('close', () => { aborted = true; });
+    // Return JSON (non-streaming) for reliability
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding, options, keep_alive } = JSON.parse(body || '{}');
@@ -2495,18 +2487,13 @@ const server = http.createServer(async (req, res) => {
         includeCoding: includeCoding !== false,
         options: options || undefined,
         keep_alive: keep_alive,
-        onEvent: (ev) => { if (!aborted) sendEvent(ev); },
+        onEvent: () => {},
       });
-      if (!aborted) {
-        sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, toolsDisabled: result.toolsDisabled });
-        // background learning
-        autoExtractMemories(result.messages || messages || []).catch(() => {});
-      }
+      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, toolsDisabled: result.toolsDisabled });
+      autoExtractMemories(result.messages || messages || []).catch(() => {});
     } catch (e) {
       console.error('agent error:', e && e.stack || e);
-      if (!aborted) sendEvent({ type: 'error', message: e.message || String(e) });
-    } finally {
-      try { res.end(); } catch (_) {}
+      json(res, 500, { error: e.message || String(e) });
     }
     return;
   }
