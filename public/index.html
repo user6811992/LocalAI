@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.8</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.9</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.8</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.9</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -399,8 +399,11 @@
       <div id="reFiles" style="font-size:12px;color:var(--muted);max-height:200px;overflow:auto;"></div>
       <hr style="border-color:var(--border);margin:8px 0;">
       <div style="font-size:13px;font-weight:600;">Search reverse-engineered projects (17,000+ index):</div>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <input type="text" id="areSearchInput" placeholder="Search by product, vendor, protocol..." style="flex:1;font-size:12px;padding:4px 6px;" />
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="areSearchInput" placeholder="Search by product, vendor, protocol..." style="flex:1;min-width:120px;font-size:12px;padding:4px 6px;" />
+        <select id="areCategoryFilter" style="font-size:12px;padding:4px 6px;max-width:180px;">
+          <option value="">All categories</option>
+        </select>
         <button id="areSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
       </div>
       <div id="areSearchResults" style="font-size:12px;color:var(--muted);max-height:250px;overflow:auto;margin-top:4px;"></div>
@@ -2551,13 +2554,22 @@
   const areSearchBtn = document.getElementById('areSearchBtn');
   const areSearchInput = document.getElementById('areSearchInput');
   const areSearchResults = document.getElementById('areSearchResults');
+  const areCategoryFilter = document.getElementById('areCategoryFilter');
+  // Populate category dropdown
+  if (areCategoryFilter) {
+    fetch('/api/are-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: '', limit: 0 }) }).then(r => r.json()).then(d => {}).catch(() => {});
+    // Load categories from a dedicated endpoint or hardcode from data
+    const cats = ['AI Tools & LLM Clients','Alternative Frontends','Apple Ecosystem','Automotive','Chinese & Asian Platforms','Collections & Awesome Lists','Desktop Software Reimplementations','Devices, IoT & Hardware','Drivers & Low-level Hardware','File Formats','Firmware & Embedded','Game Decompilations & Reimplementations','Industrial & Building Automation','Messaging & Social Apps','Mobile Apps','Network & Wire Protocols','Online Service Revivals','RE Tooling','Third-party Clients','Unofficial Web/App API Clients'];
+    cats.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; areCategoryFilter.appendChild(opt); });
+  }
   if (areSearchBtn && areSearchInput && areSearchResults) {
     const doAreSearch = async () => {
       const q = areSearchInput.value.trim();
-      if (!q) { areSearchResults.textContent = 'Enter a search term.'; return; }
+      const cat = areCategoryFilter ? areCategoryFilter.value : '';
+      if (!q && !cat) { areSearchResults.textContent = 'Enter a search term or select a category.'; return; }
       areSearchResults.textContent = 'Searching...';
       try {
-        const r = await fetch('/api/are-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, limit: 15 }) });
+        const r = await fetch('/api/are-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q || '', category: cat, limit: 15 }) });
         const d = await r.json();
         if (!d.ok) { areSearchResults.textContent = 'Error: ' + (d.message || 'unknown'); return; }
         if (d.count === 0) { areSearchResults.textContent = 'No results found.'; return; }
