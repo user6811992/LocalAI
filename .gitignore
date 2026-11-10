@@ -25,3 +25,7 @@ desktop.ini
 workspace/
 rag-store.json
 chats.json
+
+# Awesome-RE cached data
+data/are-entries.json
+

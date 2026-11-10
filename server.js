@@ -1441,6 +1441,31 @@ const server = http.createServer(async (req, res) => {
       }
     }
     json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError });
+
+  // ---------- Awesome-RE data search ----------
+  if (req.url === '/api/are-search' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { query, category, language, minStars, limit } = JSON.parse(body || '{}');
+      const data = await loadAreData();
+      if (!data) { json(res, 503, { ok: false, message: 'ARE data not loaded yet. Try again in a moment.' }); return; }
+      const results = searchAreData(query, { category, language, minStars, limit });
+      json(res, 200, { ok: true, count: results.length, results: results.map((e) => ({
+        name: e.name,
+        description: e.description,
+        stars: e.stars,
+        language: e.language,
+        category: e.category,
+        url: e.url,
+        health: e.health,
+      })) });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/are-data-status' && req.method === 'GET') {
+    json(res, 200, { loaded: !!areDataCache, loading: areDataLoading, count: Array.isArray(areDataCache) ? areDataCache.length : 0 });
+    return;
+  }
     return;
   }
   if (req.url === '/api/project' && req.method === 'GET') {
@@ -2458,3 +2483,81 @@ server.listen(PORT, '0.0.0.0', () => {
 // Init MCP after server start
 initMcp();
 initAwesomeReMcp();
+
+// ---------- Awesome-RE data cache ----------
+const ARE_DATA_FILE = path.join(__dirname, 'data', 'are-entries.json');
+const ARE_DATA_URL = 'https://raw.githubusercontent.com/alexgaoth/awesome-reverse-engineered/main/data/entries.json';
+let areDataCache = null;
+let areDataLoading = false;
+
+async function loadAreData() {
+  if (areDataCache) return areDataCache;
+  const fs = require('fs');
+  // Try local cache first
+  if (fs.existsSync(ARE_DATA_FILE)) {
+    try {
+      const raw = fs.readFileSync(ARE_DATA_FILE, 'utf8');
+      areDataCache = JSON.parse(raw);
+      console.log('Awesome-RE data loaded from cache:', Array.isArray(areDataCache) ? areDataCache.length : 'unknown', 'entries');
+      return areDataCache;
+    } catch (e) {
+      console.error('Failed to parse cached ARE data:', e.message);
+    }
+  }
+  // Download if not cached
+  if (areDataLoading) return null;
+  areDataLoading = true;
+  try {
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      https.get(ARE_DATA_URL, (r) => {
+        let buf = '';
+        r.on('data', (c) => (buf += c));
+        r.on('end', () => resolve(buf));
+      }).on('error', reject);
+    });
+    areDataCache = JSON.parse(data);
+    // Cache to disk
+    try {
+      const dir = path.dirname(ARE_DATA_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(ARE_DATA_FILE, data, 'utf8');
+      console.log('Awesome-RE data downloaded and cached:', Array.isArray(areDataCache) ? areDataCache.length : 'unknown', 'entries');
+    } catch (e) {
+      console.error('Failed to cache ARE data:', e.message);
+    }
+    areDataLoading = false;
+    return areDataCache;
+  } catch (e) {
+    areDataLoading = false;
+    console.error('Failed to download ARE data:', e.message);
+    return null;
+  }
+}
+
+// Search ARE data
+function searchAreData(query, opts) {
+  if (!areDataCache || !Array.isArray(areDataCache)) return [];
+  opts = opts || {};
+  const q = (query || '').toLowerCase();
+  const limit = opts.limit || 20;
+  const category = opts.category || '';
+  const language = opts.language || '';
+  const minStars = opts.minStars || 0;
+  const results = [];
+  for (const entry of areDataCache) {
+    if (!entry) continue;
+    // Filter by category
+    if (category && (entry.category || '').toLowerCase() !== category.toLowerCase()) continue;
+    // Filter by language
+    if (language && (entry.language || '').toLowerCase() !== language.toLowerCase()) continue;
+    // Filter by min stars
+    if (minStars && (entry.stars || 0) < minStars) continue;
+    // Search in name, description, topics
+    const searchable = ((entry.name || '') + ' ' + (entry.description || '') + ' ' + (entry.topics || []).join(' ') + ' ' + (entry.category || '')).toLowerCase();
+    if (q && !searchable.includes(q)) continue;
+    results.push(entry);
+    if (results.length >= limit) break;
+  }
+  return results;
+}
