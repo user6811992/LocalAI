@@ -1441,6 +1441,8 @@ const server = http.createServer(async (req, res) => {
       }
     }
     json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError });
+    return;
+  }
 
   // ---------- Awesome-RE data search ----------
   if (req.url === '/api/are-search' && req.method === 'POST') {
@@ -1464,8 +1466,6 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.url === '/api/are-data-status' && req.method === 'GET') {
     json(res, 200, { loaded: !!areDataCache, loading: areDataLoading, count: Array.isArray(areDataCache) ? areDataCache.length : 0 });
-    return;
-  }
     return;
   }
   if (req.url === '/api/project' && req.method === 'GET') {
