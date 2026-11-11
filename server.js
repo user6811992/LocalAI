@@ -1055,8 +1055,13 @@ return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join(
 const DATA_DIR = process.env.AEGISAI_DATA_DIR || __dirname;
 const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
 const SKILLS_FILE = path.join(DATA_DIR, 'skills.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 function loadSkills() { return loadJsonFile(SKILLS_FILE); }
 function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
+function loadSettings() {
+  try { const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return (j && typeof j === 'object') ? j : {}; } catch (e) { return {}; }
+}
+function saveSettings(s) { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s || {}, null, 2), 'utf8'); } catch (e) {} }
 
 function loadJsonFile(fp) { try { return JSON.parse(require('fs').readFileSync(fp, 'utf8')); } catch (e) { return []; } }
 function saveJsonFile(fp, data) { require('fs').writeFileSync(fp, JSON.stringify(data, null, 2), 'utf8'); }
@@ -1375,17 +1380,20 @@ async function runAgent(model, messages, maxIter, opts) {
   maxIter = maxIter || 8;
   const tools = [];
   if (includeCoding) tools.push(...codingToolsAsOllama());
+  const src = (opts && opts.sources) || {};
   if (includeRe) {
-    if (mcpReady) for (const t of mcpTools) tools.push(mcpToolAsOllama(t, '', ''));
-    if (areReady) for (const t of areTools) tools.push(mcpToolAsOllama(t, 'are_', ' [from awesome-reverse-engineered index]'));
-    if (ghidraReady) for (const t of ghidraTools) tools.push(mcpToolAsOllama(t, 'ghidra_', ' [from GhidrAssistMCP]'));
-    if (craftReady) for (const t of craftTools) tools.push(mcpToolAsOllama(t, 'craft_', ' [from Craft Anything]'));
+    if (mcpReady && src.re !== false) for (const t of mcpTools) tools.push(mcpToolAsOllama(t, '', ''));
+    if (areReady && src.are !== false) for (const t of areTools) tools.push(mcpToolAsOllama(t, 'are_', ' [from awesome-reverse-engineered index]'));
+    if (ghidraReady && src.ghidra !== false) for (const t of ghidraTools) tools.push(mcpToolAsOllama(t, 'ghidra_', ' [from GhidrAssistMCP]'));
+    if (craftReady && src.craft !== false) for (const t of craftTools) tools.push(mcpToolAsOllama(t, 'craft_', ' [from Craft Anything]'));
   }
-  // Enforce one overall budget. Coding tools are always kept; external tools fill the rest in order.
   const codingDefs = tools.filter((t) => codingToolNames.has(t.function.name));
   const externalDefs = tools.filter((t) => !codingToolNames.has(t.function.name));
-  let kept = codingDefs.concat(externalDefs.slice(0, Math.max(0, TOOL_BUDGET - codingDefs.length)));
+  const budget = Math.max(1, parseInt((opts && opts.toolBudget), 10) || parseInt((loadSettings().toolBudget), 10) || TOOL_BUDGET);
+  let kept = codingDefs.concat(externalDefs.slice(0, Math.max(0, budget - codingDefs.length)));
+  // Enforce one overall budget. Coding tools are always kept; external tools fill the rest in order.
   if (cleanRoom) kept = kept.filter((t) => !isCleanRoomBlocked(t.function.name));
+
   tools.length = 0;
   tools.push(...kept);
   const log = [];
@@ -2807,8 +2815,10 @@ const server = http.createServer(async (req, res) => {
       if (!text.trim()) { json(res, 400, { ok: false, message: 'No text extracted' }); return; }
       const chunks = [];
       const size = 800;
-      for (let i = 0; i < text.length; i += size) {
+      const overlap = 200;
+      for (let i = 0; i < text.length; i += (size - overlap)) {
         chunks.push(text.slice(i, i + size));
+        if (i + size >= text.length) break;
       }
       const store = loadRag();
       const coll = collection || store.activeCollection || 'default';
@@ -3023,6 +3033,73 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, chat);
     return;
   }
+  if (req.url === '/api/settings' && req.method === 'GET') {
+    const s = loadSettings();
+    json(res, 200, { toolBudget: s.toolBudget || TOOL_BUDGET, sources: s.sources || { re: true, ghidra: true, craft: true, are: true } });
+    return;
+  }
+  if (req.url === '/api/settings' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const patch = JSON.parse(body || '{}');
+      const s = loadSettings();
+      if (patch.toolBudget !== undefined) s.toolBudget = Math.max(1, Math.min(500, parseInt(patch.toolBudget, 10) || TOOL_BUDGET));
+      if (patch.sources && typeof patch.sources === 'object') s.sources = Object.assign({}, s.sources || {}, patch.sources);
+      saveSettings(s);
+      json(res, 200, { ok: true, settings: s });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/backup' && req.method === 'GET') {
+    try {
+      const bundle = {
+        version: 1,
+        created: new Date().toISOString(),
+        memory: loadJsonFile(MEMORY_FILE),
+        skills: loadSkills(),
+        chats: loadChats(),
+        searchConfig: loadSearchConfig(),
+        settings: loadSettings(),
+      };
+      json(res, 200, bundle);
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/restore' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const bundle = JSON.parse(body || '{}');
+      if (!bundle || typeof bundle !== 'object') { json(res, 400, { ok: false, message: 'Invalid bundle' }); return; }
+      if (Array.isArray(bundle.memory)) saveJsonFile(MEMORY_FILE, bundle.memory);
+      if (Array.isArray(bundle.skills)) saveSkills(bundle.skills);
+      if (Array.isArray(bundle.chats)) saveChats(bundle.chats);
+      if (bundle.searchConfig && typeof bundle.searchConfig === 'object') saveSearchConfig(bundle.searchConfig);
+      if (bundle.settings && typeof bundle.settings === 'object') saveSettings(bundle.settings);
+      json(res, 200, { ok: true, message: 'Restored backup' });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // RAG reindex: re-embed every chunk of a collection with the current model.
+  if (req.url === '/api/rag-reindex' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { collection } = JSON.parse(body || '{}');
+      const store = loadRag();
+      const coll = collection || store.activeCollection || 'default';
+      const col = getCollection(store, coll);
+      let n = 0;
+      for (const c of col.chunks) {
+        c.embedding = await embedText(c.text);
+        n++;
+      }
+      saveRag(store);
+      json(res, 200, { ok: true, collection: coll, reindexed: n });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/stats' && req.method === 'GET') {
     try {
       const chats = loadChats();
@@ -3159,12 +3236,15 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
+      const settings = loadSettings();
       const result = await runAgent(model, messages || [], undefined, {
         includeRe: includeRe !== false,
         includeCoding: includeCoding !== false,
         cleanRoom: cleanRoom === true,
         options: options || undefined,
         keep_alive: keep_alive,
+        toolBudget: settings.toolBudget,
+        sources: settings.sources,
         signal: ac.signal,
         onEvent: (ev) => { if (!aborted) sendEvent(ev); },
       });
