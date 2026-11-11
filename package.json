@@ -9,8 +9,5 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "pdf-parse": "^1.1.1"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^13.1.1"
   }
 }
