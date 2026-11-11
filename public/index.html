@@ -139,7 +139,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.50</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.51</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -222,7 +222,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.50</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.51</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -840,6 +840,34 @@
     ce.className = 'content';
     ce.textContent = content;
     div.appendChild(ce);
+    // Add action buttons for assistant messages
+    if (role === 'assistant') {
+      const btnBar = document.createElement('div');
+      btnBar.style.marginTop = '4px';
+      btnBar.style.display = 'flex';
+      btnBar.style.gap = '4px';
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = 'Copy';
+      copyBtn.style.fontSize = '10px';
+      copyBtn.style.padding = '1px 6px';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(content).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        }).catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = content;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+      });
+      btnBar.appendChild(copyBtn);
+      div.appendChild(btnBar);
+    }
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
     return div;
