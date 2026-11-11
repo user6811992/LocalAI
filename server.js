@@ -1846,7 +1846,54 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.url === '/api/memory' && req.method === 'GET') {
     const mems = loadJsonFile(MEMORY_FILE);
-    json(res, 200, { count: mems.length, memories: mems.map((m) => ({ id: m.id, text: m.text, source: m.source, tags: m.tags, created: m.created })) });
+    const u = new URL(req.url, 'http://localhost');
+    const search = (u.searchParams.get('search') || '').toLowerCase();
+    let filtered = mems;
+    if (search) {
+      filtered = mems.filter((m) => (m.text || '').toLowerCase().includes(search) || (m.tags || []).some((t) => t.toLowerCase().includes(search)));
+    }
+    json(res, 200, { count: filtered.length, memories: filtered.map((m) => ({ id: m.id, text: m.text, source: m.source, tags: m.tags, created: m.created })) });
+    return;
+  }
+  if (req.url === '/api/memory/save' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { text, tags } = JSON.parse(body || '{}');
+      if (!text) { json(res, 400, { ok: false, message: 'text required' }); return; }
+      const id = await addMemory(text, 'manual', tags || []);
+      json(res, 200, { ok: true, id: id || null, message: id ? 'Saved' : 'Duplicate or too short' });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/memory/forget' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const mems = loadJsonFile(MEMORY_FILE);
+      const idx = mems.findIndex((m) => m.id === id);
+      if (idx === -1) { json(res, 404, { ok: false, message: 'Not found' }); return; }
+      mems.splice(idx, 1);
+      saveJsonFile(MEMORY_FILE, mems);
+      json(res, 200, { ok: true, message: 'Deleted' });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/skills' && req.method === 'GET') {
+    const skills = loadSkills();
+    json(res, 200, { skills: skills.map((s) => ({ name: s.name, description: s.description, created: s.created })) });
+    return;
+  }
+  if (req.url === '/api/skills/delete' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { name } = JSON.parse(body || '{}');
+      const skills = loadSkills();
+      const idx = skills.findIndex((s) => s.name === name);
+      if (idx === -1) { json(res, 404, { ok: false, message: 'Not found' }); return; }
+      skills.splice(idx, 1);
+      saveSkills(skills);
+      json(res, 200, { ok: true, message: 'Deleted' });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/project' && req.method === 'POST') {

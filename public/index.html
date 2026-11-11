@@ -139,7 +139,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.46</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.47</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -168,6 +168,8 @@
     <button id="codeBtn" style="padding:4px 8px;font-size:12px;">Code</button>
     <button id="reWorkspaceBtn" style="padding:4px 8px;font-size:12px;">RE</button>
   <button id="browseReBtn" style="padding:4px 8px;font-size:12px;">Browse RE</button>
+    <button id="memoryBtn" style="padding:4px 8px;font-size:12px;">Memory</button>
+    <button id="skillsBtn" style="padding:4px 8px;font-size:12px;">Skills</button>
     <button id="chatsBtn" style="padding:4px 8px;font-size:12px;">Chats</button>
     <button id="compareBtn" style="padding:4px 8px;font-size:12px;">Compare</button>
     <span style="color:var(--border);">|</span>
@@ -220,7 +222,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.46</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.47</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -425,6 +427,31 @@
       <button id="browseReNext" style="font-size:11px;padding:2px 8px;" disabled>Next</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:4px;">Data from <a href="https://github.com/alexgaoth/awesome-reverse-engineered" target="_blank" style="color:var(--accent);">awesome-reverse-engineered</a> by Alex Gao (CC0 data, MIT code).</div>
+  </div>
+</div>
+
+<div id="memoryBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:600px;">
+    <button class="close-btn" id="memoryClose">&times;</button>
+    <h2>Memory Manager</h2>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <input type="text" id="memorySearchInput" placeholder="Search memories..." style="flex:1;font-size:12px;padding:4px 6px;" />
+      <button id="memorySearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <input type="text" id="memoryAddInput" placeholder="Add a memory..." style="flex:1;font-size:12px;padding:4px 6px;" />
+      <button id="memoryAddBtn" style="font-size:12px;padding:4px 8px;">Add</button>
+    </div>
+    <div id="memoryList" style="font-size:12px;max-height:300px;overflow:auto;"></div>
+  </div>
+</div>
+
+<div id="skillsBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:600px;">
+    <button class="close-btn" id="skillsClose">&times;</button>
+    <h2>Skills Manager</h2>
+    <div id="skillsList" style="font-size:12px;max-height:300px;overflow:auto;"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted);">Skills are saved procedures that can be run with skill_run.</div>
   </div>
 </div>
 
@@ -2754,6 +2781,97 @@
   if (browseReSort) browseReSort.addEventListener('change', () => { if (browseReAllResults.length) { const sort = browseReSort.value; if (sort === 'stars') browseReAllResults.sort((a, b) => (b.stars || 0) - (a.stars || 0)); else browseReAllResults.sort((a, b) => (a.name || '').localeCompare(b.name || '')); browseRePage = 0; renderBrowseRePage(); } });
   if (browseRePrev) browseRePrev.addEventListener('click', () => { if (browseRePage > 0) { browseRePage--; renderBrowseRePage(); } });
   if (browseReNext) browseReNext.addEventListener('click', () => { const tp = Math.ceil(browseReAllResults.length / browseRePerPage); if (browseRePage < tp - 1) { browseRePage++; renderBrowseRePage(); } });
+
+  // Memory Manager
+  const memoryBtn = document.getElementById('memoryBtn');
+  const memoryBackdrop = document.getElementById('memoryBackdrop');
+  const memoryClose = document.getElementById('memoryClose');
+  const memoryList = document.getElementById('memoryList');
+  const memorySearchInput = document.getElementById('memorySearchInput');
+  const memorySearchBtn = document.getElementById('memorySearchBtn');
+  const memoryAddInput = document.getElementById('memoryAddInput');
+  const memoryAddBtn = document.getElementById('memoryAddBtn');
+  async function loadMemories(q) {
+    if (!memoryList) return;
+    memoryList.textContent = 'Loading...';
+    try {
+      const url = q ? '/api/memory?search=' + encodeURIComponent(q) : '/api/memory';
+      const r = await fetch(url);
+      const d = await r.json();
+      memoryList.innerHTML = '';
+      const mems = d.memories || [];
+      if (mems.length === 0) { memoryList.textContent = 'No memories found.'; return; }
+      mems.forEach(m => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '6px';
+        div.style.padding = '4px';
+        div.style.borderBottom = '1px solid var(--border)';
+        div.innerHTML = '<span style="color:var(--muted);font-size:10px;">' + escHtml(m.id || '') + '</span><br>' + escHtml(m.text || '') + (m.tags && m.tags.length ? '<br><span style="font-size:10px;color:var(--accent);">' + escHtml(m.tags.join(', ')) + '</span>' : '');
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.style.fontSize = '10px';
+        delBtn.style.padding = '1px 4px';
+        delBtn.style.marginTop = '2px';
+        delBtn.addEventListener('click', async () => {
+          await fetch('/api/memory/forget', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }) });
+          loadMemories(q);
+        });
+        div.appendChild(delBtn);
+        memoryList.appendChild(div);
+      });
+    } catch (e) { memoryList.textContent = 'Error: ' + e.message; }
+  }
+  if (memoryBtn) memoryBtn.addEventListener('click', () => { if (memoryBackdrop) memoryBackdrop.classList.add('open'); loadMemories(); });
+  if (memoryClose) memoryClose.addEventListener('click', () => { if (memoryBackdrop) memoryBackdrop.classList.remove('open'); });
+  if (memoryBackdrop) memoryBackdrop.addEventListener('click', (e) => { if (e.target.id === 'memoryBackdrop') memoryBackdrop.classList.remove('open'); });
+  if (memorySearchBtn) memorySearchBtn.addEventListener('click', () => loadMemories(memorySearchInput ? memorySearchInput.value.trim() : ''));
+  if (memoryAddBtn && memoryAddInput) {
+    memoryAddBtn.addEventListener('click', async () => {
+      const text = memoryAddInput.value.trim();
+      if (!text) return;
+      await fetch('/api/memory/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, tags: ['manual'] }) });
+      memoryAddInput.value = '';
+      loadMemories();
+    });
+  }
+
+  // Skills Manager
+  const skillsBtn = document.getElementById('skillsBtn');
+  const skillsBackdrop = document.getElementById('skillsBackdrop');
+  const skillsClose = document.getElementById('skillsClose');
+  const skillsList = document.getElementById('skillsList');
+  async function loadSkills() {
+    if (!skillsList) return;
+    skillsList.textContent = 'Loading...';
+    try {
+      const r = await fetch('/api/skills');
+      const d = await r.json();
+      skillsList.innerHTML = '';
+      const skills = d.skills || [];
+      if (skills.length === 0) { skillsList.textContent = 'No skills saved.'; return; }
+      skills.forEach(s => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '8px';
+        div.style.padding = '4px';
+        div.style.borderBottom = '1px solid var(--border)';
+        div.innerHTML = '<b>' + escHtml(s.name) + '</b><br><span style="color:var(--muted);font-size:11px;">' + escHtml(s.description || '') + '</span>';
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.style.fontSize = '10px';
+        delBtn.style.padding = '1px 4px';
+        delBtn.style.marginTop = '2px';
+        delBtn.addEventListener('click', async () => {
+          await fetch('/api/skills/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s.name }) });
+          loadSkills();
+        });
+        div.appendChild(delBtn);
+        skillsList.appendChild(div);
+      });
+    } catch (e) { skillsList.textContent = 'Error: ' + e.message; }
+  }
+  if (skillsBtn) skillsBtn.addEventListener('click', () => { if (skillsBackdrop) skillsBackdrop.classList.add('open'); loadSkills(); });
+  if (skillsClose) skillsClose.addEventListener('click', () => { if (skillsBackdrop) skillsBackdrop.classList.remove('open'); });
+  if (skillsBackdrop) skillsBackdrop.addEventListener('click', (e) => { if (e.target.id === 'skillsBackdrop') skillsBackdrop.classList.remove('open'); });
   // ARE search handler
   const areSearchBtn = document.getElementById('areSearchBtn');
   const areSearchInput = document.getElementById('areSearchInput');
