@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.31</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.32</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -163,6 +163,7 @@
     <button id="ragBtn" style="padding:4px 8px;font-size:12px;">Docs</button>
     <button id="codeBtn" style="padding:4px 8px;font-size:12px;">Code</button>
     <button id="reWorkspaceBtn" style="padding:4px 8px;font-size:12px;">RE</button>
+  <button id="browseReBtn" style="padding:4px 8px;font-size:12px;">Browse RE</button>
     <button id="chatsBtn" style="padding:4px 8px;font-size:12px;">Chats</button>
     <button id="compareBtn" style="padding:4px 8px;font-size:12px;">Compare</button>
     <span style="color:var(--border);">|</span>
@@ -215,7 +216,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.31</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.32</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -386,6 +387,31 @@
       <button id="saveChatBtn" style="font-size:12px;">Save current</button>
     </div>
     <div id="chatsList" style="max-height:300px;overflow:auto;font-size:12px;"></div>
+  </div>
+</div>
+
+<div id="browseReBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:900px;max-height:80vh;">
+    <button class="close-btn" id="browseReClose">&times;</button>
+    <h2>Browse Reverse-Engineered Projects (17,000+)</h2>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <input type="text" id="browseReInput" placeholder="Search by product, vendor, protocol..." style="flex:1;min-width:150px;font-size:12px;padding:4px 6px;" />
+      <select id="browseReCategory" style="font-size:12px;padding:4px 6px;max-width:200px;">
+        <option value="">All categories</option>
+      </select>
+      <select id="browseReSort" style="font-size:12px;padding:4px 6px;">
+        <option value="stars">Sort by stars</option>
+        <option value="name">Sort by name</option>
+      </select>
+      <button id="browseReSearchBtn" style="font-size:12px;padding:4px 8px;">Search</button>
+    </div>
+    <div id="browseReResults" style="font-size:12px;max-height:60vh;overflow:auto;"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+      <button id="browseRePrev" style="font-size:11px;padding:2px 8px;" disabled>Prev</button>
+      <span id="browseRePageInfo" style="font-size:11px;color:var(--muted);"></span>
+      <button id="browseReNext" style="font-size:11px;padding:2px 8px;" disabled>Next</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;">Data from <a href="https://github.com/alexgaoth/awesome-reverse-engineered" target="_blank" style="color:var(--accent);">awesome-reverse-engineered</a> by Alex Gao (CC0 data, MIT code).</div>
   </div>
 </div>
 
@@ -2526,6 +2552,78 @@
       if (e.target.id === 'reWorkspaceBackdrop') reWorkspaceBackdrop.classList.remove('open');
     });
   }
+  // Browse RE Projects handler
+  const browseReBtn = document.getElementById('browseReBtn');
+  const browseReBackdrop = document.getElementById('browseReBackdrop');
+  const browseReClose = document.getElementById('browseReClose');
+  const browseReInput = document.getElementById('browseReInput');
+  const browseReCategory = document.getElementById('browseReCategory');
+  const browseReSort = document.getElementById('browseReSort');
+  const browseReSearchBtn = document.getElementById('browseReSearchBtn');
+  const browseReResults = document.getElementById('browseReResults');
+  const browseRePrev = document.getElementById('browseRePrev');
+  const browseReNext = document.getElementById('browseReNext');
+  const browseRePageInfo = document.getElementById('browseRePageInfo');
+  let browseRePage = 0;
+  const browseRePerPage = 20;
+  let browseReAllResults = [];
+  // Populate category dropdown
+  if (browseReCategory) {
+    const cats = ['AI Tools & LLM Clients','Alternative Frontends','Apple Ecosystem','Automotive','Chinese & Asian Platforms','Collections & Awesome Lists','Desktop Software Reimplementations','Devices, IoT & Hardware','Drivers & Low-level Hardware','File Formats','Firmware & Embedded','Game Decompilations & Reimplementations','Industrial & Building Automation','Messaging & Social Apps','Mobile Apps','Network & Wire Protocols','Online Service Revivals','RE Tooling','Third-party Clients','Unofficial Web/App API Clients'];
+    cats.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; browseReCategory.appendChild(opt); });
+  }
+  function renderBrowseRePage() {
+    if (!browseReResults) return;
+    browseReResults.innerHTML = '';
+    const start = browseRePage * browseRePerPage;
+    const page = browseReAllResults.slice(start, start + browseRePerPage);
+    if (page.length === 0) { browseReResults.textContent = 'No results.'; return; }
+    page.forEach(it => {
+      const div = document.createElement('div');
+      div.style.marginBottom = '8px';
+      div.style.padding = '6px';
+      div.style.borderBottom = '1px solid var(--border)';
+      const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
+      const lang = it.language ? ' [' + it.language + ']' : '';
+      const safeUrl = it.url && /^https?:\/\//i.test(it.url) ? it.url : '';
+      const urlHtml = safeUrl ? '<a href=\"' + escHtml(safeUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:var(--accent);font-size:11px;\">' + escHtml(safeUrl) + '</a>' : '';
+      div.innerHTML = '<b>' + escHtml(it.name || '') + '</b>' + stars + lang + '<br><span style=\"color:var(--muted);\">' + escHtml((it.description || '').slice(0, 120)) + '</span><br><span style=\"font-size:10px;color:var(--muted);\">' + escHtml(it.category || '') + (it.health ? ' ' + escHtml(it.health) : '') + '</span><br>' + urlHtml;
+      browseReResults.appendChild(div);
+    });
+    const totalPages = Math.ceil(browseReAllResults.length / browseRePerPage);
+    if (browseRePageInfo) browseRePageInfo.textContent = 'Page ' + (browseRePage + 1) + ' of ' + totalPages + ' (' + browseReAllResults.length + ' results)';
+    if (browseRePrev) browseRePrev.disabled = browseRePage === 0;
+    if (browseReNext) browseReNext.disabled = browseRePage >= totalPages - 1;
+  }
+  async function doBrowseReSearch() {
+    if (!browseReResults) return;
+    const q = browseReInput ? browseReInput.value.trim() : '';
+    const cat = browseReCategory ? browseReCategory.value : '';
+    browseReResults.textContent = 'Searching...';
+    try {
+      const r = await fetch('/api/are-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, category: cat, limit: 200 }) });
+      const d = await r.json();
+      if (!d.ok) { browseReResults.textContent = 'Error: ' + (d.message || 'unknown'); return; }
+      if (d.count === 0) { browseReResults.textContent = 'No results found.'; return; }
+      browseReAllResults = d.results;
+      // Sort
+      const sort = browseReSort ? browseReSort.value : 'stars';
+      if (sort === 'stars') browseReAllResults.sort((a, b) => (b.stars || 0) - (a.stars || 0));
+      else browseReAllResults.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      browseRePage = 0;
+      renderBrowseRePage();
+    } catch (e) {
+      browseReResults.textContent = 'Error: ' + e.message;
+    }
+  }
+  if (browseReBtn) browseReBtn.addEventListener('click', () => { if (browseReBackdrop) browseReBackdrop.classList.add('open'); doBrowseReSearch(); });
+  if (browseReClose) browseReClose.addEventListener('click', () => { if (browseReBackdrop) browseReBackdrop.classList.remove('open'); });
+  if (browseReBackdrop) browseReBackdrop.addEventListener('click', (e) => { if (e.target.id === 'browseReBackdrop') browseReBackdrop.classList.remove('open'); });
+  if (browseReSearchBtn) browseReSearchBtn.addEventListener('click', doBrowseReSearch);
+  if (browseReInput) browseReInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doBrowseReSearch(); });
+  if (browseReSort) browseReSort.addEventListener('change', () => { if (browseReAllResults.length) { const sort = browseReSort.value; if (sort === 'stars') browseReAllResults.sort((a, b) => (b.stars || 0) - (a.stars || 0)); else browseReAllResults.sort((a, b) => (a.name || '').localeCompare(b.name || '')); browseRePage = 0; renderBrowseRePage(); } });
+  if (browseRePrev) browseRePrev.addEventListener('click', () => { if (browseRePage > 0) { browseRePage--; renderBrowseRePage(); } });
+  if (browseReNext) browseReNext.addEventListener('click', () => { const tp = Math.ceil(browseReAllResults.length / browseRePerPage); if (browseRePage < tp - 1) { browseRePage++; renderBrowseRePage(); } });
   // ARE search handler
   const areSearchBtn = document.getElementById('areSearchBtn');
   const areSearchInput = document.getElementById('areSearchInput');
