@@ -35,7 +35,23 @@ Tested with:
 - [Node.js](https://nodejs.org) 18+
 - [Ollama](https://ollama.com/download) installed and running
 
-### Install
+### Install (Windows — Inno Setup installer, recommended)
+Download `AegisAI-Setup-<version>.exe` from the [Releases](https://github.com/user6811992/LocalAI/releases) page and run it. The installer:
+- Checks for Node.js and Ollama (offers to download if missing)
+- Optionally bundles a portable Node.js runtime (zero prerequisites)
+- Copies the application, runs `npm install`
+- Lets you pick which AI models to download (optional, ~38 GB total)
+- Creates desktop and Start Menu shortcuts
+- Optionally enables LAN access and auto-start
+
+### Install (Windows — script installer, legacy)
+```bash
+git clone https://github.com/user6811992/LocalAI.git
+cd LocalAI
+npm install
+```
+
+### Install (Linux / macOS)
 ```bash
 git clone https://github.com/user6811992/LocalAI.git
 cd LocalAI
