@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.24</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.25</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,7 +212,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.24</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.25</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -417,6 +417,8 @@
 <script>
   const chat = document.getElementById('chat');
   const input = document.getElementById('input');
+  // HTML escape helper for safe innerHTML
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   const sendBtn = document.getElementById('send');
   if (sendBtn) sendBtn.disabled = false;
   const modelSel = document.getElementById('model');
@@ -911,8 +913,8 @@
           logDiv.style.fontSize = '12px';
           logDiv.style.color = 'var(--muted)';
           logDiv.innerHTML = '<b>Tools used:</b><br>' + data.toolLog.map(t =>
-            '\u2022 ' + t.name + ' ' + JSON.stringify(t.args || {}).slice(0,120) +
-            (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + t.resultPreview.slice(0,200) : '')
+            '\u2022 ' + escHtml(t.name) + ' ' + escHtml(JSON.stringify(t.args || {}).slice(0,120)) +
+            (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + escHtml(t.resultPreview.slice(0,200)) : '')
           ).join('<br>');
           assistantDiv.appendChild(logDiv);
         }
@@ -923,7 +925,7 @@
           citDiv.style.marginTop = '8px';
           citDiv.style.fontSize = '11px';
           citDiv.style.color = 'var(--muted)';
-          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + (c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
+          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + escHtml(c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
           assistantDiv.appendChild(citDiv);
         }
         if (!data.toolsDisabled) {
@@ -2553,8 +2555,13 @@
           div.style.borderBottom = '1px solid var(--border)';
           const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
           const lang = it.language ? ' [' + it.language + ']' : '';
-          const url = it.url ? '<a href="' + it.url + '" target="_blank" style="color:var(--accent);font-size:11px;">' + it.url + '</a>' : '';
-          div.innerHTML = '<b>' + (it.name || '') + '</b>' + stars + lang + '<br><span style="color:var(--muted);">' + (it.description || '').slice(0, 120) + '</span><br><span style="font-size:10px;color:var(--muted);">' + (it.category || '') + (it.health ? ' ' + it.health : '') + '</span><br>' + url;
+          const safeUrl = it.url && /^https?:\/\//i.test(it.url) ? it.url : '';
+          const url = safeUrl ? '<a href="' + escHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:11px;">' + escHtml(safeUrl) + '</a>' : '';
+          const safeName = escHtml(it.name || '');
+          const safeDesc = escHtml((it.description || '').slice(0, 120));
+          const safeCat = escHtml(it.category || '');
+          const safeHealth = escHtml(it.health ? ' ' + it.health : '');
+          div.innerHTML = '<b>' + safeName + '</b>' + stars + lang + '<br><span style="color:var(--muted);">' + safeDesc + '</span><br><span style="font-size:10px;color:var(--muted);">' + safeCat + safeHealth + '</span><br>' + url;
           // Add README preview button
           if (it.url) {
             const previewBtn = document.createElement('button');
