@@ -3028,7 +3028,7 @@ const server = http.createServer(async (req, res) => {
         keep_alive: keep_alive,
         onEvent: () => {},
       });
-      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: (result.eval_count || result.prompt_eval_count) ? { prompt: result.prompt_eval_count || 0, generated: result.eval_count || 0 } : null });
+      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats || null });
       // Extract memories in background (delayed to avoid blocking Ollama)
       setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
     } catch (e) {
