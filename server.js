@@ -41,6 +41,59 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+// ---------- Anonymous Error Logging ----------
+const ERROR_LOG_FILE = path.join(__dirname, 'error.log');
+const MAX_ERROR_LOG_SIZE = 100 * 1024; // 100KB max
+
+function sanitizeForLog(text) {
+  if (!text) return '';
+  let s = String(text);
+  // Remove potential API keys / tokens (long alphanumeric strings)
+  s = s.replace(/[A-Za-z0-9_-]{32,}/g, '[REDACTED]');
+  // Sanitize file paths: replace username in paths
+  s = s.replace(/C:\\\\Users\\\\[^\\\\]+/gi, 'C:\\\\Users\\\\[USER]');
+  s = s.replace(/\/home\/[^\/]+/g, '/home/[USER]');
+  s = s.replace(/\/Users\/[^\/]+/g, '/Users/[USER]');
+  return s;
+}
+
+function logError(context, error) {
+  try {
+    const fs = require('fs');
+    const entry = {
+      ts: new Date().toISOString(),
+      v: (function() { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version; } catch (e) { return 'unknown'; } })(),
+      ctx: sanitizeForLog(context),
+      msg: sanitizeForLog(error && error.message ? error.message : String(error)),
+      stack: sanitizeForLog(error && error.stack ? error.stack : ''),
+    };
+    let line = JSON.stringify(entry) + '\\n';
+    // Rotate if too large
+    if (fs.existsSync(ERROR_LOG_FILE)) {
+      const stat = fs.statSync(ERROR_LOG_FILE);
+      if (stat.size > MAX_ERROR_LOG_SIZE) {
+        // Keep last half
+        const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
+        const lines = content.split('\\n');
+        const half = lines.slice(Math.floor(lines.length / 2));
+        fs.writeFileSync(ERROR_LOG_FILE, half.join('\\n'), 'utf8');
+      }
+    }
+    fs.appendFileSync(ERROR_LOG_FILE, line, 'utf8');
+  } catch (e) {
+    // Silently fail - don't let logging crash the server
+  }
+}
+
+// Global error handlers
+process.on('uncaughtException', (err) => {
+  logError('uncaughtException', err);
+  console.error('Uncaught exception:', err && err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  logError('unhandledRejection', reason);
+});
+
 // ---------- MCP client (REA) ----------
 let mcpClient = null;
 let mcpTools = []; // MCP tool descriptors (REA)
@@ -2169,6 +2222,38 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ---------- Error log endpoints ----------
+  if (req.url === '/api/error-log' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(ERROR_LOG_FILE)) { json(res, 200, { entries: [], count: 0 }); return; }
+      const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
+      const entries = content.trim().split('\\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
+      json(res, 200, { entries, count: entries.length });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/error-log/clear' && req.method === 'POST') {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(ERROR_LOG_FILE)) fs.unlinkSync(ERROR_LOG_FILE);
+      json(res, 200, { ok: true, message: 'Error log cleared.' });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/error-log/copy' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(ERROR_LOG_FILE)) { json(res, 200, { text: '(no errors logged)' }); return; }
+      const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
+      // Format as readable text for copy/paste
+      const entries = content.trim().split('\\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
+      const text = entries.map((e) => '[' + (e.ts || '') + '] ' + (e.ctx || '') + ': ' + (e.msg || '') + (e.stack ? '\\n  ' + e.stack : '')).join('\\n\\n');
+      json(res, 200, { text });
+    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/check-update' && req.method === 'GET') {
     try {
       const https = require('https');
@@ -2817,6 +2902,7 @@ const server = http.createServer(async (req, res) => {
       setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
     } catch (e) {
       console.error('agent error:', e && e.stack || e);
+      logError('agent', e);
       json(res, 500, { error: e.message || String(e) });
     }
     return;

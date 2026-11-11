@@ -231,7 +231,15 @@
         <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>
         <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>
         <button id="clearCacheBtn" style="font-size:12px;padding:6px 10px;">Clear cache & reload</button>
+        <button id="viewErrorLogBtn" style="font-size:12px;padding:6px 10px;">View Error Log</button>
         <span id="updateStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+      <div id="errorLogArea" style="display:none;margin-top:8px;">
+        <textarea id="errorLogText" readonly style="width:100%;height:150px;font-size:11px;font-family:monospace;background:#00000040;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <button id="copyErrorLogBtn" style="font-size:11px;padding:4px 8px;">Copy to Clipboard</button>
+          <button id="clearErrorLogBtn" style="font-size:11px;padding:4px 8px;">Clear Log</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1759,6 +1767,50 @@
         location.reload();
       } catch (e) {
         document.getElementById('updateStatus').textContent = 'Clear failed: ' + e.message;
+      }
+    });
+  }
+  // Error log handlers
+  const viewErrorLogBtn = document.getElementById('viewErrorLogBtn');
+  const errorLogArea = document.getElementById('errorLogArea');
+  const errorLogText = document.getElementById('errorLogText');
+  const copyErrorLogBtn = document.getElementById('copyErrorLogBtn');
+  const clearErrorLogBtn = document.getElementById('clearErrorLogBtn');
+  if (viewErrorLogBtn && errorLogArea && errorLogText) {
+    viewErrorLogBtn.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/error-log/copy');
+        const d = await r.json();
+        errorLogText.value = d.text || '(no errors)';
+        errorLogArea.style.display = errorLogArea.style.display === 'none' ? 'block' : 'none';
+        viewErrorLogBtn.textContent = errorLogArea.style.display === 'none' ? 'View Error Log' : 'Hide Error Log';
+      } catch (e) {
+        errorLogText.value = 'Error: ' + e.message;
+        errorLogArea.style.display = 'block';
+      }
+    });
+  }
+  if (copyErrorLogBtn && errorLogText) {
+    copyErrorLogBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(errorLogText.value);
+        copyErrorLogBtn.textContent = 'Copied!';
+        setTimeout(() => { copyErrorLogBtn.textContent = 'Copy to Clipboard'; }, 2000);
+      } catch (e) {
+        errorLogText.select();
+        document.execCommand('copy');
+        copyErrorLogBtn.textContent = 'Copied!';
+        setTimeout(() => { copyErrorLogBtn.textContent = 'Copy to Clipboard'; }, 2000);
+      }
+    });
+  }
+  if (clearErrorLogBtn && errorLogText) {
+    clearErrorLogBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/error-log/clear', { method: 'POST' });
+        errorLogText.value = '(log cleared)';
+      } catch (e) {
+        errorLogText.value = 'Error: ' + e.message;
       }
     });
   }
