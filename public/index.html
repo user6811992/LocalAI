@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.33</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.34</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -216,7 +216,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.33</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.34</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -2743,6 +2743,33 @@
   loadModels();
   loadProject();
   loadSearchEngines();
+  // Register service worker for offline support
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      console.log('Service worker registered:', reg.scope);
+    }).catch((e) => {
+      console.log('Service worker registration failed:', e.message);
+    });
+  }
+  // Context window check on model change
+  if (modelSel) {
+    modelSel.addEventListener('change', async () => {
+      const model = modelSel.value;
+      if (!model) return;
+      try {
+        const r = await fetch('/api/ollama-info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: model }) });
+        const d = await r.json();
+        const ctx = d.info && d.info.model_info ? (d.info.model_info['llama.context_length'] || d.info.model_info['qwen2.context_length'] || d.info.model_info['gemma.context_length'] || 0) : 0;
+        const toolsData = await (await fetch('/api/tools')).json();
+        const toolCount = toolsData.tools ? toolsData.tools.length : 0;
+        const estTokens = toolCount * 80; // rough estimate: 80 tokens per tool definition
+        if (ctx > 0 && estTokens > ctx * 0.5) {
+          status.textContent = 'Warning: ' + model + ' has ' + ctx + ' context but ~' + toolCount + ' tools (~' + estTokens + ' tokens) may exceed it. Consider disabling Code/RE mode.';
+          status.className = 'status err';
+        }
+      } catch (e) {}
+    });
+  }
 
   // First-run wizard
   (function() {
