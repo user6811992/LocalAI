@@ -1388,22 +1388,43 @@ function serveStatic(req, res) {
 }
 
 function proxyToOllama(req, res) {
-  const opts = {
-    hostname: OLLAMA_URL.hostname,
-    port: OLLAMA_URL.port || 80,
-    path: req.url,
-    method: req.method,
-    headers: Object.assign({}, req.headers, { host: OLLAMA_URL.host }),
-  };
-  const proxyReq = http.request(opts, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    proxyRes.pipe(res);
+  // Buffer the request body first (needed for retries)
+  let bodyChunks = [];
+  req.on('data', (c) => bodyChunks.push(c));
+  req.on('end', () => {
+    const bodyBuf = Buffer.concat(bodyChunks);
+    const opts = {
+      hostname: OLLAMA_URL.hostname,
+      port: OLLAMA_URL.port || 80,
+      path: req.url,
+      method: req.method,
+      headers: Object.assign({}, req.headers, { host: OLLAMA_URL.host, 'content-length': bodyBuf.length }),
+    };
+    delete opts.headers['transfer-encoding'];
+    let retries = 0;
+    function attempt() {
+      const proxyReq = http.request(opts, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res);
+      });
+      proxyReq.on('error', (e) => {
+        if (retries < 2 && (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT')) {
+          retries++;
+          setTimeout(attempt, 500 * retries);
+          return;
+        }
+        if (!res.headersSent) { res.statusCode = 502; }
+        try { res.end('Ollama proxy error: ' + e.message + '. Is Ollama running? Start with: ollama serve'); } catch (_) {}
+      });
+      if (bodyBuf.length > 0) proxyReq.write(bodyBuf);
+      proxyReq.end();
+    }
+    attempt();
   });
-  proxyReq.on('error', (e) => {
-    if (!res.headersSent) { res.statusCode = 502; }
-    try { res.end('Ollama proxy error: ' + e.message); } catch (_) {}
+  req.on('error', (e) => {
+    if (!res.headersSent) { res.statusCode = 500; }
+    try { res.end('Request error: ' + e.message); } catch (_) {}
   });
-  req.pipe(proxyReq);
 }
 
 // ---------- Auth + rate limiting ----------
