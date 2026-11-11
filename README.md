@@ -76,6 +76,8 @@ docker exec -it <ollama-container> ollama pull llama3.2:3b
 
 Or use the Models button in the web UI.
 
+All app data (memory, chats, RAG store, skills, auth, search config) persists in the `aegisai_data` named volume at `/app/data`, and the reverse-engineering workspace in the `aegisai_workspace` volume at `/app/workspace` — no per-file volume mounts needed. The data directory is overridable via the `AEGISAI_DATA_DIR` env var.
+
 ## Remote Access
 
 ### Same Wi-Fi (LAN)

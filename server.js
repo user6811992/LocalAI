@@ -955,8 +955,11 @@ return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join(
 }
 
 // ---------- Learning / Memory system ----------
-const MEMORY_FILE = path.join(__dirname, 'memory.json');
-const SKILLS_FILE = path.join(__dirname, 'skills.json');
+// Data dir is overridable (e.g. AEGISAI_DATA_DIR=/app/data in Docker) so all
+// JSON state files can live under one mounted volume instead of per-file paths.
+const DATA_DIR = process.env.AEGISAI_DATA_DIR || __dirname;
+const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
+const SKILLS_FILE = path.join(DATA_DIR, 'skills.json');
 function loadSkills() { return loadJsonFile(SKILLS_FILE); }
 function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
 
@@ -1031,7 +1034,7 @@ async function autoExtractMemories(messages) {
 }
 
 // Search engine config
-const SEARCH_CONFIG_FILE = path.join(__dirname, 'search-config.json');
+const SEARCH_CONFIG_FILE = path.join(DATA_DIR, 'search-config.json');
 function loadSearchConfig() {
   try { return JSON.parse(require('fs').readFileSync(SEARCH_CONFIG_FILE, 'utf8')); }
   catch (e) { return { engine: 'duckduckgo', keys: {} }; }
@@ -1787,7 +1790,7 @@ function getAuthToken() {
   try {
     const fs = require('fs');
     const path = require('path');
-    const p = path.join(__dirname, 'auth.json');
+    const p = path.join(DATA_DIR, 'auth.json');
     if (fs.existsSync(p)) {
       const j = JSON.parse(fs.readFileSync(p, 'utf8'));
       return (j && j.token) ? String(j.token).trim() : '';
@@ -2633,7 +2636,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- RAG (document upload + retrieval) with collections ----------
-  const RAG_FILE = path.join(__dirname, 'rag-store.json');
+  const RAG_FILE = path.join(DATA_DIR, 'rag-store.json');
   function loadRag() {
     try {
       const d = JSON.parse(fs.readFileSync(RAG_FILE, 'utf8'));
@@ -2905,7 +2908,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- Multi-chat persistence ----------
-  const CHATS_FILE = path.join(__dirname, 'chats.json');
+  const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
   function loadChats() { try { return JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8')); } catch (e) { return []; } }
   function saveChats(chats) { try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {} }
 
@@ -3142,7 +3145,7 @@ setInterval(async () => {
 }, 60 * 60 * 1000); // every hour
 
 // ---------- Awesome-RE data cache ----------
-const ARE_DATA_FILE = path.join(__dirname, 'data', 'are-entries.json');
+const ARE_DATA_FILE = path.join(DATA_DIR, 'data', 'are-entries.json');
 const ARE_DATA_URL = 'https://raw.githubusercontent.com/alexgaoth/awesome-reverse-engineered/main/data/entries.json';
 let areDataCache = null;
 let areDataLoading = false;

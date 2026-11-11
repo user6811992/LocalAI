@@ -20,12 +20,9 @@ services:
       - OLLAMA_URL=http://ollama:11434
       - PORT=8080
       - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}
+      - AEGISAI_DATA_DIR=/app/data
     volumes:
       - aegisai_data:/app/data
-      - aegisai_memory:/app/memory.json
-      - aegisai_chats:/app/chats.json
-      - aegisai_skills:/app/skills.json
-      - aegisai_search:/app/search-config.json
       - aegisai_workspace:/app/workspace
     depends_on:
       ollama:
@@ -40,8 +37,4 @@ services:
 volumes:
   ollama_data:
   aegisai_data:
-  aegisai_memory:
-  aegisai_chats:
-  aegisai_skills:
-  aegisai_search:
   aegisai_workspace:
