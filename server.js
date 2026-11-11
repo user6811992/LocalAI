@@ -1240,6 +1240,7 @@ async function runAgent(model, messages, maxIter, opts) {
     }
   }
   const log = [];
+  const webCitations = [];
   const memBlock = '';
   const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
   const craftHint = (craftReady && includeRe) ? ' You also have CRAFT ANYTHING tools (craft_* prefixed) for deep reverse engineering analysis (320 tools covering native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files).' : '';
@@ -1281,8 +1282,8 @@ async function runAgent(model, messages, maxIter, opts) {
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
         const msg = r.data.message || {};
         msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
-        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
-        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
+        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported });
+        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported };
       } else {
         throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
       }
@@ -1309,8 +1310,8 @@ async function runAgent(model, messages, maxIter, opts) {
       const content = msg.content || '';
       const thinking = msg.thinking || finalThinking || '';
       msgs.push({ role: 'assistant', content: content, thinking: thinking });
-      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, toolsDisabled: !toolsSupported });
-      return { messages: msgs, final: content, thinking: thinking, toolLog: log, toolsDisabled: !toolsSupported };
+      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported });
+      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported };
     }
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
@@ -1333,13 +1334,21 @@ async function runAgent(model, messages, maxIter, opts) {
       const logEntry = log[log.length - 1];
       logEntry.resultPreview = resultPreview;
       if (onEvent) onEvent({ type: 'tool_result', name, preview: resultPreview });
+      // Extract web citations from web_search results
+      if (name === 'web_search' && typeof result === 'string') {
+        const urlRegex = /https?:\/\/[^\s)>\]]+/g;
+        const urls = result.match(urlRegex) || [];
+        for (const u of urls) {
+          if (!webCitations.includes(u)) webCitations.push(u);
+        }
+      }
     }
     if (onEvent) onEvent({ type: 'tool_done' });
   }
   const fallback = 'Reached max iterations without final answer.';
   msgs.push({ role: 'assistant', content: fallback });
-  if (onEvent) onEvent({ type: 'final', content: fallback, thinking: finalThinking, toolLog: log, toolsDisabled: !toolsSupported });
-  return { messages: msgs, final: fallback, thinking: finalThinking, toolLog: log, toolsDisabled: !toolsSupported };
+  if (onEvent) onEvent({ type: 'final', content: fallback, thinking: finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported });
+  return { messages: msgs, final: fallback, thinking: finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported };
 }
 
 
@@ -2891,7 +2900,7 @@ const server = http.createServer(async (req, res) => {
         keep_alive: keep_alive,
         onEvent: () => {},
       });
-      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, toolsDisabled: result.toolsDisabled });
+      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled });
       // Extract memories in background (delayed to avoid blocking Ollama)
       setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
     } catch (e) {

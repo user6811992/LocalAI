@@ -139,7 +139,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.45</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.46</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -220,7 +220,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.45</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.46</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -997,6 +997,15 @@
             (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + escHtml(t.resultPreview.slice(0,200)) : '')
           ).join('<br>');
           assistantDiv.appendChild(logDiv);
+        }
+        // show web citations if any
+        if (data.webCitations && data.webCitations.length) {
+          const webCitDiv = document.createElement('div');
+          webCitDiv.style.marginTop = '8px';
+          webCitDiv.style.fontSize = '11px';
+          webCitDiv.style.color = 'var(--muted)';
+          webCitDiv.innerHTML = '<b>Web sources:</b><br>' + data.webCitations.slice(0, 8).map((u, i) => (i+1) + '. <a href="' + escHtml(u) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">' + escHtml(u) + '</a>').join('<br>');
+          assistantDiv.appendChild(webCitDiv);
         }
         // update messages with final assistant
         messages.push({ role: 'assistant', content: finalText });
