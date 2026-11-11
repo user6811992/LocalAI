@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.54</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.55</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -237,7 +237,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.54</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.55</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -3045,7 +3045,7 @@
         div.style.marginBottom = '6px';
         div.style.padding = '4px';
         div.style.borderBottom = '1px solid var(--border)';
-        div.innerHTML = '<span style="color:var(--muted);font-size:10px;">' + escHtml(m.id || '') + '</span><br>' + escHtml(m.text || '') + (m.tags && m.tags.length ? '<br><span style="font-size:10px;color:var(--accent);">' + escHtml(m.tags.join(', ')) + '</span>' : '');
+        div.innerHTML = '<span style="color:var(--muted);font-size:10px;">' + escHtml(m.id || '') + '</span><br><span class="mem-text">' + escHtml(m.text || '') + '</span>' + (m.tags && m.tags.length ? '<br><span style="font-size:10px;color:var(--accent);">' + escHtml(m.tags.join(', ')) + '</span>' : '');
         const delBtn = document.createElement('button');
         delBtn.textContent = 'Delete';
         delBtn.style.fontSize = '10px';
@@ -3056,6 +3056,35 @@
           loadMemories(q);
         });
         div.appendChild(delBtn);
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.style.fontSize = '10px';
+        editBtn.style.padding = '1px 4px';
+        editBtn.style.marginTop = '2px';
+        editBtn.style.marginLeft = '4px';
+        editBtn.addEventListener('click', () => {
+          const textEl = div.querySelector('.mem-text');
+          const original = textEl ? textEl.textContent : m.text;
+          const textarea = document.createElement('textarea');
+          textarea.value = original;
+          textarea.style.width = '100%';
+          textarea.style.minHeight = '40px';
+          textarea.style.fontSize = '12px';
+          textarea.style.background = 'var(--panel2)';
+          textarea.style.color = 'var(--text)';
+          textarea.style.border = '1px solid var(--border)';
+          textarea.style.borderRadius = '6px';
+          textarea.style.padding = '4px';
+          if (textEl) textEl.replaceWith(textarea);
+          editBtn.textContent = 'Save';
+          editBtn.onclick = async () => {
+            const newText = textarea.value.trim();
+            if (!newText) return;
+            await fetch('/api/memory/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, text: newText }) });
+            loadMemories(q);
+          };
+        });
+        div.appendChild(editBtn);
         memoryList.appendChild(div);
       });
     } catch (e) { memoryList.textContent = 'Error: ' + e.message; }

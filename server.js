@@ -1964,6 +1964,21 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
+  if (req.url === '/api/memory/edit' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id, text, tags } = JSON.parse(body || '{}');
+      const mems = loadJsonFile(MEMORY_FILE);
+      const idx = mems.findIndex((m) => m.id === id);
+      if (idx === -1) { json(res, 404, { ok: false, message: 'Not found' }); return; }
+      if (text) mems[idx].text = text;
+      if (tags) mems[idx].tags = tags;
+      mems[idx].updated = new Date().toISOString();
+      saveJsonFile(MEMORY_FILE, mems);
+      json(res, 200, { ok: true, message: 'Updated' });
+    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    return;
+  }
   if (req.url === '/api/skills' && req.method === 'GET') {
     const skills = loadSkills();
     json(res, 200, { skills: skills.map((s) => ({ name: s.name, description: s.description, created: s.created })) });
