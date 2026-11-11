@@ -3021,7 +3021,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.url === '/api/agent' && req.method === 'POST') {
-    // Return JSON (non-streaming) for reliability
+    // SSE streaming
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    res.flushHeaders();
+    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); if (typeof res.flush === 'function') res.flush(); } catch (_) {} };
+    let aborted = false;
+    req.on('close', () => { aborted = true; });
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
@@ -3031,15 +3040,19 @@ const server = http.createServer(async (req, res) => {
         cleanRoom: cleanRoom === true,
         options: options || undefined,
         keep_alive: keep_alive,
-        onEvent: () => {},
+        onEvent: (ev) => { if (!aborted) sendEvent(ev); },
       });
-      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats || null });
-      // Extract memories in background (delayed to avoid blocking Ollama)
-      setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
+      if (!aborted) {
+        sendEvent({ type: 'final', content: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
+        sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
+        setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
+      }
     } catch (e) {
       console.error('agent error:', e && e.stack || e);
       logError('agent', e);
-      json(res, 500, { error: e.message || String(e) });
+      if (!aborted) sendEvent({ type: 'error', message: e.message || String(e) });
+    } finally {
+      try { res.end(); } catch (_) {}
     }
     return;
   }

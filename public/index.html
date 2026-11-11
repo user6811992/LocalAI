@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.51</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.52</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -223,7 +223,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.51</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.52</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1010,32 +1010,145 @@
           try { t = await res.text(); } catch (e) { t = ''; }
           throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
         }
-        let data;
-        try { data = await res.json(); } catch (e) { throw e; }
-        const finalText = data.final || '';
-        const thinkingText = data.thinking || '';
+        // SSE streaming for agent mode
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalText = '';
+        let thinkingText = '';
+        let toolLog = [];
+        let toolsDisabled = false;
+        let webCitations = [];
+        let tokenStats = null;
+        let accumulated = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.trim() || !line.startsWith('data: ')) continue;
+            let obj;
+            try { obj = JSON.parse(line.slice(6)); } catch (e) { continue; }
+            if (obj.type === 'token') {
+              accumulated += obj.content || '';
+              contentEl.textContent = accumulated;
+              chat.scrollTop = chat.scrollHeight;
+            }
+            if (obj.type === 'thinking') {
+              thinkingText += (obj.content || '') + '\n';
+            }
+            if (obj.type === 'final') {
+              finalText = obj.content || accumulated;
+              thinkingText = obj.thinking || thinkingText;
+              toolLog = obj.toolLog || [];
+              toolsDisabled = obj.toolsDisabled || false;
+              webCitations = obj.webCitations || [];
+              tokenStats = obj.tokenStats || null;
+              contentEl.textContent = finalText;
+            }
+            if (obj.type === 'done') {
+              finalText = obj.final || finalText || accumulated;
+              thinkingText = obj.thinking || thinkingText;
+              toolLog = obj.toolLog || toolLog;
+              toolsDisabled = obj.toolsDisabled || toolsDisabled;
+              webCitations = obj.webCitations || webCitations;
+              tokenStats = obj.tokenStats || tokenStats;
+              contentEl.textContent = finalText;
+            }
+            if (obj.type === 'error') {
+              throw new Error(obj.message || 'Agent error');
+            }
+          }
+        }
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+          try {
+            const obj = JSON.parse(buffer.slice(6));
+            if (obj.type === 'done' || obj.type === 'final') {
+              finalText = obj.final || obj.content || finalText || accumulated;
+              thinkingText = obj.thinking || thinkingText;
+              toolLog = obj.toolLog || toolLog;
+              toolsDisabled = obj.toolsDisabled || toolsDisabled;
+              webCitations = obj.webCitations || webCitations;
+              tokenStats = obj.tokenStats || tokenStats;
+              contentEl.textContent = finalText;
+            }
+          } catch (e) {}
+        }
+        if (!finalText) finalText = accumulated;
         contentEl.textContent = finalText;
         // Render markdown + code highlighting
         if (typeof marked !== 'undefined' && finalText) {
           try {
-            const rawHtml2 = marked.parse(finalText);
-            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml2) : rawHtml2;
+            const rawHtml = marked.parse(finalText);
+            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
             if (typeof hljs !== 'undefined') {
               contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
             }
           } catch (e) {}
         }
-        if (data.tokenStats) {
+        if (tokenStats) {
           const ts = document.createElement('div');
           ts.style.fontSize = '10px';
           ts.style.color = 'var(--muted)';
           ts.style.marginTop = '4px';
-          ts.textContent = 'Tokens: ' + (data.tokenStats.prompt || 0) + ' prompt + ' + (data.tokenStats.generated || 0) + ' generated';
+          ts.textContent = 'Tokens: ' + (tokenStats.prompt || 0) + ' prompt + ' + (tokenStats.generated || 0) + ' generated';
           assistantDiv.appendChild(ts);
         }
-        if (data.toolsDisabled) {
+        if (toolsDisabled) {
           status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';
           status.className = 'status err';
+        }
+        // show thinking block if present
+        if (thinkingText && thinkingText.trim()) {
+          const det = document.createElement('details');
+          det.className = 'thinking-block';
+          const sum = document.createElement('summary');
+          sum.textContent = 'Reasoning';
+          const tc = document.createElement('div');
+          tc.className = 'thinking-content';
+          tc.textContent = thinkingText.trim();
+          det.appendChild(sum);
+          det.appendChild(tc);
+          assistantDiv.insertBefore(det, contentEl);
+        }
+        // show tool log
+        if (toolLog && toolLog.length) {
+          const logDiv = document.createElement('div');
+          logDiv.style.marginTop = '8px';
+          logDiv.style.fontSize = '12px';
+          logDiv.style.color = 'var(--muted)';
+          logDiv.innerHTML = '<b>Tools used:</b><br>' + toolLog.map(t =>
+            '\u2022 ' + escHtml(t.name) + ' ' + escHtml(JSON.stringify(t.args || {}).slice(0,120)) +
+            (toolConfidence(t.resultPreview) ? ' ' + toolConfidence(t.resultPreview) : '') +
+            (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + escHtml(t.resultPreview.slice(0,200)) : '')
+          ).join('<br>');
+          assistantDiv.appendChild(logDiv);
+        }
+        // show web citations if any
+        if (webCitations && webCitations.length) {
+          const webCitDiv = document.createElement('div');
+          webCitDiv.style.marginTop = '8px';
+          webCitDiv.style.fontSize = '11px';
+          webCitDiv.style.color = 'var(--muted)';
+          webCitDiv.innerHTML = '<b>Web sources:</b><br>' + webCitations.slice(0, 8).map((u, i) => (i+1) + '. <a href="' + escHtml(u) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">' + escHtml(u) + '</a>').join('<br>');
+          assistantDiv.appendChild(webCitDiv);
+        }
+        // update messages with final assistant
+        messages.push({ role: 'assistant', content: finalText });
+        scheduleAutoSave();
+        if (ragCitations.length) {
+          const citDiv = document.createElement('div');
+          citDiv.style.marginTop = '8px';
+          citDiv.style.fontSize = '11px';
+          citDiv.style.color = 'var(--muted)';
+          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + escHtml(c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
+          assistantDiv.appendChild(citDiv);
+        }
+        if (!toolsDisabled) {
+          status.textContent = 'Done (agent).';
+          status.className = 'status';
         }
         // show thinking block if present
         if (thinkingText && thinkingText.trim()) {
