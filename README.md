@@ -254,6 +254,19 @@ If you find LocalAI useful, consider sponsoring the project:
 
 MIT License — see [LICENSE](LICENSE) for details.
 
+## Third-Party Notices
+
+AegisAI references and integrates with several third-party projects. Their names, trademarks, and branding are owned by their respective creators. AegisAI is not affiliated with or endorsed by any of these projects:
+
+- **[Ollama](https://ollama.com)** — Local LLM runtime (MIT License)
+- **[HuggingFace](https://huggingface.co)** — Model hub (Apache 2.0)
+- **[morluto/rea](https://github.com/morluto/rea)** — Reverse engineering toolset
+- **[Alex Gao / awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered)** — Curated RE index (MIT code, CC0 data)
+- **[symgraph / GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP)** — Ghidra MCP extension (MIT)
+- **[storytold / Craft Anything](https://github.com/storytold/craft-anything)** — RE engine (MIT/Apache-2.0). ArtCraft name/logos are trademarks of the ArtCraft Team.
+
+No third-party logos, trademarks, or branding assets are included in this repository. All references are by name only for factual attribution.
+
 ## Contributing
 
 Contributions welcome! Please open an issue or pull request.
