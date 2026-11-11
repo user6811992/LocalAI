@@ -3095,6 +3095,14 @@ const server = http.createServer(async (req, res) => {
         json(res, 400, { ok: false, message: 'File not found: ' + modelPath });
         return;
       }
+      // Confine the source path to the project root / allow-list, when configured.
+      const resolvedModelPath = path.resolve(modelPath);
+      if (PROJECT_ROOT_ALLOWLIST.length) {
+        const allowed = PROJECT_ROOT_ALLOWLIST.some((base) => resolvedModelPath === base || resolvedModelPath.startsWith(base + path.sep));
+        if (!allowed) { json(res, 403, { ok: false, message: 'Model path is outside the allowed directories' }); return; }
+      } else if (!resolvedModelPath.startsWith(path.resolve(__dirname) + path.sep) && !resolvedModelPath.startsWith(path.resolve(projectRoot) + path.sep)) {
+        console.warn('WARNING: importing model from outside the app/project directory:', resolvedModelPath);
+      }
       const stat = fs.statSync(modelPath);
       if (stat.size < 1000) {
         json(res, 400, { ok: false, message: 'File too small (' + stat.size + ' bytes). Not a valid GGUF.' });
@@ -3119,7 +3127,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // Use forward slashes in Modelfile (Ollama prefers them)
-      const posixPath = modelPath.replace(/\\/g, '/');
+      const posixPath = resolvedModelPath.replace(/\\/g, '/');
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
       // Write Modelfile with FROM directive (quoted path for spaces)
       fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\n', 'utf8');
@@ -3277,7 +3285,10 @@ async function loadAreData() {
       if (process.env.GITHUB_TOKEN) headers['Authorization'] = 'token ' + process.env.GITHUB_TOKEN;
       https.get(ARE_DATA_URL, { headers }, (r) => {
         let buf = '';
-        r.on('data', (c) => (buf += c));
+        r.on('data', (c) => {
+          if (buf.length > 50 * 1024 * 1024) { reject(new Error('ARE data too large')); r.destroy(); return; }
+          buf += c;
+        });
         r.on('end', () => resolve(buf));
       }).on('error', reject);
     });
@@ -3319,7 +3330,8 @@ function searchAreData(query, opts) {
     // Filter by min stars
     if (minStars && (entry.stars || 0) < minStars) continue;
     // Search in name, description, topics
-    const searchable = ((entry.name || '') + ' ' + (entry.description || '') + ' ' + (entry.topics || []).join(' ') + ' ' + (entry.category || '')).toLowerCase();
+    const topics = Array.isArray(entry.topics) ? entry.topics : [];
+    const searchable = ((entry.name || '') + ' ' + (entry.description || '') + ' ' + topics.join(' ') + ' ' + (entry.category || '')).toLowerCase();
     if (q && !searchable.includes(q)) continue;
     results.push(entry);
     if (results.length >= limit) break;

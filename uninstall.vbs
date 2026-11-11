@@ -26,6 +26,11 @@ For Each pNode In colProc
   End If
 Next
 
+' ---------- remove the firewall rule added for LAN access ----------
+On Error Resume Next
+sh.Run "netsh advfirewall firewall delete rule name=""LocalAI""", 0, True
+On Error GoTo 0
+
 ' ---------- export user data before removal ----------
 Dim backupDir, udFiles, udf
 backupDir = sh.SpecialFolders("Desktop") & "\AegisAI-backup-" & Year(Now) & Month(Now) & Day(Now)
