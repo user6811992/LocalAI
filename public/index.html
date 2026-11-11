@@ -139,7 +139,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.42</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.43</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -220,7 +220,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.42</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.43</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -472,6 +472,18 @@
     return '';
   }
   const sendBtn = document.getElementById('send');
+  // Auto-save chat with debounce
+  let autoSaveTimer = null;
+  function scheduleAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(async () => {
+      if (!messages || messages.length === 0) return;
+      try {
+        const title = messages.find(m => m.role === 'user') ? messages.find(m => m.role === 'user').content.slice(0, 40) : 'Untitled';
+        await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, messages: messages.slice(-50) }) });
+      } catch (e) {}
+    }, 3000);
+  }
   if (sendBtn) sendBtn.disabled = false;
   const modelSel = document.getElementById('model');
   const systemPromptSel = document.getElementById('systemPrompt');
@@ -876,12 +888,22 @@
       if (rd.citations) ragCitations = rd.citations;
 
     } catch (e) {}
+    // Collect image attachments as base64
+    const imageB64 = [];
+    for (const a of atts) {
+      if (a.type && a.type.startsWith('image/') && a.dataUrl) {
+        const b64 = a.dataUrl.split(',')[1];
+        if (b64) imageB64.push(b64);
+      }
+    }
     const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
     input.value = '';
     attachments = [];
     renderAttachments();
     input.style.height = 'auto';
-    messages.push({ role: 'user', content: text });
+    const userMsg = { role: 'user', content: text };
+    if (imageB64.length) userMsg.images = imageB64;
+    messages.push(userMsg);
     let display = rawText;
     if (atts.length) display += '\\n\\n[Attachments: ' + atts.map(a=>a.name).join(', ') + ']';
     addMsg('user', display);
@@ -978,6 +1000,7 @@
         }
         // update messages with final assistant
         messages.push({ role: 'assistant', content: finalText });
+        scheduleAutoSave();
         if (ragCitations.length) {
           const citDiv = document.createElement('div');
           citDiv.style.marginTop = '8px';
@@ -1006,6 +1029,7 @@
         const decoder = new TextDecoder();
         let buffer = '';
         let accumulated = '';
+        let tokenStats = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) { break; }
@@ -1016,10 +1040,13 @@
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
-                    if (obj.message && obj.message.content) {
+              if (obj.message && obj.message.content) {
                 accumulated += obj.message.content;
                 contentEl.textContent = accumulated;
                 chat.scrollTop = chat.scrollHeight;
+              }
+              if (obj.done && obj.eval_count) {
+                tokenStats = 'Tokens: ' + (obj.prompt_eval_count || 0) + ' prompt + ' + (obj.eval_count || 0) + ' generated';
               }
             } catch (e) { /* ignore partial */ }
           }
@@ -1032,6 +1059,15 @@
           } catch (e) {}
         }
         messages.push({ role: 'assistant', content: accumulated });
+        scheduleAutoSave();
+        if (tokenStats) {
+          const ts = document.createElement('div');
+          ts.style.fontSize = '10px';
+          ts.style.color = 'var(--muted)';
+          ts.style.marginTop = '4px';
+          ts.textContent = tokenStats;
+          assistantDiv.appendChild(ts);
+        }
         // Render markdown + code highlighting
         if (typeof marked !== 'undefined') {
           try {
