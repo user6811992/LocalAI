@@ -1108,6 +1108,8 @@
         let webCitations = [];
         let tokenStats = null;
         let compacted = 0;
+        let contextUsed = 0;
+        let cumTokens = { prompt: 0, generated: 0 };
         let accumulated = '';
         while (true) {
           const { done, value } = await reader.read();
@@ -1135,6 +1137,7 @@
               webCitations = obj.webCitations || [];
               tokenStats = obj.tokenStats || null;
               compacted = obj.compacted || compacted;
+              contextUsed = obj.context || contextUsed;
               contentEl.textContent = finalText;
             }
             if (obj.type === 'done') {
@@ -1145,6 +1148,7 @@
               webCitations = obj.webCitations || webCitations;
               tokenStats = obj.tokenStats || tokenStats;
               compacted = obj.compacted || compacted;
+              contextUsed = obj.context || contextUsed;
               contentEl.textContent = finalText;
             }
             if (obj.type === 'error') {
@@ -1185,6 +1189,22 @@
           ts.style.marginTop = '4px';
           ts.textContent = 'Tokens: ' + (tokenStats.prompt || 0) + ' prompt + ' + (tokenStats.generated || 0) + ' generated';
           assistantDiv.appendChild(ts);
+          cumTokens.prompt += tokenStats.prompt || 0;
+          cumTokens.generated += tokenStats.generated || 0;
+          const ct = document.createElement('div');
+          ct.style.fontSize = '10px';
+          ct.style.color = 'var(--muted)';
+          ct.style.marginTop = '2px';
+          ct.textContent = 'Cumulative: ' + cumTokens.prompt + ' prompt + ' + cumTokens.generated + ' generated';
+          assistantDiv.appendChild(ct);
+          if (contextUsed) {
+            const cs = document.createElement('div');
+            cs.style.fontSize = '10px';
+            cs.style.color = 'var(--muted)';
+            cs.style.marginTop = '2px';
+            cs.textContent = 'Context used: ' + contextUsed + '%';
+            assistantDiv.appendChild(cs);
+          }
         }
         if (compacted) {
           const cb = document.createElement('div');
@@ -2809,6 +2829,37 @@
           loadChatsList();
         });
         row.appendChild(delBtn);
+        const rnBtn = document.createElement('button');
+        rnBtn.textContent = 'Rename';
+        rnBtn.style.fontSize = '11px';
+        rnBtn.style.padding = '2px 6px';
+        rnBtn.addEventListener('click', async () => {
+          const t = prompt('Rename chat:', c.title);
+          if (!t || !t.trim()) return;
+          await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id, title: t.trim(), messages: c.messages || [] }) });
+          loadChatsList();
+        });
+        row.appendChild(rnBtn);
+        const exBtn = document.createElement('button');
+        exBtn.textContent = 'Export';
+        exBtn.style.fontSize = '11px';
+        exBtn.style.padding = '2px 6px';
+        exBtn.addEventListener('click', async () => {
+          try {
+            const rr = await fetch('/api/chats/' + c.id);
+            const dd = await rr.json();
+            const blob = new Blob([JSON.stringify(dd, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (c.title || 'chat').replace(/[^a-z0-9-_]+/gi, '_') + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+        });
+        row.appendChild(exBtn);
         el.appendChild(row);
       });
       if (!d.chats || d.chats.length === 0) el.textContent = '(no saved chats)';

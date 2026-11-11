@@ -1363,8 +1363,9 @@ async function runAgent(model, messages, maxIter, opts) {
         const msg = r.data.message || {};
         msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
         const tokenStats = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
-        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats });
-        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats, compacted: compactedCount };
+        const contextUsed = ctxLen > 0 && tokenStats && tokenStats.prompt ? Math.round((tokenStats.prompt / ctxLen) * 100) : 0;
+        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats, context: contextUsed });
+        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats, compacted: compactedCount, context: contextUsed };
       } else {
         throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
       }
@@ -1392,8 +1393,9 @@ async function runAgent(model, messages, maxIter, opts) {
       const thinking = msg.thinking || finalThinking || '';
       msgs.push({ role: 'assistant', content: content, thinking: thinking });
       const tokenStats2 = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
-      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2 });
-      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2, compacted: compactedCount };
+      const contextUsed2 = ctxLen > 0 && tokenStats2 && tokenStats2.prompt ? Math.round((tokenStats2.prompt / ctxLen) * 100) : 0;
+      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2, context: contextUsed2 });
+      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2, compacted: compactedCount, context: contextUsed2 };
     }
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
@@ -3060,8 +3062,8 @@ const server = http.createServer(async (req, res) => {
         onEvent: (ev) => { if (!aborted) sendEvent(ev); },
       });
       if (!aborted) {
-        sendEvent({ type: 'final', content: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
-        sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
+        sendEvent({ type: 'final', content: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats, context: result.context });
+        sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats, context: result.context });
         try { res.end(); } catch (_) {}
         setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
       }
