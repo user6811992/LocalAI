@@ -194,7 +194,21 @@
     <input type="file" id="attachInput" multiple accept="image/*,.txt,.md,.json,.js,.py,.csv,.log" style="display:none;" />
     <button id="attachBtn" title="Attach files (images/text)" style="padding:6px 10px;">+</button>
     <button id="pasteBtn" title="Paste from clipboard" style="padding:6px 10px;">Paste</button>
-    <button id="voiceBtn" title="Voice input (speech-to-text)" style="padding:6px 10px;">Mic</button>
+    <select id="sttLang" title="Speech recognition language" style="font-size:11px;padding:2px 4px;margin-right:4px;">
+  <option value="en-US">EN</option>
+  <option value="fr-FR">FR</option>
+  <option value="de-DE">DE</option>
+  <option value="es-ES">ES</option>
+  <option value="ja-JP">JA</option>
+  <option value="zh-CN">ZH</option>
+</select>
+<select id="ttsVoice" title="TTS voice" style="font-size:11px;padding:2px 4px;margin-right:4px;">
+  <option value="">Default</option>
+  <option value="Microsoft Zira Desktop">Zira</option>
+  <option value="Microsoft David Desktop">David</option>
+  <option value="Microsoft Mark Desktop">Mark</option>
+</select>
+<button id="voiceBtn" title="Voice input (speech-to-text)" style="padding:6px 10px;">Mic</button>
     <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, paste to attach)" rows="1"></textarea>
     <button id="queueBtn" title="Queue message (send while busy)" style="padding:6px 10px;">Queue</button>
     <button id="send" class="primary">Send</button>
@@ -502,13 +516,18 @@
   const sendBtn = document.getElementById('send');
   // Auto-save chat with debounce
   let autoSaveTimer = null;
+  let currentChatId = null;
   function scheduleAutoSave() {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(async () => {
       if (!messages || messages.length === 0) return;
       try {
         const title = messages.find(m => m.role === 'user') ? messages.find(m => m.role === 'user').content.slice(0, 40) : 'Untitled';
-        await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, messages: messages.slice(-50) }) });
+        const body = { title, messages: messages.slice(-50) };
+        if (currentChatId) body.id = currentChatId;
+        const r = await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.id) currentChatId = d.id;
       } catch (e) {}
     }, 3000);
   }
@@ -714,7 +733,9 @@
       recognition = new SR();
       recognition.continuous = false;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      const sttLangSel = document.getElementById('sttLang');
+    recognition.lang = sttLangSel ? sttLangSel.value : 'en-US';
+    if (sttLangSel) sttLangSel.addEventListener('change', () => { recognition.lang = sttLangSel.value; });
       recognition.onresult = (e) => {
         let transcript = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
