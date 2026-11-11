@@ -638,6 +638,11 @@ async function execCodingTool(name, args) {
   }
   if (name === 'run_command') {
     if (isDangerousCmd(args.command)) return 'BLOCKED: command matched safety filter.';
+    if ((process.env.AEGISAI_SANDBOX || '').toLowerCase() === 'docker') {
+      const r = await runProcess('docker', ['run', '--rm', '--network', 'none', '--memory', '256m', '--cpus', '1', '-v', projectRoot + ':/work', '-w', '/work', 'alpine:3.20', 'sh', '-c', args.command], { timeout: 60000, maxBuffer: 1024 * 1024 });
+      if (!r.ok && r.err) return 'EXIT ' + r.code + '\n' + (r.out || r.err);
+      return r.out || '(no output)';
+    }
     const { execSync } = require('child_process');
     try {
       const out = execSync(args.command, { cwd: projectRoot, timeout: 60000, maxBuffer: 1024 * 1024, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -949,6 +954,14 @@ async function execCodingTool(name, args) {
     return keys.length ? keys.join('\n') : '(no memories)';
   }
   if (name === 'run_python') {
+    if ((process.env.AEGISAI_SANDBOX || '').toLowerCase() === 'docker') {
+      const f = path.join(os.tmpdir(), 'localai-py-' + Date.now() + '.py');
+      fs.writeFileSync(f, args.code || '');
+      const r = await runProcess('docker', ['run', '--rm', '--network', 'none', '--memory', '256m', '--cpus', '1', '-v', path.dirname(f) + ':/work', '-w', '/work', 'python:3.12-alpine', 'python', '/work/' + path.basename(f)], { timeout: 120000, maxBuffer: 1024 * 1024 });
+      try { fs.unlinkSync(f); } catch (e) {}
+      if (!r.ok) return 'EXIT ' + r.code + '\n' + (r.out || r.err);
+      return r.out || '(no output)';
+    }
     const { execFileSync } = require('child_process');
     try {
       const out = execFileSync('python', ['-c', args.code], { cwd: projectRoot, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 120000 });
@@ -1070,6 +1083,9 @@ if (USE_SQLITE) {
     dbModule = null;
   }
 }
+// Modularized data-access layer (lib/). Inline helpers below delegate to these.
+const memoryModule = require('./lib/memory').make({ dataDir: DATA_DIR, ollamaRequest });
+const settingsModule = require('./lib/settings').make(DATA_DIR);
 function loadSkills() { return loadJsonFile(SKILLS_FILE); }
 function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
 function loadSettings() {

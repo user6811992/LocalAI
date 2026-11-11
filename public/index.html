@@ -3009,7 +3009,8 @@
         const title = document.createElement('span');
         title.style.flex = '1';
         title.style.cursor = 'pointer';
-        const branchTag = c.parent_id ? ' ↳ ' : '';
+        const branchTag = c.parent_id ? '  ↳ ' : '';
+        title.style.paddingLeft = c.parent_id ? '16px' : '0px';
         title.textContent = branchTag + c.title + ' (' + (c.updated || '').slice(0,10) + ')';
         title.addEventListener('click', async () => {
           try {
