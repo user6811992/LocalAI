@@ -238,6 +238,7 @@ Special thanks to:
 - **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search, category browsing, README preview, and project lookup help users find existing RE work before starting their own. Data is cached locally and refreshed automatically when older than 24 hours.
 - **[symgraph (RevGraph Labs)](https://github.com/symgraph)** - for [GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP) (MIT license), a native MCP server extension for Ghidra providing 100+ granular RE tools. Optional integration available when Ghidra 12.0/12.1 + Java 25+ is installed.
 - **[storytold](https://github.com/storytold)** - for [Craft Anything](https://github.com/storytold/craft-anything) (MIT/Apache-2.0), which inspired the Clean Room/Deep mode concept for reverse engineering.
+- **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code, CC0 data).
 - All other contributors, testers, and the open-source community.
 
 ## Support
