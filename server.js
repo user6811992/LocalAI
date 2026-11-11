@@ -6,8 +6,7 @@ const { spawn } = require('child_process');
 const PORT = process.env.PORT || 8080;
 
 // Prevent a single request error from crashing the whole server
-process.on('uncaughtException', (e) => { console.error('uncaughtException:', e && e.stack || e); });
-process.on('unhandledRejection', (e) => { console.error('unhandledRejection:', e && e.stack || e); });
+// (moved to error logging section below)
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
@@ -1332,7 +1331,6 @@ async function runAgent(model, messages, maxIter, opts) {
       if (onEvent) onEvent({ type: 'tool_result', name, preview: resultPreview });
     }
     if (onEvent) onEvent({ type: 'tool_done' });
-    accumulatedContent = '';
   }
   const fallback = 'Reached max iterations without final answer.';
   msgs.push({ role: 'assistant', content: fallback });
