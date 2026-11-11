@@ -356,7 +356,19 @@ If pullModels Then
     MsgBox "Ollama is not installed. Skipping model pull." & vbCrLf & _
            "Install Ollama from https://ollama.com/download then re-run.", vbExclamation, "AegisAI Installer"
   Else
-    Dim i, m, rc
+    ' Make sure the Ollama server is running before pulling.
+    Dim ollamaRunning
+    ollamaRunning = False
+    Dim wmiO, colO
+    Set wmiO = GetObject("winmgmts:\\.\root\cimv2")
+    Set colO = wmiO.ExecQuery("SELECT * FROM Win32_Process WHERE Name='ollama.exe'")
+    If colO.Count > 0 Then ollamaRunning = True
+    If Not ollamaRunning Then
+      sh.Run """" & ResolveOllama() & """ serve", 0, False
+      WScript.Sleep 4000
+    End If
+    Dim i, m, rc, failedModels
+    failedModels = ""
     For i = 0 To UBound(modelList)
       m = modelList(i)
       MsgBox "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ":" & vbCrLf & m & "  (" & modelSize(i) & ")" & vbCrLf & vbCrLf & _
@@ -365,14 +377,22 @@ If pullModels Then
       rc = sh.Run("cmd /c """ & ResolveOllama() & """ pull " & m, 1, True)
       If Err.Number <> 0 Then
         MsgBox "Error pulling " & m & ": " & Err.Description, vbExclamation, "AegisAI Installer"
+        failedModels = failedModels & m & vbCrLf
       ElseIf rc <> 0 Then
         MsgBox "ollama pull " & m & " returned code " & rc & "." & vbCrLf & _
                "Continuing with next model.", vbExclamation, "AegisAI Installer"
+        failedModels = failedModels & m & vbCrLf
       End If
       On Error GoTo 0
     Next
-    MsgBox "Model pull complete.", vbInformation, "AegisAI Installer"
-    LogMsg logPath, "Model pull completed."
+    If failedModels <> "" Then
+      MsgBox "Some models failed to pull:" & vbCrLf & failedModels & vbCrLf & _
+             "Check your network connection and re-run the installer, or pull manually:" & vbCrLf & _
+             "ollama pull <model>", vbExclamation, "AegisAI Installer"
+    Else
+      MsgBox "All models pulled successfully.", vbInformation, "AegisAI Installer"
+    End If
+    LogMsg logPath, "Model pull completed. Failed: " & failedModels
   End If
 End If
 If Not pullModels Then LogMsg logPath, "Model pull skipped."

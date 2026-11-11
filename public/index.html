@@ -1053,6 +1053,13 @@
 
   async function loadModels() {
     try {
+      // Quick health check first
+      try {
+        const hr = await fetch('/api/version');
+        if (!hr.ok) throw new Error('Ollama not reachable (HTTP ' + hr.status + ')');
+      } catch (he) {
+        throw new Error('Ollama not running. Start it with: ollama serve (or launch the Ollama app).');
+      }
       const r = await fetch('/api/tags');
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const data = await r.json();
@@ -1062,7 +1069,7 @@
         const opt = document.createElement('option');
         opt.textContent = '(no models)';
         modelSel.appendChild(opt);
-        status.textContent = 'No models found. Pull one with: ollama pull llama3.1:8b';
+        status.textContent = 'No models installed. Pull one with: ollama pull llama3.2:3b  (or use the Models button). If you just pulled, restart Ollama and click Refresh.';
         status.className = 'status err';
         return;
       }
@@ -1078,7 +1085,7 @@
       status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 14 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');
       status.className = 'status';
     } catch (e) {
-      status.textContent = 'Cannot reach Ollama: ' + e.message;
+      status.textContent = 'Cannot reach Ollama: ' + e.message + '. Start Ollama (ollama serve) and click Refresh.';
       status.className = 'status err';
     }
   }

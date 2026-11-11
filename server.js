@@ -1988,13 +1988,14 @@ const server = http.createServer(async (req, res) => {
   // text/plain, and a rebinding page presents its own Host name; both are refused here.
   const hostHeader = String(req.headers.host || '').toLowerCase();
   if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') {
-    // Accept any port on loopback; the Host header may differ from PORT when the
-    // server is started on an ephemeral port (tests, containers).
-    if (!/^127\.0\.0\.1:\d+$/.test(hostHeader) && !/^localhost:\d+$/.test(hostHeader) && hostHeader !== '[::1]:' + hostHeader.split(':')[1]) {
+    // Accept any port on loopback.
+    if (!/^127\.0\.0\.1:\d+$/.test(hostHeader) && !/^localhost:\d+$/.test(hostHeader) && !/^\[::1\]:\d+$/.test(hostHeader)) {
       json(res, 421, { error: 'Misdirected request: unexpected Host header' });
       return;
     }
   }
+  // When bound to 0.0.0.0 (LAN mode) we cannot validate the Host precisely, so we
+  // rely on the auth token (and the JSON content-type check below) for protection.
   const origin = req.headers.origin;
   if (origin && origin !== 'null') {
     const sameOrigin = origin.toLowerCase() === ('http://' + hostHeader) || origin.toLowerCase() === ('https://' + hostHeader);
@@ -3268,6 +3269,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const { path: modelPath, name } = JSON.parse(body || '{}');
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
+      // Make sure Ollama is up before trying to import.
+      try {
+        const hr = await fetch(OLLAMA + '/api/version');
+        if (!hr.ok) throw new Error('HTTP ' + hr.status);
+      } catch (e) {
+        json(res, 503, { ok: false, message: 'Ollama is not running. Start it with: ollama serve' });
+        return;
+      }
       const fs = require('fs');
       const os = require('os');
       const path = require('path');
