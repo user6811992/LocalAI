@@ -251,7 +251,7 @@ When a token is set, all API requests require `X-Auth-Token: <token>` header. Th
 
 **LAN access warning:** If no token is set and the server binds to a non-loopback address, a warning is printed to the console. Use Tailscale or Cloudflare Tunnel for secure remote access.
 
-**Code execution:** `/api/run-code` and the Python tools run code without a sandbox, as your user. See [SECURITY.md](SECURITY.md).
+**Code execution:** `/api/run-code` and the Python tools run code without a sandbox by default, as your user. Set `AEGISAI_SANDBOX=docker` to run code in an isolated container (requires Docker). See [SECURITY.md](SECURITY.md).
 
 ## Privacy
 

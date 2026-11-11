@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.62</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.63</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -949,6 +949,26 @@
         }
       });
       btnBar.appendChild(regenBtn);
+      // Branch button: create a new chat from this point
+      const branchBtn = document.createElement('button');
+      branchBtn.textContent = 'Branch';
+      branchBtn.style.fontSize = '10px';
+      branchBtn.style.padding = '1px 6px';
+      branchBtn.addEventListener('click', async () => {
+        if (!currentChatId) { status.textContent = 'Save the chat first, then branch.'; status.className = 'status err'; return; }
+        // Find the index of this assistant message in the messages array
+        const idx = messages.indexOf(messages.find((m) => m.role === 'assistant' && m.content === content));
+        const cutAt = (idx >= 0 ? idx + 1 : messages.length);
+        try {
+          const r = await fetch('/api/chats/branch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: currentChatId, atIndex: cutAt }) });
+          const d = await r.json();
+          if (!r.ok || !d.ok) throw new Error(d.error || d.message || ('HTTP ' + r.status));
+          currentChatId = d.id;
+          status.textContent = 'Branched chat: ' + d.id;
+          status.className = 'status';
+        } catch (e) { status.textContent = 'Branch failed: ' + e.message; status.className = 'status err'; }
+      });
+      btnBar.appendChild(branchBtn);
       div.appendChild(btnBar);
     }
     // Edit button for user messages
@@ -2989,7 +3009,8 @@
         const title = document.createElement('span');
         title.style.flex = '1';
         title.style.cursor = 'pointer';
-        title.textContent = c.title + ' (' + (c.updated || '').slice(0,10) + ')';
+        const branchTag = c.parent_id ? ' ↳ ' : '';
+        title.textContent = branchTag + c.title + ' (' + (c.updated || '').slice(0,10) + ')';
         title.addEventListener('click', async () => {
           try {
             const rr = await fetch('/api/chats/' + c.id);
@@ -3043,6 +3064,21 @@
           } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
         });
         row.appendChild(exBtn);
+        const brBtn = document.createElement('button');
+        brBtn.textContent = 'Branches';
+        brBtn.style.fontSize = '11px';
+        brBtn.style.padding = '2px 6px';
+        brBtn.addEventListener('click', async () => {
+          try {
+            const rr = await fetch('/api/chats/branches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }) });
+            const dd = await rr.json();
+            if (!rr.ok || !dd.ok) throw new Error(dd.error || dd.message || ('HTTP ' + rr.status));
+            if (!dd.branches || dd.branches.length === 0) { status.textContent = 'No branches for this chat.'; status.className = 'status'; return; }
+            status.textContent = 'Branches: ' + dd.branches.map((b) => b.id).join(', ');
+            status.className = 'status';
+          } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
+        });
+        row.appendChild(brBtn);
         el.appendChild(row);
       });
       if (!d.chats || d.chats.length === 0) el.textContent = '(no saved chats)';

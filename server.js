@@ -2909,7 +2909,15 @@ const server = http.createServer(async (req, res) => {
       } else {
         json(res, 400, { ok: false, message: 'Unsupported language. Use python or javascript.' }); return;
       }
-      const r = await runProcess(runner, [f], { timeout: 15000, maxBuffer: 1024 * 1024 });
+      let r;
+      if ((process.env.AEGISAI_SANDBOX || '').toLowerCase() === 'docker') {
+        const image = lang === 'python' ? 'python:3.12-alpine' : 'node:20-alpine';
+        const cmd = lang === 'python' ? 'python' : 'node';
+        const baseName = path.basename(f);
+        r = await runProcess('docker', ['run', '--rm', '--network', 'none', '--memory', '256m', '--cpus', '1', '-v', path.dirname(f) + ':/work', '-w', '/work', image, cmd, '/work/' + baseName], { timeout: 30000, maxBuffer: 1024 * 1024 });
+      } else {
+        r = await runProcess(runner, [f], { timeout: 15000, maxBuffer: 1024 * 1024 });
+      }
       try { fs.unlinkSync(f); } catch (_) {}
       const result = { ok: r.ok, stdout: r.out.slice(0, 4000), stderr: '', code: r.code };
       json(res, 200, result);
