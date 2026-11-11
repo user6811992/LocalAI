@@ -59,6 +59,12 @@ let ghidraTools = [];
 let ghidraReady = false;
 let ghidraError = null;
 
+// Craft Anything MCP (optional, requires craft-anything-cli binary)
+let craftClient = null;
+let craftTools = [];
+let craftReady = false;
+let craftError = null;
+
 function resolveReaBin() {
   if (process.env.REA_BIN && fs.existsSync(process.env.REA_BIN)) return process.env.REA_BIN;
   const candidates = [
@@ -205,6 +211,74 @@ async function initGhidrAssistMcp() {
   }
 }
 
+function resolveCraftBin() {
+  if (process.env.CRAFT_ANYTHING_BIN && fs.existsSync(process.env.CRAFT_ANYTHING_BIN)) return process.env.CRAFT_ANYTHING_BIN;
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'craft-anything', 'craft-anything-cli.exe'),
+    path.join(process.env.PROGRAMFILES || '', 'craft-anything', 'craft-anything-cli.exe'),
+    path.join(process.env.HOME || '', '.cargo', 'bin', 'craft-anything-cli'),
+    '/usr/local/bin/craft-anything-cli',
+    '/usr/bin/craft-anything-cli',
+  ];
+  for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
+  try {
+    const { execSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'where craft-anything-cli' : 'which craft-anything-cli';
+    const out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+    const first = (out || '').trim().split(/\r?\n/)[0];
+    if (first && fs.existsSync(first)) return first;
+  } catch (_) {}
+  return null;
+}
+
+async function initCraftMcp() {
+  const bin = resolveCraftBin();
+  if (!bin) {
+    craftError = 'craft-anything-cli not found. Install from https://github.com/storytold/craft-anything';
+    craftReady = false;
+    console.log('Craft Anything MCP skipped:', craftError);
+    return;
+  }
+  try {
+    let Client, StdioClientTransport;
+    try {
+      const sdk = require('@modelcontextprotocol/sdk/client');
+      Client = sdk.Client;
+      const stdio = require('@modelcontextprotocol/sdk/client/stdio.js');
+      StdioClientTransport = stdio.StdioClientTransport;
+    } catch (e) {
+      try {
+        const sdk = require('@modelcontextprotocol/sdk');
+        Client = sdk.Client;
+        StdioClientTransport = sdk.StdioClientTransport;
+      } catch (e2) {
+        throw new Error('MCP SDK not installed. Run: npm install in the AegisAI folder.');
+      }
+    }
+    const transport = new StdioClientTransport({
+      command: bin,
+      args: ['mcp'],
+      env: Object.assign({}, process.env),
+      stderr: 'pipe',
+    });
+    const client = new Client({ name: 'aegisai-craft', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+    const res = await client.listTools();
+    craftTools = res.tools || [];
+    craftClient = client;
+    craftReady = true;
+    console.log('Craft Anything MCP ready. Tools:', craftTools.length);
+  } catch (e) {
+    craftError = e && e.message ? e.message : String(e);
+    craftReady = false;
+    if (!/ENOENT|not found|not recognized/i.test(craftError)) {
+      console.error('Craft Anything MCP init failed:', craftError);
+    } else {
+      console.log('Craft Anything MCP not available.');
+    }
+  }
+}
+
 function mcpToolsAsOllama() {
   const tools = mcpTools.map((t) => ({
     type: 'function',
@@ -235,6 +309,19 @@ function mcpToolsAsOllama() {
         function: {
           name: 'ghidra_' + t.name,
           description: ((t.description || '') + ' [from GhidrAssistMCP]').slice(0, 120),
+          parameters: t.inputSchema || { type: 'object', properties: {} },
+        },
+      });
+    }
+  }
+  // Add Craft Anything tools (prefixed to avoid collisions)
+  if (craftReady) {
+    for (const t of craftTools) {
+      tools.push({
+        type: 'function',
+        function: {
+          name: 'craft_' + t.name,
+          description: ((t.description || '') + ' [from Craft Anything]').slice(0, 120),
           parameters: t.inputSchema || { type: 'object', properties: {} },
         },
       });
@@ -275,6 +362,22 @@ async function callMcpTool(name, args) {
     if (!ghidraClient) throw new Error('GhidrAssistMCP not ready: ' + (ghidraError || 'unknown'));
     const origName = name.slice(7);
     const r = await ghidraClient.callTool({ name: origName, arguments: args || {} });
+    let text = '';
+    if (r && r.content) {
+      for (const c of r.content) {
+        if (c.type === 'text') text += c.text;
+        else text += JSON.stringify(c);
+      }
+    }
+    if (r && r.isError) text = 'ERROR: ' + text;
+    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
+    return text;
+  }
+  // Route to Craft Anything client if prefixed
+  if (name.startsWith('craft_')) {
+    if (!craftClient) throw new Error('Craft Anything MCP not ready: ' + (craftError || 'unknown'));
+    const origName = name.slice(6);
+    const r = await craftClient.callTool({ name: origName, arguments: args || {} });
     let text = '';
     if (r && r.content) {
       for (const c of r.content) {
@@ -1091,8 +1194,9 @@ async function runAgent(model, messages, maxIter, opts) {
   const log = [];
   const memBlock = '';
   const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
+  const craftHint = (craftReady && includeRe) ? ' You also have CRAFT ANYTHING tools (craft_* prefixed) for deep reverse engineering analysis (320 tools covering native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files).' : '';
   const cleanRoomHint = cleanRoom ? ' CLEAN ROOM MODE: Do NOT read, view, or access any original source code, binaries, or files from the target. Work only from visible behavior: screenshots, UI layout, text content, and observable functionality. Refuse any tool that would read original code or files. If the user asks to read source, explain that clean room mode prevents this and suggest switching to Deep mode.' : '';
-  const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint + cleanRoomHint };
+  const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint + craftHint + cleanRoomHint };
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
   let toolsSupported = true;
@@ -1607,7 +1711,12 @@ const server = http.createServer(async (req, res) => {
         allTools.push({ name: 'ghidra_' + t.name, description: (t.description || '') + ' [GhidrAssistMCP]' });
       }
     }
-    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError, ghidraReady, ghidraTools: ghidraTools.length, ghidraError });
+    if (craftReady) {
+      for (const t of craftTools) {
+        allTools.push({ name: 'craft_' + t.name, description: (t.description || '') + ' [Craft Anything]' });
+      }
+    }
+    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError, ghidraReady, ghidraTools: ghidraTools.length, ghidraError, craftReady, craftTools: craftTools.length, craftError });
     return;
   }
 
@@ -1728,10 +1837,12 @@ const server = http.createServer(async (req, res) => {
     mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
     areReady = false; areError = null; areClient = null; areTools = [];
     ghidraReady = false; ghidraError = null; ghidraClient = null; ghidraTools = [];
+    craftReady = false; craftError = null; craftClient = null; craftTools = [];
     await initMcp();
     await initAwesomeReMcp();
     await initGhidrAssistMcp();
-    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length + ghidraTools.length, areReady, areTools: areTools.length, ghidraReady, ghidraTools: ghidraTools.length });
+    await initCraftMcp();
+    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length + ghidraTools.length + craftTools.length, areReady, areTools: areTools.length, ghidraReady, ghidraTools: ghidraTools.length, craftReady, craftTools: craftTools.length });
     return;
   }
 
@@ -2681,6 +2792,7 @@ server.listen(PORT, '0.0.0.0', () => {
 initMcp();
 initAwesomeReMcp();
 initGhidrAssistMcp();
+initCraftMcp();
 
 // ---------- Default skill: search before RE ----------
 const DEFAULT_SKILL_NAME = 'search-before-re';
