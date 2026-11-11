@@ -1056,6 +1056,20 @@ const DATA_DIR = process.env.AEGISAI_DATA_DIR || __dirname;
 const MEMORY_FILE = path.join(DATA_DIR, 'memory.json');
 const SKILLS_FILE = path.join(DATA_DIR, 'skills.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const DB_FILE = path.join(DATA_DIR, 'aegisai.db');
+const USE_SQLITE = (process.env.AEGISAI_DB || 'json').toLowerCase() === 'sqlite';
+let dbModule = null;
+if (USE_SQLITE) {
+  try {
+    dbModule = require('./lib/db');
+    dbModule.open(DB_FILE);
+    dbModule.migrateFromJson(DATA_DIR);
+    console.log('SQLite backend enabled:', DB_FILE);
+  } catch (e) {
+    console.error('SQLite init failed, falling back to JSON:', e.message);
+    dbModule = null;
+  }
+}
 function loadSkills() { return loadJsonFile(SKILLS_FILE); }
 function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
 function loadSettings() {
@@ -2992,43 +3006,101 @@ const server = http.createServer(async (req, res) => {
 
   // ---------- Multi-chat persistence ----------
   const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-  function loadChats() { try { return JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8')); } catch (e) { return []; } }
-  function saveChats(chats) { try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {} }
+  function loadChats() {
+    if (dbModule) {
+      try { return dbModule.listChats().map((c) => dbModule.getChat(c.id)); } catch (e) { console.error('loadChats sqlite failed:', e.message); }
+    }
+    try { return JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8')); } catch (e) { return []; }
+  }
+  function saveChats(chats) {
+    if (dbModule) {
+      try {
+        const existing = new Set(dbModule.listChats().map((c) => c.id));
+        for (const c of (chats || [])) {
+          dbModule.saveChat({ id: c.id, title: c.title, messages: c.messages, parent_id: c.parent_id, branch_from: c.branch_from });
+          existing.delete(c.id);
+        }
+        for (const id of existing) dbModule.deleteChat(id);
+        return;
+      } catch (e) { console.error('saveChats sqlite failed:', e.message); }
+    }
+    try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {}
+  }
+  function getChatById(id) {
+    if (dbModule) { try { return dbModule.getChat(id); } catch (e) {} }
+    return loadChats().find((c) => c.id === id) || null;
+  }
+  function saveOneChat(chat) {
+    if (dbModule) { try { return dbModule.saveChat(chat); } catch (e) { console.error('saveOneChat sqlite failed:', e.message); } }
+    // JSON fallback: upsert into chats.json
+    const chats = loadChats();
+    const idx = chats.findIndex((c) => c.id === chat.id);
+    const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: chat.messages || [], updated: new Date().toISOString(), parent_id: chat.parent_id, branch_from: chat.branch_from };
+    if (idx >= 0) chats[idx] = entry; else chats.unshift(entry);
+    if (chats.length > 50) chats.length = 50;
+    saveChats(chats);
+    return entry.id;
+  }
+  function deleteChatById(id) {
+    if (dbModule) { try { dbModule.deleteChat(id); return; } catch (e) { console.error('deleteChatById sqlite failed:', e.message); } }
+    const chats = loadChats().filter((c) => c.id !== id);
+    saveChats(chats);
+  }
+  function listChatBranches(parentId) {
+    if (dbModule) { try { return dbModule.listBranches(parentId); } catch (e) {} }
+    return loadChats().filter((c) => c.parent_id === parentId);
+  }
 
   if (req.url === '/api/chats' && req.method === 'GET') {
     const chats = loadChats();
-    json(res, 200, { chats: chats.map(c => ({ id: c.id, title: c.title, updated: c.updated })) });
+    json(res, 200, { chats: chats.map(c => ({ id: c.id, title: c.title, updated: c.updated, parent_id: c.parent_id, branch_from: c.branch_from })) });
     return;
   }
   if (req.url === '/api/chats' && req.method === 'POST') {
     try {
       const body = await readBody(req);
-      const { id, title, messages } = JSON.parse(body || '{}');
-      const chats = loadChats();
-      const chatId = id || ('chat_' + Date.now());
-      const existing = chats.findIndex(c => c.id === chatId);
-      const entry = { id: chatId, title: title || 'Untitled', messages: messages || [], updated: new Date().toISOString() };
-      if (existing >= 0) chats[existing] = entry; else chats.unshift(entry);
-      // keep last 50
-      if (chats.length > 50) chats.length = 50;
-      saveChats(chats);
+      const { id, title, messages, parent_id, branch_from } = JSON.parse(body || '{}');
+      const chatId = saveOneChat({ id, title, messages, parent_id, branch_from });
       json(res, 200, { ok: true, id: chatId });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
+
   if (req.url === '/api/chats/delete' && req.method === 'POST') {
     try {
       const body = await readBody(req);
       const { id } = JSON.parse(body || '{}');
-      const chats = loadChats().filter(c => c.id !== id);
-      saveChats(chats);
+      deleteChatById(id);
       json(res, 200, { ok: true });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/chats/branches' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      if (!id) { json(res, 400, { ok: false, message: 'id required' }); return; }
+      const branches = listChatBranches(id);
+      json(res, 200, { ok: true, branches });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/chats/branch' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id, atIndex, title } = JSON.parse(body || '{}');
+      const src = getChatById(id);
+      if (!src) { json(res, 404, { ok: false, message: 'not found' }); return; }
+      const idx = (typeof atIndex === 'number' && atIndex >= 0) ? atIndex : src.messages.length;
+      const newId = 'chat_' + Date.now();
+      saveOneChat({ id: newId, title: title || (src.title + ' (branch)'), messages: src.messages.slice(0, idx), parent_id: id, branch_from: idx });
+      json(res, 200, { ok: true, id: newId, parent_id: id, branch_from: idx });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
   if (req.url.startsWith('/api/chats/') && req.method === 'GET') {
     const id = req.url.split('/').pop();
-    const chat = loadChats().find(c => c.id === id);
+    const chat = getChatById(id);
     if (!chat) { json(res, 404, { error: 'not found' }); return; }
     json(res, 200, chat);
     return;

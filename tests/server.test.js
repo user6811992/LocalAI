@@ -201,6 +201,24 @@ test('memory save persists with a real embedding (duplicate embedText fixed)', a
 
 // ---------- stats ----------
 
+test('chat branching creates a child chat from a message index', async () => {
+  const r = await req('POST', '/api/chats', { body: { id: 'parent1', title: 'parent', messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'yo' }, { role: 'user', content: 'more' }] } });
+  assert.equal(r.status, 200);
+  const br = await req('POST', '/api/chats/branch', { body: { id: 'parent1', atIndex: 2 } });
+  assert.equal(br.status, 200);
+  const d = await br.json();
+  assert.equal(d.ok, true);
+  assert.equal(d.parent_id, 'parent1');
+  assert.equal(d.branch_from, 2);
+  const child = await req('GET', '/api/chats/' + d.id);
+  const cd = await child.json();
+  assert.equal(cd.messages.length, 2);
+  assert.equal(cd.messages[1].content, 'yo');
+  const branches = await req('POST', '/api/chats/branches', { body: { id: 'parent1' } });
+  const bd = await branches.json();
+  assert.equal(bd.branches.length, 1);
+});
+
 test('/api/stats counts only user and assistant messages', async () => {
   const chats = [{ id: 'c1', title: 't', updated: '', messages: [
     { role: 'user', content: 'hi' },

@@ -180,6 +180,7 @@
     <button id="refresh" style="padding:4px 8px;font-size:12px;">Refresh</button>
     <button id="clear" style="padding:4px 8px;font-size:12px;">Clear</button>
     <button id="exportChat" style="padding:4px 8px;font-size:12px;">Export</button>
+    <button id="branchChatBtn" style="padding:4px 8px;font-size:12px;">Branch</button>
     <button id="aboutBtn" onclick="openAbout()" style="padding:4px 8px;font-size:12px;">About</button>
     <input id="chatSearch" placeholder="Search..." style="width:120px;font-size:12px;padding:4px 8px;" />
   </div>
@@ -1530,6 +1531,21 @@
           m.style.display = 'none';
         }
       });
+    });
+  }
+
+  const branchChatBtn = document.getElementById('branchChatBtn');
+  if (branchChatBtn) {
+    branchChatBtn.addEventListener('click', async () => {
+      if (!currentChatId) { status.textContent = 'No chat to branch. Save first.'; status.className = 'status err'; return; }
+      try {
+        const r = await fetch('/api/chats/branch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: currentChatId }) });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || d.message || ('HTTP ' + r.status));
+        currentChatId = d.id;
+        status.textContent = 'Branched chat: ' + d.id;
+        status.className = 'status';
+      } catch (e) { status.textContent = 'Branch failed: ' + e.message; status.className = 'status err'; }
     });
   }
 
