@@ -15,6 +15,9 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Mobile-friendly** — safe-area insets, touch targets, install hint banner
 - **No telemetry** — zero phone-home, analytics, or tracking code
 - **Portable** — auto-generates paths on install, no hardcoded usernames
+- **Agent streaming** — live SSE token/thinking/tool events, token usage stats, context meter, compaction indicator, tool log, web citations, reasoning display
+- **Chat management** — auto-save, rename, export, delete; Memory & Skills panels with add/edit/delete
+- **Safety** — DOMPurify sanitization for Markdown, client-disconnect abort on proxy, Docker healthchecks and named volumes
 
 ## Supported Models
 
