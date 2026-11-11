@@ -1700,7 +1700,7 @@
             reconnectBtn.disabled = true;
             reconnectBtn.textContent = 'Connecting...';
             try {
-              const rr = await fetch('/api/reconnect-mcp', { method: 'POST' });
+              const rr = await fetch('/api/reconnect-mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
               const dd = await rr.json();
               status.textContent = 'RE tools: ' + (dd.ready ? 'ready (' + dd.tools + ' tools)' : 'failed: ' + dd.error);
               status.className = dd.ready ? 'status' : 'status err';
@@ -2018,7 +2018,7 @@
     btn.disabled = true; cbtn.disabled = true;
     st.textContent = 'Updating... (this may take a minute)';
     try {
-      const r = await fetch('/api/update', { method: 'POST' });
+      const r = await fetch('/api/update', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const d = await r.json();
       if (d.ok) {
         st.textContent = d.message + ' Waiting for server restart...';
@@ -2122,7 +2122,7 @@
   if (clearErrorLogBtn && errorLogText) {
     clearErrorLogBtn.addEventListener('click', async () => {
       try {
-        await fetch('/api/error-log/clear', { method: 'POST' });
+        await fetch('/api/error-log/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         errorLogText.value = '(log cleared)';
       } catch (e) {
         errorLogText.value = 'Error: ' + e.message;
@@ -3197,7 +3197,7 @@
       areRefreshBtn.disabled = true;
       areRefreshBtn.textContent = 'Refreshing...';
       try {
-        const r = await fetch('/api/are-data-refresh', { method: 'POST' });
+        const r = await fetch('/api/are-data-refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await r.json();
         if (d.ok) { areSearchResults.textContent = 'Data refreshed: ' + d.count + ' entries loaded.'; }
         else { areSearchResults.textContent = 'Refresh failed: ' + (d.message || 'unknown'); }

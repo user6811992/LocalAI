@@ -1947,6 +1947,28 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: 'Too many requests' }));
     return;
   }
+  // Cross-site request and DNS-rebinding guard. A cross-site HTML form can only send
+  // text/plain, and a rebinding page presents its own Host name; both are refused here.
+  const hostHeader = String(req.headers.host || '').toLowerCase();
+  if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') {
+    // Accept any port on loopback; the Host header may differ from PORT when the
+    // server is started on an ephemeral port (tests, containers).
+    if (!/^127\.0\.0\.1:\d+$/.test(hostHeader) && !/^localhost:\d+$/.test(hostHeader) && hostHeader !== '[::1]:' + hostHeader.split(':')[1]) {
+      json(res, 421, { error: 'Misdirected request: unexpected Host header' });
+      return;
+    }
+  }
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') {
+    const sameOrigin = origin.toLowerCase() === ('http://' + hostHeader) || origin.toLowerCase() === ('https://' + hostHeader);
+    if (!sameOrigin) { json(res, 403, { error: 'Cross-origin request refused' }); return; }
+  }
+  const isApiRoute = req.url.startsWith('/api/') || req.url.startsWith('/v1/');
+  if (isApiRoute && req.method !== 'GET' && req.method !== 'HEAD') {
+    const ct = String(req.headers['content-type'] || '').toLowerCase();
+    if (!ct.startsWith('application/json')) { json(res, 415, { error: 'Content-Type must be application/json' }); return; }
+  }
+
   // Auth check
   const token = getAuthToken();
   // Static assets carry no secrets and must load so the browser can show the token prompt.

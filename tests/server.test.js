@@ -146,22 +146,22 @@ test('safePath blocks traversal outside the project root', () => {
 // ---------- HTTP hardening ----------
 
 test('requests without the token are rejected (401)', async () => {
-  const r = await req('GET', '/api/version', { auth: false });
+  const r = await fetch(base + '/api/version', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port } });
   assert.equal(r.status, 401);
 });
 
 test('wrong token is rejected (401)', async () => {
-  const r = await fetch(base + '/api/version', { headers: { 'X-Auth-Token': 'nope' } });
+  const r = await fetch(base + '/api/version', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port, 'X-Auth-Token': 'nope' } });
   assert.equal(r.status, 401);
 });
 
 test('Authorization: Bearer token is accepted', async () => {
-  const r = await fetch(base + '/api/version', { headers: { Authorization: 'Bearer ' + TOKEN } });
+  const r = await fetch(base + '/api/version', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port, Authorization: 'Bearer ' + TOKEN } });
   assert.equal(r.status, 200);
 });
 
 test('static responses carry security headers', async () => {
-  const r = await fetch(base + '/index.html', { headers: { 'X-Auth-Token': TOKEN } });
+  const r = await fetch(base + '/index.html', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port } });
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
@@ -176,9 +176,9 @@ test('the web UI itself loads without a token so the browser can prompt for one'
 });
 
 test('static path traversal is blocked', async () => {
-  const r = await fetch(base + '/..%2F..%2Fpackage.json', { headers: { 'X-Auth-Token': TOKEN } });
+  const r = await fetch(base + '/..%2F..%2Fpackage.json', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port, 'X-Auth-Token': TOKEN } });
   assert.notEqual(r.status, 200);
-  const r2 = await fetch(base + '/%2e%2e/%2e%2e/server.js', { headers: { 'X-Auth-Token': TOKEN } });
+  const r2 = await fetch(base + '/%2e%2e/%2e%2e/server.js', { headers: { 'Host': '127.0.0.1:' + serverInstance.address().port, 'X-Auth-Token': TOKEN } });
   assert.notEqual(r2.status, 200);
 });
 
