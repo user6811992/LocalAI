@@ -3028,9 +3028,10 @@ const server = http.createServer(async (req, res) => {
       'Connection': 'keep-alive',
     });
     res.flushHeaders();
-    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); if (typeof res.flush === 'function') res.flush(); } catch (_) {} };
+    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); if (typeof res.flush === 'function') res.flush(); } catch (e) { aborted = true; } };
     let aborted = false;
-    req.on('close', () => { aborted = true; });
+    // Don't use req.on('close') for abort detection - it fires after body is consumed
+    // Instead, rely on res.write() errors to detect client disconnect
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
@@ -3045,6 +3046,7 @@ const server = http.createServer(async (req, res) => {
       if (!aborted) {
         sendEvent({ type: 'final', content: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
         sendEvent({ type: 'done', final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: result.tokenStats });
+        try { res.end(); } catch (_) {}
         setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
       }
     } catch (e) {
