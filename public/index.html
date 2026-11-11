@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.30</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.31</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -215,7 +215,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.30</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.31</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -422,6 +422,16 @@
   const input = document.getElementById('input');
   // HTML escape helper for safe innerHTML
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  // Extract confidence level from tool result text
+  function toolConfidence(preview) {
+    if (!preview) return '';
+    const t = String(preview).toLowerCase();
+    if (/confidence:\s*high|coverage:\s*high|\bhigh confidence\b/.test(t)) return '<span style="color:#22c55e;font-weight:600;">&#9679; High</span>';
+    if (/confidence:\s*medium|coverage:\s*medium|\bmedium confidence\b/.test(t)) return '<span style="color:#eab308;font-weight:600;">&#9679; Medium</span>';
+    if (/confidence:\s*low|coverage:\s*low|\blow confidence\b/.test(t)) return '<span style="color:#ef4444;font-weight:600;">&#9679; Low</span>';
+    if (/evidence/i.test(t)) return '<span style="color:var(--accent2);font-weight:600;">&#9679; Evidence</span>';
+    return '';
+  }
   const sendBtn = document.getElementById('send');
   if (sendBtn) sendBtn.disabled = false;
   const modelSel = document.getElementById('model');
@@ -919,6 +929,7 @@
           logDiv.style.color = 'var(--muted)';
           logDiv.innerHTML = '<b>Tools used:</b><br>' + data.toolLog.map(t =>
             '\u2022 ' + escHtml(t.name) + ' ' + escHtml(JSON.stringify(t.args || {}).slice(0,120)) +
+            (toolConfidence(t.resultPreview) ? ' ' + toolConfidence(t.resultPreview) : '') +
             (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + escHtml(t.resultPreview.slice(0,200)) : '')
           ).join('<br>');
           assistantDiv.appendChild(logDiv);
