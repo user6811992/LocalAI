@@ -184,6 +184,79 @@ If fso.FileExists(destBase & "\server.js") Then
 End If
 If updateOnly Then LogMsg logPath, "Mode: UPDATE (core files only)."
 
+' ---------- stop running server before update ----------
+If updateOnly Then
+  On Error Resume Next
+  Dim wmiProc, colProc
+  Set wmiProc = GetObject("winmgmts:\\.\root\cimv2")
+  Set colProc = wmiProc.ExecQuery("SELECT * FROM Win32_Process WHERE Name='node.exe'")
+  Dim pNode
+  For Each pNode In colProc
+    If InStr(1, pNode.CommandLine, "server.js", vbTextCompare) > 0 Then
+      pNode.Terminate
+      LogMsg logPath, "Terminated running server process (PID " & pNode.ProcessId & ")."
+    End If
+  Next
+  ' Wait for process to exit
+  WScript.Sleep 2000
+  On Error GoTo 0
+End If
+
+' ---------- version check ----------
+Dim srcVersion, dstVersion
+srcVersion = ""
+dstVersion = ""
+If fso.FileExists(srcBase & "\package.json") Then
+  Dim vFile
+  Set vFile = fso.OpenTextFile(srcBase & "\package.json", 1)
+  Dim vContent
+  vContent = vFile.ReadAll
+  vFile.Close
+  ' Extract version (simple regex)
+  Dim vMatch
+  Set vMatch = New RegExp
+  vMatch.Pattern = """version""\s*:\s*""([^""]+)"""
+  Dim vMatches
+  Set vMatches = vMatch.Execute(vContent)
+  If vMatches.Count > 0 Then srcVersion = vMatches(0).SubMatches(0)
+End If
+If fso.FileExists(destBase & "\package.json") Then
+  Set vFile = fso.OpenTextFile(destBase & "\package.json", 1)
+  vContent = vFile.ReadAll
+  vFile.Close
+  Set vMatches = vMatch.Execute(vContent)
+  If vMatches.Count > 0 Then dstVersion = vMatches(0).SubMatches(0)
+End If
+If updateOnly And srcVersion <> "" And dstVersion <> "" And srcVersion = dstVersion Then
+  MsgBox "Already up to date (v" & srcVersion & "). No update needed.", vbInformation, "AegisAI Installer"
+  WScript.Quit 0
+End If
+If srcVersion <> "" Then LogMsg logPath, "Source version: " & srcVersion
+If dstVersion <> "" Then LogMsg logPath, "Dest version: " & dstVersion
+
+' ---------- backup before update ----------
+If updateOnly Then
+  On Error Resume Next
+  Dim backupDir
+  backupDir = destBase & "\.update-backup"
+  If fso.FolderExists(backupDir) Then fso.DeleteFolder backupDir, True
+  fso.CreateFolder backupDir
+  ' Back up user data
+  Dim udFiles
+  udFiles = Array("search-config.json", "memory.json", "skills.json", "chats.json", "rag-store.json", "auth.json")
+  Dim udf
+  For Each udf In udFiles
+    If fso.FileExists(destBase & "\" & udf) Then
+      fso.CopyFile destBase & "\" & udf, backupDir & "\" & udf, True
+    End If
+  Next
+  If fso.FolderExists(destBase & "\workspace") Then
+    fso.CopyFolder destBase & "\workspace", backupDir & "\workspace", True
+  End If
+  LogMsg logPath, "Backup created in " & backupDir
+  On Error GoTo 0
+End If
+
 ' ---------- copy app files if destination differs from source ----------
 If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
   MsgBox "Copying application files to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
@@ -207,6 +280,40 @@ If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
     LogMsg logPath, "Files copied successfully."
   End If
   On Error GoTo 0
+End If
+
+' ---------- npm install ----------
+If fso.FileExists(destBase & "\package.json") Then
+  MsgBox "Installing npm dependencies..." & vbCrLf & "This may take a moment.", vbInformation, "AegisAI Installer"
+  On Error Resume Next
+  Dim npmRc
+  npmRc = sh.Run("cmd /c cd /d """ & destBase & """ && npm install", 1, True)
+  If Err.Number <> 0 Or npmRc <> 0 Then
+    MsgBox "npm install may have failed (code " & npmRc & ")." & vbCrLf & _
+           "Run manually: cd """ & destBase & """ && npm install", vbExclamation, "AegisAI Installer"
+    LogMsg logPath, "npm install failed (rc=" & npmRc & ")."
+  Else
+    LogMsg logPath, "npm install completed."
+  End If
+  On Error GoTo 0
+End If
+
+' ---------- post-copy verification ----------
+Dim verifyFiles
+verifyFiles = Array("server.js", "package.json", "launcher.vbs", "public\index.html")
+Dim vf, allPresent
+allPresent = True
+For Each vf In verifyFiles
+  If Not fso.FileExists(destBase & "\" & vf) Then
+    allPresent = False
+    LogMsg logPath, "MISSING after copy: " & vf
+  End If
+Next
+If Not allPresent Then
+  MsgBox "Warning: Some files are missing after copy." & vbCrLf & _
+         "Check " & logPath & " for details.", vbExclamation, "AegisAI Installer"
+Else
+  LogMsg logPath, "Verification passed: all key files present."
 End If
 
 ' ---------- prerequisites ----------

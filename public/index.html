@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.36</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.37</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -216,7 +216,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.36</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.37</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1698,8 +1698,8 @@
       const r = await fetch('/api/update', { method: 'POST' });
       const d = await r.json();
       if (d.ok) {
-        st.textContent = d.message + ' Clearing cache and reloading...';
-        // Auto-clear service worker cache and reload to pick up new version
+        st.textContent = d.message + ' Waiting for server restart...';
+        // Auto-clear service worker cache
         try {
           if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
@@ -1711,7 +1711,26 @@
           }
           localStorage.removeItem('localai_cachedVersion');
         } catch (e) {}
-        setTimeout(() => location.reload(), 1500);
+        // Wait for server to restart, then reload
+        let attempts = 0;
+        const waitForServer = setInterval(async () => {
+          attempts++;
+          try {
+            const r = await fetch('/api/version', { cache: 'no-store' });
+            if (r.ok) {
+              const vd = await r.json();
+              if (vd.version && vd.version !== d.version) {
+                clearInterval(waitForServer);
+                st.textContent = 'Updated to v' + vd.version + '. Reloading...';
+                setTimeout(() => location.reload(), 500);
+              }
+            }
+          } catch (e) {}
+          if (attempts > 30) {
+            clearInterval(waitForServer);
+            st.textContent = 'Server may still be restarting. Please refresh manually.';
+          }
+        }, 1000);
       } else {
         st.textContent = 'Update failed: ' + (d.message || d.error || 'unknown');
       }

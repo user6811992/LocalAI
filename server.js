@@ -2284,15 +2284,20 @@ const server = http.createServer(async (req, res) => {
           json(res, 500, { ok: false, message: 'Update failed: ' + (e.message || String(e)), output }); return;
         }
       }
-      // npm install
-      output += 'Running npm install...\\n';
-      const npmRes = await new Promise((resolve) => {
-        exec('npm install', { cwd: __dirname, timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-          resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+      // npm install with retry
+      let npmRes = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        output += 'Running npm install (attempt ' + attempt + '/3)...\\n';
+        npmRes = await new Promise((resolve) => {
+          exec('npm install', { cwd: __dirname, timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+            resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
+          });
         });
-      });
-      output += npmRes.out + '\\n';
-      if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed: ' + (npmRes.err || npmRes.out), output }); return; }
+        output += npmRes.out + '\\n';
+        if (npmRes.ok) break;
+        if (attempt < 3) { output += 'npm install failed, retrying...\\n'; await new Promise((r) => setTimeout(r, 2000)); }
+      }
+      if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed after 3 attempts: ' + (npmRes.err || npmRes.out), output }); return; }
       // Restore user data
       const restored = [];
       for (const f of userDataFiles) {
@@ -2315,7 +2320,45 @@ const server = http.createServer(async (req, res) => {
       // read new version
       let newVersion = 'unknown';
       try { newVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
-      json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Restart the server to apply.', version: newVersion, output });
+      // Post-update verification: check key files exist
+      const keyFiles = ['server.js', 'package.json', 'public/index.html'];
+      const missing = keyFiles.filter((f) => !fs.existsSync(path.join(__dirname, f)));
+      if (missing.length) {
+        output += 'WARNING: Missing files after update: ' + missing.join(', ') + '\\n';
+        output += 'Update may be incomplete.\\n';
+      } else {
+        output += 'Verification passed: all key files present.\\n';
+      }
+      // Clean stale files: remove .update-backup of old versions (keep only latest)
+      try {
+        const backupDir = path.join(__dirname, '.update-backup');
+        if (fs.existsSync(backupDir)) {
+          // Keep backup but remove any stale temp files
+          const tmpFiles = fs.readdirSync(backupDir).filter((f) => f.endsWith('.tmp') || f.endsWith('.old'));
+          for (const f of tmpFiles) { try { fs.unlinkSync(path.join(backupDir, f)); } catch (_) {} }
+        }
+      } catch (_) {}
+      output += 'Updated to v' + newVersion + '.\\n';
+      output += 'IMPORTANT: The server will restart automatically in 3 seconds.\\n';
+      json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Server restarting...', version: newVersion, output, restart: true });
+      // Auto-restart: spawn new server process after a short delay
+      setTimeout(() => {
+        try {
+          const { spawn } = require('child_process');
+          const child = spawn(process.execPath, ['server.js'], {
+            cwd: __dirname,
+            detached: true,
+            stdio: 'ignore',
+            env: Object.assign({}, process.env),
+          });
+          child.unref();
+          console.log('Update: spawned new server process (PID ' + child.pid + ')');
+        } catch (e) {
+          console.error('Update: failed to spawn new server:', e.message);
+        }
+        // Exit current process to allow new one to take over
+        setTimeout(() => { process.exit(0); }, 1000);
+      }, 3000);
     } catch (e) { json(res, 500, { error: e.message || String(e) }); }
     return;
   }

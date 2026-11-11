@@ -55,14 +55,56 @@ if [ ! -f "$DEST/server.js" ]; then
 fi
 echo "Installing to: $DEST"
 
+# ---------- stop running server before update ----------
+if [ -f "$DEST/server.js" ]; then
+  echo "Stopping any running AegisAI server..."
+  pkill -f "node.*server.js" 2>/dev/null || true
+  sleep 2
+fi
+
+# ---------- version check ----------
+SRC_VER="unknown"; DST_VER="unknown"
+if [ -f "$SCRIPT_DIR/package.json" ]; then SRC_VER=$(node -e "console.log(require('$SCRIPT_DIR/package.json').version)" 2>/dev/null || echo "unknown"); fi
+if [ -f "$DEST/package.json" ]; then DST_VER=$(node -e "console.log(require('$DEST/package.json').version)" 2>/dev/null || echo "unknown"); fi
+if [ "$SRC_VER" != "unknown" ] && [ "$DST_VER" != "unknown" ] && [ "$SRC_VER" = "$DST_VER" ] && [ "$DEST" != "$SCRIPT_DIR" ]; then
+  echo "Already up to date (v$SRC_VER). No update needed."
+  exit 0
+fi
+echo "Source version: $SRC_VER, Dest version: $DST_VER"
+
+# ---------- backup before update ----------
+if [ -d "$DEST" ] && [ -f "$DEST/server.js" ]; then
+  echo "Creating backup..."
+  BACKUP_DIR="$DEST/.update-backup"
+  rm -rf "$BACKUP_DIR" 2>/dev/null || true
+  mkdir -p "$BACKUP_DIR"
+  # Back up user data
+  for f in search-config.json memory.json skills.json chats.json rag-store.json auth.json; do
+    if [ -f "$DEST/$f" ]; then cp "$DEST/$f" "$BACKUP_DIR/$f" 2>/dev/null || true; fi
+  done
+  # Back up workspace
+  if [ -d "$DEST/workspace" ]; then cp -r "$DEST/workspace" "$BACKUP_DIR/workspace" 2>/dev/null || true; fi
+  echo "Backup created in $BACKUP_DIR"
+fi
+
 # ---------- copy app files ----------
 if [ "$DEST" != "$SCRIPT_DIR" ]; then
   echo "Copying application files..."
   # copy everything except node_modules and .git
-  rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' "$SCRIPT_DIR/" "$DEST/" 2>/dev/null || {
-    # fallback without rsync
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' "$SCRIPT_DIR/" "$DEST/" || {
+      echo "rsync failed, falling back to cp..."
+      cp -r "$SCRIPT_DIR"/* "$DEST/" 2>/dev/null || true
+    }
+  else
     cp -r "$SCRIPT_DIR"/* "$DEST/" 2>/dev/null || true
-  }
+  fi
+  # Verify copy
+  if [ ! -f "$DEST/server.js" ] || [ ! -f "$DEST/package.json" ]; then
+    echo "ERROR: Copy failed. Key files missing."
+    exit 1
+  fi
+  echo "Files copied and verified."
 fi
 
 # ---------- prerequisites ----------
@@ -84,10 +126,20 @@ if [ "$OLLAMA_OK" -eq 0 ]; then
   if [ "$OS" = "Linux" ]; then echo "  Linux: curl -fsSL https://ollama.com/install.sh | sh"; fi
 fi
 
-# npm install
+# npm install with verification
 if [ -f "$DEST/package.json" ]; then
   echo "Installing npm dependencies..."
-  (cd "$DEST" && npm install) || echo "npm install failed; run manually in $DEST"
+  if (cd "$DEST" && npm install); then
+    echo "npm install completed successfully."
+  else
+    echo "WARNING: npm install failed. Run manually: cd $DEST && npm install"
+    echo "Some features may not work without dependencies."
+  fi
+  # Verify node_modules exists
+  if [ ! -d "$DEST/node_modules" ]; then
+    echo "ERROR: node_modules not found after npm install."
+    exit 1
+  fi
 fi
 
 # ---------- recommended models ----------
