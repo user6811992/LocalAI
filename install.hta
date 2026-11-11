@@ -203,7 +203,7 @@ function doInstall() {
     advance('Copying application files...');
     var srcBase = sh.CurrentDirectory;
     // (File copy handled by the VBS installer; HTA just reports)
-    WScript.Sleep(500);
+    var _t = new Date().getTime(); while (new Date().getTime() - _t < 500) {}
 
     // Step 2: npm install
     advance('Installing npm dependencies...');
@@ -259,7 +259,7 @@ function doInstall() {
       var colO = wmiO.ExecQuery("SELECT * FROM Win32_Process WHERE Name='ollama.exe'");
       if (colO.Count === 0) {
         sh.Run('"' + resolveOllama() + '" serve', 0, False);
-        WScript.Sleep(4000);
+        var _t2 = new Date().getTime(); while (new Date().getTime() - _t2 < 4000) {}
       }
       for (var j = 0; j < toPull.length; j++) {
         log('Pulling ' + toPull[j] + ' (' + (j+1) + '/' + toPull.length + ')...');
