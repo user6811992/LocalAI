@@ -98,6 +98,15 @@ REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
 
 The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
 
+### Clean Room / Deep Mode
+
+AegisAI supports two reverse-engineering modes, inspired by [Craft Anything](https://github.com/storytold/craft-anything):
+
+- **Deep mode** (default): Full access to RE tools — reads binaries, source code, files, and memory. Use for your own projects and authorized analysis.
+- **Clean room mode**: The AI agent is instructed NOT to read original source code or files. It works only from visible behavior (screenshots, UI layout, text content, observable functionality). Toggle via the "Clean room" checkbox next to Code/RE. Useful for interoperability work where you need to avoid copying proprietary code.
+
+Toggle in the toolbar: check "Clean room" to enable. The agent's system prompt is automatically updated.
+
 ### Reverse-Engineered Project Search
 
 AegisAI includes a searchable index of **17,000+ reverse-engineered projects** from [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered) by Alex Gao. Access it via the **RE** button in the web UI:
@@ -228,6 +237,7 @@ Special thanks to:
 - **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
 - **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search, category browsing, README preview, and project lookup help users find existing RE work before starting their own. Data is cached locally and refreshed automatically when older than 24 hours.
 - **[symgraph (RevGraph Labs)](https://github.com/symgraph)** - for [GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP) (MIT license), a native MCP server extension for Ghidra providing 100+ granular RE tools. Optional integration available when Ghidra 12.0/12.1 + Java 25+ is installed.
+- **[storytold](https://github.com/storytold)** - for [Craft Anything](https://github.com/storytold/craft-anything) (MIT/Apache-2.0), which inspired the Clean Room/Deep mode concept for reverse engineering.
 - All other contributors, testers, and the open-source community.
 
 ## Support
