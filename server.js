@@ -243,7 +243,17 @@ function mcpToolsAsOllama() {
   return tools;
 }
 
+// Tool result cache (5-minute TTL)
+const _toolCache = new Map();
+function toolCacheKey(name, args) { return name + ':' + JSON.stringify(args || {}); }
+
 async function callMcpTool(name, args) {
+  // Check cache first
+  const cacheKey = toolCacheKey(name, args);
+  const cached = _toolCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts) < 5 * 60 * 1000) {
+    return cached.result + '\n[cached]';
+  }
   // Route to awesome-re client if prefixed
   if (name.startsWith('are_')) {
     if (!areClient) throw new Error('Awesome-RE MCP not ready: ' + (areError || 'unknown'));
@@ -257,6 +267,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
+    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   // Route to GhidrAssistMCP client if prefixed
@@ -272,6 +283,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
+    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   if (!mcpClient) throw new Error('MCP not ready: ' + (mcpError || 'unknown'));
@@ -285,6 +297,7 @@ async function callMcpTool(name, args) {
     }
   }
   if (r && r.isError) text = 'ERROR: ' + text;
+  _toolCache.set(cacheKey, { result: text, ts: Date.now() });
   return text;
 }
 
