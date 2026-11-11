@@ -1174,8 +1174,13 @@ async function runAgent(model, messages, maxIter, opts) {
         if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
         else result = await callMcpTool(name, args);
       } catch (e) { result = 'ERROR: ' + (e.message || String(e)); }
-      msgs.push({ role: 'tool', content: (typeof result === 'string' ? result : JSON.stringify(result)) });
-      if (onEvent) onEvent({ type: 'tool_result', name, preview: String(result).slice(0, 200) });
+      const resultStr = (typeof result === 'string' ? result : JSON.stringify(result));
+      msgs.push({ role: 'tool', content: resultStr });
+      const resultPreview = resultStr.slice(0, 300);
+      // Store result preview in the log entry
+      const logEntry = log[log.length - 1];
+      logEntry.resultPreview = resultPreview;
+      if (onEvent) onEvent({ type: 'tool_result', name, preview: resultPreview });
     }
     if (onEvent) onEvent({ type: 'tool_done' });
     accumulatedContent = '';
