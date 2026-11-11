@@ -50,7 +50,7 @@ function sanitizeForLog(text) {
   // Remove potential API keys / tokens (long alphanumeric strings)
   s = s.replace(/[A-Za-z0-9_-]{32,}/g, '[REDACTED]');
   // Sanitize file paths: replace username in paths
-  s = s.replace(/C:\\\\Users\\\\[^\\\\]+/gi, 'C:\\\\Users\\\\[USER]');
+  s = s.replace(/C:\\Users\\[^\\]+/gi, 'C:\\Users\\[USER]');
   s = s.replace(/\/home\/[^\/]+/g, '/home/[USER]');
   s = s.replace(/\/Users\/[^\/]+/g, '/Users/[USER]');
   return s;
@@ -1098,6 +1098,8 @@ function ollamaStream(path, bodyObj, onChunk) {
         let fullThinking = '';
         let toolCalls = [];
         let done = false;
+        let evalCount = 0;
+        let promptEvalCount = 0;
         res.on('data', (c) => {
           buf += c.toString();
           const lines = buf.split('\n');
@@ -1117,7 +1119,11 @@ function ollamaStream(path, bodyObj, onChunk) {
                 }
                 if (obj.message.tool_calls) toolCalls = toolCalls.concat(obj.message.tool_calls);
               }
-              if (obj.done) done = true;
+              if (obj.done) {
+                done = true;
+                if (obj.eval_count) evalCount = obj.eval_count;
+                if (obj.prompt_eval_count) promptEvalCount = obj.prompt_eval_count;
+              }
             } catch (e) {}
           }
         });
@@ -1131,9 +1137,13 @@ function ollamaStream(path, bodyObj, onChunk) {
                 if (obj.message.thinking) { fullThinking += obj.message.thinking; if (onChunk) onChunk({ type: 'thinking', content: obj.message.thinking }); }
                 if (obj.message.tool_calls) toolCalls = toolCalls.concat(obj.message.tool_calls);
               }
+              if (obj.done) {
+                if (obj.eval_count) evalCount = obj.eval_count;
+                if (obj.prompt_eval_count) promptEvalCount = obj.prompt_eval_count;
+              }
             } catch (e) {}
           }
-          resolve({ status: res.statusCode, data: { message: { content: fullContent, thinking: fullThinking, tool_calls: toolCalls } } });
+          resolve({ status: res.statusCode, data: { message: { content: fullContent, thinking: fullThinking, tool_calls: toolCalls }, eval_count: evalCount, prompt_eval_count: promptEvalCount } });
         });
         res.on('error', reject);
       }
@@ -1290,6 +1300,8 @@ async function runAgent(model, messages, maxIter, opts) {
   const cleanRoomHint = cleanRoom ? ' CLEAN ROOM MODE: Do NOT read, view, or access any original source code, binaries, or files from the target. Work only from visible behavior: screenshots, UI layout, text content, and observable functionality. Refuse any tool that would read original code or files. If the user asks to read source, explain that clean room mode prevents this and suggest switching to Deep mode.' : '';
   const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint + craftHint + cleanRoomHint };
   let finalThinking = '';
+  let totalEvalCount = 0;
+  let totalPromptEvalCount = 0;
   // Context compaction: summarize old messages if conversation is too long
   let compactedMessages = messages.slice();
   try {
@@ -1331,6 +1343,12 @@ async function runAgent(model, messages, maxIter, opts) {
         }
       });
 
+      // Accumulate token counts
+      if (r && r.data) {
+        if (r.data.eval_count) totalEvalCount += r.data.eval_count;
+        if (r.data.prompt_eval_count) totalPromptEvalCount += r.data.prompt_eval_count;
+      }
+
     } catch (e) {
       throw new Error('Ollama error: ' + (e.message || String(e)));
     }
@@ -1343,8 +1361,9 @@ async function runAgent(model, messages, maxIter, opts) {
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
         const msg = r.data.message || {};
         msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
-        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported });
-        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported };
+        const tokenStats = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
+        if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats });
+        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats };
       } else {
         throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
       }
@@ -1371,8 +1390,9 @@ async function runAgent(model, messages, maxIter, opts) {
       const content = msg.content || '';
       const thinking = msg.thinking || finalThinking || '';
       msgs.push({ role: 'assistant', content: content, thinking: thinking });
-      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported });
-      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported };
+      const tokenStats2 = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
+      if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2 });
+      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2 };
     }
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
@@ -3008,7 +3028,7 @@ const server = http.createServer(async (req, res) => {
         keep_alive: keep_alive,
         onEvent: () => {},
       });
-      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled });
+      json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, webCitations: result.webCitations, toolsDisabled: result.toolsDisabled, tokenStats: (result.eval_count || result.prompt_eval_count) ? { prompt: result.prompt_eval_count || 0, generated: result.eval_count || 0 } : null });
       // Extract memories in background (delayed to avoid blocking Ollama)
       setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
     } catch (e) {

@@ -995,6 +995,14 @@
             }
           } catch (e) {}
         }
+        if (data.tokenStats) {
+          const ts = document.createElement('div');
+          ts.style.fontSize = '10px';
+          ts.style.color = 'var(--muted)';
+          ts.style.marginTop = '4px';
+          ts.textContent = 'Tokens: ' + (data.tokenStats.prompt || 0) + ' prompt + ' + (data.tokenStats.generated || 0) + ' generated';
+          assistantDiv.appendChild(ts);
+        }
         if (data.toolsDisabled) {
           status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';
           status.className = 'status err';
