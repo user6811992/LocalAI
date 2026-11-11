@@ -481,7 +481,6 @@ const codingToolsDef = [
   { name: 'web_search', description: 'Search the web (DuckDuckGo) and return titles, snippets, and URLs.', parameters: { type: 'object', properties: { query: { type: 'string' }, max_results: { type: 'integer' } }, required: ['query'] } },
   { name: 'read_pdf', description: 'Extract text from a PDF file (relative to project root).', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
   { name: 'screenshot', description: 'Capture the primary screen to a PNG in the project root; returns the file path.', parameters: { type: 'object', properties: { filename: { type: 'string' } } } },
-  { name: 'memory_save', description: 'Save a note/fact to persistent memory (key/value).', parameters: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] } },
   { name: 'memory_recall', description: 'Recall a saved memory by key, or list all keys if no key given.', parameters: { type: 'object', properties: { key: { type: 'string' } } } },
   { name: 'run_python', description: 'Run a Python snippet and return stdout/stderr.', parameters: { type: 'object', properties: { code: { type: 'string' } }, required: ['code'] } },
 ];
@@ -826,12 +825,13 @@ async function execCodingTool(name, args) {
     return result;
   }
   if (name === 'read_pdf') {
-    const { execFileSync } = require('child_process');
     const fp = safePath(args.path);
     try {
-      const out = execFileSync('python', ['-c', 'import sys,pypdf;r=pypdf.PdfReader(sys.argv[1]);print("\\n".join(p.extract_text() or "" for p in r.pages))', fp], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 });
-      return out.slice(0, 200000) || '(no text extracted)';
-    } catch (e) { return 'ERROR: ' + (e.stderr || e.message); }
+      const pdfParse = require('pdf-parse');
+      const buf = fs.readFileSync(fp);
+      const data = await pdfParse(buf);
+      return (data.text || '').slice(0, 200000) || '(no text extracted)';
+    } catch (e) { return 'ERROR: ' + (e.message || String(e)); }
   }
   if (name === 'screenshot') {
     const { execFileSync } = require('child_process');
@@ -842,15 +842,6 @@ async function execCodingTool(name, args) {
       const out = execFileSync('powershell', ['-Command', ps], { encoding: 'utf8', timeout: 30000 });
       return 'Saved screenshot: ' + fp + ' (' + out.trim() + ')';
     } catch (e) { return 'ERROR: ' + (e.stderr || e.message); }
-  }
-  if (name === 'memory_save') {
-    const fs = require('fs');
-    const memFile = path.join(projectRoot, '.memory.json');
-    let mem = {};
-    try { mem = JSON.parse(fs.readFileSync(memFile, 'utf8')); } catch (e) {}
-    mem[args.key] = args.value;
-    fs.writeFileSync(memFile, JSON.stringify(mem, null, 2), 'utf8');
-    return 'Saved memory: ' + args.key;
   }
   if (name === 'memory_recall') {
     const fs = require('fs');
@@ -905,7 +896,7 @@ async function execCodingTool(name, args) {
   }
   if (name === 'skill_list') {
     const skills = loadSkills();
-    return skills.length ? skills.map((s) => s.name + ' â€” ' + s.description).join('\n') : '(no skills)';
+return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join('\n') : '(no skills)';
   }
   if (name === 'skill_get') {
     const skills = loadSkills();
@@ -928,7 +919,7 @@ async function execCodingTool(name, args) {
     const fn = args.filename || ('speech_' + Date.now() + '.wav');
     const fp = safePath(fn);
     const speak = (args.speak === true || args.speak === 'true') ? '$synth.Speak($text);' : '';
-    const ps = "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $text = @'\n" + args.text.replace(/'/g, "''") + "\n'@; $synth.SetOutputToWaveFile('" + fp.replace(/'/g, "''") + "'); $synth.Speak($text); $synth.SetOutputToDefaultAudioDevice(); " + speak + " Write-Output 'ok'";
+    const ps = "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $text = @'\n" + args.text.replace(/'/g, "''") + "\n'@; $synth.SetOutputToWaveFile('" + fp.replace(/'/g, "''") + "'); $synth.Speak($text); $synth.Dispose(); Write-Output 'ok'";
     try {
       execFileSync('powershell', ['-Command', ps], { encoding: 'utf8', timeout: 120000 });
       return 'Saved TTS audio: ' + fp;
@@ -948,7 +939,7 @@ async function execCodingTool(name, args) {
     const fp = safePath(args.path);
     const buf = fs.readFileSync(fp);
     const b64 = buf.toString('base64');
-    const visionModel = 'moondream';
+    const visionModel = args.model || 'moondream';
     const r = await ollamaRequest('/api/chat', {
       model: visionModel,
       messages: [{ role: 'user', content: args.question || 'Describe this image in detail.', images: [b64] }],
@@ -1017,7 +1008,7 @@ async function autoExtractMemories(messages) {
   try {
     const convo = messages.map((m) => (m.role + ': ' + (m.content || '').slice(0, 1500))).join('\n').slice(0, 8000);
     const r = await ollamaRequest('/api/chat', {
-      model: 'llama3.1:8b',
+      model: process.env.LOCALAI_MEMORY_MODEL || 'llama3.2:1b',
       messages: [
         { role: 'system', content: 'Extract durable facts, user preferences, decisions, and useful findings from this conversation. Return ONLY a JSON array of short, self-contained factual strings (each a complete sentence). If nothing durable, return []. No prose, no markdown.' },
         { role: 'user', content: convo },
@@ -1193,6 +1184,7 @@ function ollamaRequest(path, bodyObj) {
       }
     );
     req.on('error', reject);
+    req.setTimeout(60000, () => { req.destroy(new Error('Ollama request timeout (60s)')); });
     req.write(data);
     req.end();
   });
@@ -2320,7 +2312,7 @@ const server = http.createServer(async (req, res) => {
         });
         output += 'Fetching latest...\\n';
         const pullRes = await new Promise((resolve) => {
-          exec('git fetch origin && git reset --hard origin/master', { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+          exec('git fetch origin && (git reset --hard origin/main || git reset --hard origin/master)', { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
             resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
           });
         });

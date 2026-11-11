@@ -4,7 +4,7 @@
       "command": "rea",
       "args": ["--mcp"],
       "env": {
-        "PATH": "C:\\Program Files\\nodejs;C:\\Users\\Poonjab\\AppData\\Roaming\\npm"
+        "PATH": "%PATH%"
       }
     }
   }

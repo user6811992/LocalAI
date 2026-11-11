@@ -197,7 +197,6 @@
           const sf = subFolders.item();
           if (sf.Name.toLowerCase() !== "node_modules") {
             const target = destBase + "\\" + sf.Name;
-            if (fso.FolderExists(target)) fso.DeleteFolder(target, true);
             fso.CopyFolder(sf.Path, target, true);
           }
         }
