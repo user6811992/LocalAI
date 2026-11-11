@@ -9,11 +9,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>AegisAI</title>
-<!-- Markdown rendering + syntax highlighting + sanitization (CDN) -->
-<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+<!-- Markdown rendering, syntax highlighting, sanitization (vendored, no CDN) -->
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="/vendor/github-dark.min.css" />
+<script src="/vendor/highlight.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -140,13 +140,14 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.59</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.60</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
     <select id="systemPrompt" title="System prompt template">
       <option value="">Default</option>
     </select>
+    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>
     <select id="searchEngine" title="Search engine"></select>
     <span style="color:var(--border);">|</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
@@ -172,6 +173,7 @@
     <button id="memoryBtn" style="padding:4px 8px;font-size:12px;">Memory</button>
     <button id="skillsBtn" style="padding:4px 8px;font-size:12px;">Skills</button>
     <button id="chatsBtn" style="padding:4px 8px;font-size:12px;">Chats</button>
+    <button id="statsBtn" style="padding:4px 8px;font-size:12px;">Stats</button>
     <button id="compareBtn" style="padding:4px 8px;font-size:12px;">Compare</button>
     <span style="color:var(--border);">|</span>
     <button id="refresh" style="padding:4px 8px;font-size:12px;">Refresh</button>
@@ -380,7 +382,7 @@
     <pre id="codeOutput" style="background:var(--panel2);padding:8px;border-radius:6px;max-height:200px;overflow:auto;font-size:12px;white-space:pre-wrap;"></pre>
     <div id="codePreview" style="margin-top:8px;display:none;">
       <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Preview:</div>
-      <iframe id="codePreviewFrame" style="width:100%;height:200px;border:1px solid var(--border);border-radius:6px;background:#fff;"></iframe>
+      <iframe id="codePreviewFrame" sandbox="allow-scripts" style="width:100%;height:200px;border:1px solid var(--border);border-radius:6px;background:#fff;"></iframe>
     </div>
   </div>
 </div>
@@ -417,6 +419,14 @@
       <button id="saveChatBtn" style="font-size:12px;">Save current</button>
     </div>
     <div id="chatsList" style="max-height:300px;overflow:auto;font-size:12px;"></div>
+  </div>
+</div>
+
+<div id="statsBackdrop" class="modal-backdrop">
+  <div class="modal" style="max-width:560px;">
+    <button class="close-btn" id="statsClose">&times;</button>
+    <h2>Usage Stats</h2>
+    <div id="statsBody" style="font-size:13px;white-space:pre-wrap;"></div>
   </div>
 </div>
 
@@ -1176,7 +1186,7 @@
         if (typeof marked !== 'undefined' && finalText) {
           try {
             const rawHtml = marked.parse(finalText);
-            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
+            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : escHtml(finalText);
             if (typeof hljs !== 'undefined') {
               contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
             }
@@ -1327,7 +1337,7 @@
         if (typeof marked !== 'undefined') {
           try {
             const rawHtml = marked.parse(accumulated);
-            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
+            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : escHtml(finalText);
             if (typeof hljs !== 'undefined') {
               contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
             }
@@ -1338,7 +1348,7 @@
           citDiv.style.marginTop = '8px';
           citDiv.style.fontSize = '11px';
           citDiv.style.color = 'var(--muted)';
-          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + (c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
+          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + escHtml(c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
           assistantDiv.appendChild(citDiv);
         }
         status.textContent = 'Done.';
@@ -2696,6 +2706,30 @@
     } catch (e) {}
   })();
 
+  // Usage stats modal
+  const statsBtn = document.getElementById('statsBtn');
+  const statsBackdrop = document.getElementById('statsBackdrop');
+  if (statsBtn && statsBackdrop) {
+    statsBtn.addEventListener('click', async () => {
+      const body = document.getElementById('statsBody');
+      body.textContent = 'Loading...';
+      statsBackdrop.classList.add('open');
+      try {
+        const r = await fetch('/api/stats');
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        body.textContent =
+          'Chats: ' + d.chats + '\n' +
+          'Messages: ' + d.messages.total + ' (user ' + d.messages.user + ', assistant ' + d.messages.assistant + ')\n' +
+          'Tokens: ' + d.tokenUsage.prompt + ' prompt, ' + d.tokenUsage.generated + ' generated\n' +
+          'Memories: ' + d.memories + '\n' +
+          'Skills: ' + d.skills;
+      } catch (e) { body.textContent = 'Error: ' + e.message; }
+    });
+    document.getElementById('statsClose').addEventListener('click', () => statsBackdrop.classList.remove('open'));
+    statsBackdrop.addEventListener('click', (e) => { if (e.target.id === 'statsBackdrop') statsBackdrop.classList.remove('open'); });
+  }
+
   // Compare modal
   const compareBtn = document.getElementById('compareBtn');
   if (compareBtn) {
@@ -3196,7 +3230,7 @@
           div.style.padding = '4px';
           div.style.borderBottom = '1px solid var(--border)';
           const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
-          const lang = it.language ? ' [' + it.language + ']' : '';
+          const lang = it.language ? ' [' + escHtml(it.language) + ']' : '';
           const safeUrl = it.url && /^https?:\/\//i.test(it.url) ? it.url : '';
           const url = safeUrl ? '<a href="' + escHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:11px;">' + escHtml(safeUrl) + '</a>' : '';
           const safeName = escHtml(it.name || '');

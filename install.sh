@@ -207,7 +207,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$DEST
-ExecStart=/usr/bin/node server.js
+ExecStart=$(command -v node) server.js
 Restart=on-failure
 
 [Install]
@@ -226,7 +226,7 @@ EOF
   <key>Label</key><string>com.localai</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/node</string>
+    <string>$(command -v node)</string>
     <string>server.js</string>
   </array>
   <key>WorkingDirectory</key><string>$DEST</string>
@@ -235,7 +235,8 @@ EOF
 </dict>
 </plist>
 EOF
-    launchctl load "$PLIST" 2>/dev/null || true
+    launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null || true
     echo "launchd agent created: $PLIST"
   fi
 fi

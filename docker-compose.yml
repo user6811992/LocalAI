@@ -2,12 +2,12 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -19,6 +19,7 @@ services:
     environment:
       - OLLAMA_URL=http://ollama:11434
       - PORT=8080
+      - HOST=0.0.0.0
       - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}
       - AEGISAI_DATA_DIR=/app/data
     volumes:
@@ -29,7 +30,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/version"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/version').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

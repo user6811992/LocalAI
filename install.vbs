@@ -431,6 +431,11 @@ End If
 If addFirewall Then
   On Error Resume Next
   Dim fwRc
+  ' LAN mode: the launcher reads this marker and binds the server to 0.0.0.0.
+  Dim lanFlag
+  Set lanFlag = fso.CreateTextFile(destBase & "\lan-access.txt", True)
+  lanFlag.WriteLine "LAN access enabled by installer. Delete this file to return to localhost-only."
+  lanFlag.Close
   fwRc = sh.Run("netsh advfirewall firewall add rule name=""LocalAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
   If Err.Number <> 0 Or fwRc <> 0 Then
     MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _

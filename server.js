@@ -4,12 +4,27 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 8080;
+// Bind address. Defaults to loopback so a default install is not exposed to the
+// network. Set HOST=0.0.0.0 (or your LAN IP) deliberately for remote access.
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Prevent a single request error from crashing the whole server
 // (moved to error logging section below)
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
+
+// Maximum accepted HTTP request body (bytes). Guards against memory-exhaustion
+// attacks on the JSON upload endpoints.
+let _scanCache = null;
+const MAX_BODY_BYTES = parseInt(process.env.AEGISAI_MAX_BODY || (100 * 1024 * 1024), 10);
+// Optional allow-list for the agent project root (AEGISAI_PROJECT_ROOT_ALLOWLIST).
+// Entries are separated by the platform path-list separator (or ';').
+const PROJECT_ROOT_ALLOWLIST = (process.env.AEGISAI_PROJECT_ROOT_ALLOWLIST || '')
+  .split(/[;:]/).map((s) => s.trim()).filter(Boolean)
+  .map((s) => path.resolve(s));
+// Total tool budget for the agent (coding tools are always included).
+const TOOL_BUDGET = Math.max(1, parseInt(process.env.AEGISAI_TOOL_BUDGET || '64', 10));
 
 // Resolve the ollama binary (may not be on PATH on Windows)
 function resolveOllamaBin() {
@@ -40,6 +55,38 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+// ---------- Process helpers ----------
+// Always spawn without a shell so user-supplied values can never be interpreted
+// by cmd.exe / sh. This is the single most important process-safety primitive.
+function runProcess(file, args, opts) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    try {
+      execFile(file, Array.isArray(args) ? args : [], Object.assign({
+        encoding: 'utf8',
+        timeout: 60000,
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }, opts || {}), (err, stdout, stderr) => {
+        resolve({
+          ok: !err,
+          out: (stdout || '') + (stderr || ''),
+          err: err ? (err.message || String(err)) : null,
+          code: err ? (err.code || 1) : 0,
+        });
+      });
+    } catch (e) {
+      resolve({ ok: false, out: '', err: e.message || String(e), code: 1 });
+    }
+  });
+}
+
+// Ollama model references: name[:tag] or namespace/name[:tag]. Rejects whitespace,
+// quotes, and option-like leading dashes.
+function isValidModelName(name) {
+  return typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._\/:@-]{0,199}$/.test(name);
+}
+
 // ---------- Anonymous Error Logging ----------
 const ERROR_LOG_FILE = path.join(__dirname, 'error.log');
 const MAX_ERROR_LOG_SIZE = 100 * 1024; // 100KB max
@@ -66,16 +113,16 @@ function logError(context, error) {
       msg: sanitizeForLog(error && error.message ? error.message : String(error)),
       stack: sanitizeForLog(error && error.stack ? error.stack : ''),
     };
-    let line = JSON.stringify(entry) + '\\n';
+    let line = JSON.stringify(entry) + '\n';
     // Rotate if too large
     if (fs.existsSync(ERROR_LOG_FILE)) {
       const stat = fs.statSync(ERROR_LOG_FILE);
       if (stat.size > MAX_ERROR_LOG_SIZE) {
         // Keep last half
         const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
-        const lines = content.split('\\n');
+        const lines = content.split('\n');
         const half = lines.slice(Math.floor(lines.length / 2));
-        fs.writeFileSync(ERROR_LOG_FILE, half.join('\\n'), 'utf8');
+        fs.writeFileSync(ERROR_LOG_FILE, half.join('\n'), 'utf8');
       }
     }
     fs.appendFileSync(ERROR_LOG_FILE, line, 'utf8');
@@ -122,13 +169,13 @@ function resolveReaBin() {
   const candidates = [
     path.join(process.env.APPDATA || '', 'npm', 'rea.cmd'),
     path.join(process.env.APPDATA || '', 'npm', 'rea'),
-    'C:\\\\Program Files\\rea\\rea.exe',
+    'C:\\Program Files\\rea\\rea.exe',
   ];
   for (const c of candidates) { if (c && fs.existsSync(c)) return c; }
   try {
     const { execSync } = require('child_process');
     const out = execSync('where rea', { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
-    const first = (out || '').trim().split(/\\r?\\n/)[0];
+    const first = (out || '').trim().split(/\r?\n/)[0];
     if (first && fs.existsSync(first)) return first;
   } catch (_) {}
   return 'rea';
@@ -382,9 +429,40 @@ function mcpToolsAsOllama() {
   return tools;
 }
 
+function mcpToolAsOllama(t, prefix, suffix) {
+  return {
+    type: 'function',
+    function: {
+      name: prefix + t.name,
+      description: ((t.description || '') + suffix).slice(0, 120),
+      parameters: t.inputSchema || { type: 'object', properties: {} },
+    },
+  };
+}
+
+// Clean-room mode must never reach tools that read original code, files, binaries,
+// or arbitrary code. Matched by exact name or by substring for RE tool families.
+const CLEAN_ROOM_EXACT = new Set([
+  'read_file', 'write_file', 'replace_in_file', 'list_files', 'run_command', 'run_python',
+  'skill_run', 'skill_save', 'skill_get', 'git_status', 'git_diff', 'read_pdf', 'analyze_image',
+  'speech_to_text',
+]);
+const CLEAN_ROOM_PATTERNS = ['inspect_', 'decompile', 'disassemble', 'get_pseudocode', 'get_disassembly', 'get_hexdump', 'list_strings', 'list_imports', 'list_exports', 'get_function', 'get_control_flow_graph', 'get_callers', 'get_callees', 'get_xrefs', 'get_comment', 'list_function_variables', 'rename_local_variable', 'set_local_variable', 'set_function_prototype', 'list_data_types', 'get_data_type', 'set_data_type', 'create_structure', 'set_structure_field', 'infer_structure', 'get_structure_field_xrefs', 'list_classes', 'get_class_info', 'analyze_program', 'get_analysis_status', 'list_tasks', 'get_task_status', 'cancel_task', 'open_program', 'close_program', 'import_file', 'export_program', 'read_', 'write_', 'file', 'binary', 'source'];
+function isCleanRoomBlocked(name) {
+  const n = String(name || '');
+  if (CLEAN_ROOM_EXACT.has(n)) return true;
+  return CLEAN_ROOM_PATTERNS.some((p) => n.includes(p));
+}
+
 // Tool result cache (5-minute TTL)
 const _toolCache = new Map();
+const TOOL_CACHE_MAX = 500;
 function toolCacheKey(name, args) { return name + ':' + JSON.stringify(args || {}); }
+function toolCacheSet(key, value) {
+  _toolCache.delete(key);
+  _toolCache.set(key, value);
+  while (_toolCache.size > TOOL_CACHE_MAX) _toolCache.delete(_toolCache.keys().next().value);
+}
 
 async function callMcpTool(name, args) {
   // Check cache first
@@ -406,7 +484,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
+    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   // Route to GhidrAssistMCP client if prefixed
@@ -422,7 +500,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
+    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   // Route to Craft Anything client if prefixed
@@ -438,7 +516,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    _toolCache.set(cacheKey, { result: text, ts: Date.now() });
+    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   if (!mcpClient) throw new Error('MCP not ready: ' + (mcpError || 'unknown'));
@@ -452,7 +530,7 @@ async function callMcpTool(name, args) {
     }
   }
   if (r && r.isError) text = 'ERROR: ' + text;
-  _toolCache.set(cacheKey, { result: text, ts: Date.now() });
+  toolCacheSet(cacheKey, { result: text, ts: Date.now() });
   return text;
 }
 
@@ -464,6 +542,24 @@ function safePath(rel) {
   const resolved = path.resolve(root, rel || '.');
   if (resolved !== root && !resolved.startsWith(root + path.sep)) {
     throw new Error('Path escapes project root: ' + rel);
+  }
+  return resolved;
+}
+
+// Validate a user-supplied project root. When AEGISAI_PROJECT_ROOT_ALLOWLIST is
+// set the root must live inside one of the allow-listed directories; otherwise
+// any existing directory is accepted (with a warning when it leaves the app dir).
+function validateProjectRoot(root) {
+  if (!root || typeof root !== 'string') throw Object.assign(new Error('Project root must be a non-empty string'), { status: 400 });
+  const resolved = path.resolve(root.trim());
+  let stat = null;
+  try { stat = fs.statSync(resolved); } catch (e) { /* handled below */ }
+  if (!stat || !stat.isDirectory()) throw Object.assign(new Error('Project root does not exist or is not a directory: ' + root), { status: 400 });
+  if (PROJECT_ROOT_ALLOWLIST.length) {
+    const allowed = PROJECT_ROOT_ALLOWLIST.some((base) => resolved === base || resolved.startsWith(base + path.sep));
+    if (!allowed) throw Object.assign(new Error('Project root is outside the allowed directories (AEGISAI_PROJECT_ROOT_ALLOWLIST)'), { status: 403 });
+  } else if (!resolved.startsWith(path.resolve(__dirname) + path.sep) && resolved !== path.resolve(__dirname)) {
+    console.warn('WARNING: project root is outside the app directory:', resolved);
   }
   return resolved;
 }
@@ -521,11 +617,16 @@ async function execCodingTool(name, args) {
   }
   if (name === 'read_file') {
     const fp = safePath(args.path);
-    const max = args.max_bytes || 200000;
-    const buf = fs.readFileSync(fp);
-    const slice = buf.slice(0, max);
+    const max = Math.max(1, Math.min(parseInt(args.max_bytes, 10) || 200000, 5 * 1024 * 1024));
+    const total = fs.statSync(fp).size;
+    const fd = fs.openSync(fp, 'r');
+    let slice;
+    try {
+      slice = Buffer.alloc(Math.min(max, total));
+      fs.readSync(fd, slice, 0, slice.length, 0);
+    } finally { fs.closeSync(fd); }
     let text = slice.toString('utf8');
-    if (buf.length > max) text += '\n... (truncated, ' + buf.length + ' bytes total)';
+    if (total > max) text += '\n... (truncated, ' + total + ' bytes total)';
     return text;
   }
   if (name === 'write_file') {
@@ -545,15 +646,9 @@ async function execCodingTool(name, args) {
       return 'EXIT ' + (e.status || '?') + '\nSTDOUT:\n' + (e.stdout || '') + '\nSTDERR:\n' + (e.stderr || '') + '\n' + (e.message || '');
     }
   }
-  if (name === 'git_status') {
-    const { execSync } = require('child_process');
-    try { return execSync('git status', { cwd: projectRoot, encoding: 'utf8', timeout: 30000 }); }
-    catch (e) { return (e.stdout || '') + (e.stderr || '') + (e.message || ''); }
-  }
-  if (name === 'git_diff') {
-    const { execSync } = require('child_process');
-    try { return execSync('git diff', { cwd: projectRoot, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 }); }
-    catch (e) { return (e.stdout || '') + (e.stderr || '') + (e.message || ''); }
+  if (name === 'git_status' || name === 'git_diff') {
+    const r = await runProcess('git', [name === 'git_status' ? 'status' : 'diff'], { cwd: projectRoot, timeout: 30000 });
+    return r.ok ? r.out : (r.out || r.err || 'git failed');
   }
   if (name === 'replace_in_file') {
     const fp = safePath(args.path);
@@ -1081,7 +1176,7 @@ for (const t of extraToolsDef) codingToolsDef.push(t);
 const codingToolNames = new Set(codingToolsDef.map((t) => t.name));
 
 // ---------- Streaming helper for Ollama ----------
-function ollamaStream(path, bodyObj, onChunk) {
+function ollamaStream(path, bodyObj, onChunk, signal) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(bodyObj);
     const req = http.request(
@@ -1154,6 +1249,10 @@ function ollamaStream(path, bodyObj, onChunk) {
     req.on('error', reject);
     // 2-minute timeout for streaming
     req.setTimeout(120000, () => { req.destroy(new Error('Ollama stream timeout (120s)')); });
+    if (signal) {
+      if (signal.aborted) req.destroy(new Error('aborted by client'));
+      else signal.addEventListener('abort', () => req.destroy(new Error('aborted by client')), { once: true });
+    }
     req.write(data);
     req.end();
   });
@@ -1161,18 +1260,36 @@ function ollamaStream(path, bodyObj, onChunk) {
 
 // HTTP helpers marker
 // ---------- HTTP helpers ----------
-function readBody(req) {
+function readBody(req, maxBytes) {
+  const limit = maxBytes || MAX_BODY_BYTES;
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (c) => (data += c));
-    req.on('end', () => resolve(data));
+    let size = 0;
+    let tooLarge = false;
+    req.on('data', (c) => {
+      if (tooLarge) return;
+      size += c.length;
+      if (size > limit) {
+        tooLarge = true;
+        reject(Object.assign(
+          new Error('Request body too large (max ' + Math.round(limit / (1024 * 1024)) + ' MB)'),
+          { status: 413 }
+        ));
+        return;
+      }
+      data += c;
+    });
+    req.on('end', () => { if (!tooLarge) resolve(data); });
     req.on('error', reject);
+    // Note: an oversized body is rejected above, but the request is still drained so the
+    // client receives the 413 response instead of a connection reset.
   });
 }
 
 function json(res, status, obj) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.end(JSON.stringify(obj));
 }
 
@@ -1259,42 +1376,19 @@ async function runAgent(model, messages, maxIter, opts) {
   maxIter = maxIter || 8;
   const tools = [];
   if (includeCoding) tools.push(...codingToolsAsOllama());
-  if (includeRe && mcpReady) tools.push(...mcpToolsAsOllama());
-  // Limit total tools to avoid overwhelming small-context models
-  // Limit tools: keep all coding + ARE tools, cap RE tools at 10
-  if (includeRe && mcpReady) {
-    const codingLen = includeCoding ? codingToolsDef.length : 0;
-    const areLen = areReady ? areTools.length : 0;
-    const reLimit = Math.max(0, 40 - codingLen - areLen);
-    // Rebuild tools with limited RE tools
-    const newTools = [];
-    if (includeCoding) newTools.push(...codingToolsAsOllama());
-    if (areReady) {
-      for (const t of areTools) {
-        newTools.push({ type: 'function', function: { name: 'are_' + t.name, description: ((t.description || '') + ' [from awesome-reverse-engineered index]').slice(0, 120), parameters: t.inputSchema || { type: 'object', properties: {} } } });
-      }
-    }
-    // Add only first N RE tools
-    const reTools = mcpTools.slice(0, reLimit).map((t) => ({
-      type: 'function',
-      function: { name: t.name, description: (t.description || '').slice(0, 120), parameters: t.inputSchema || { type: 'object', properties: {} } },
-    }));
-    newTools.push(...reTools);
-    tools.length = 0;
-    tools.push(...newTools);
+  if (includeRe) {
+    if (mcpReady) for (const t of mcpTools) tools.push(mcpToolAsOllama(t, '', ''));
+    if (areReady) for (const t of areTools) tools.push(mcpToolAsOllama(t, 'are_', ' [from awesome-reverse-engineered index]'));
+    if (ghidraReady) for (const t of ghidraTools) tools.push(mcpToolAsOllama(t, 'ghidra_', ' [from GhidrAssistMCP]'));
+    if (craftReady) for (const t of craftTools) tools.push(mcpToolAsOllama(t, 'craft_', ' [from Craft Anything]'));
   }
-  // Clean room mode: filter out tools that read original code/files
-  if (cleanRoom) {
-    const blockedPatterns = ['read_file', 'replace_in_file', 'write_file', 'list_files', 'run_command', 'inspect_', 'decompile', 'disassemble', 'get_pseudocode', 'get_disassembly', 'get_hexdump', 'list_strings', 'list_imports', 'list_exports', 'get_function_info', 'get_function_prototype', 'get_function_hash', 'get_function_byte_pattern', 'get_control_flow_graph', 'get_callers', 'get_callees', 'get_xrefs', 'get_comment', 'list_function_variables', 'rename_local_variable', 'set_local_variable', 'set_function_prototype', 'list_data_types', 'get_data_type', 'set_data_type', 'create_structure', 'set_structure_field', 'infer_structure', 'get_structure_field_xrefs', 'list_classes', 'get_class_info', 'analyze_program', 'get_analysis_status', 'list_tasks', 'get_task_status', 'cancel_task', 'open_program', 'close_program', 'import_file', 'export_program'];
-    const filtered = tools.filter((t) => {
-      const name = (t.function && t.function.name) || '';
-      return !blockedPatterns.some((p) => name.includes(p));
-    });
-    if (filtered.length > 0) {
-      tools.length = 0;
-      tools.push(...filtered);
-    }
-  }
+  // Enforce one overall budget. Coding tools are always kept; external tools fill the rest in order.
+  const codingDefs = tools.filter((t) => codingToolNames.has(t.function.name));
+  const externalDefs = tools.filter((t) => !codingToolNames.has(t.function.name));
+  let kept = codingDefs.concat(externalDefs.slice(0, Math.max(0, TOOL_BUDGET - codingDefs.length)));
+  if (cleanRoom) kept = kept.filter((t) => !isCleanRoomBlocked(t.function.name));
+  tools.length = 0;
+  tools.push(...kept);
   const log = [];
   const webCitations = [];
   const memBlock = '';
@@ -1308,8 +1402,9 @@ async function runAgent(model, messages, maxIter, opts) {
   // Context compaction: summarize old messages if conversation is too long
   let compactedMessages = messages.slice();
   let compactedCount = 0;
+  let ctxLen = 0;
   try {
-    const ctxLen = await getModelContextLength(model);
+    ctxLen = await getModelContextLength(model);
     if (ctxLen > 0 && messages.length > 8) {
       const estTokens = estimateTokens(systemMsg.content + messages.map((m) => m.content || '').join(' '));
       if (estTokens > ctxLen * 0.75) {
@@ -1327,6 +1422,7 @@ async function runAgent(model, messages, maxIter, opts) {
   let msgs = [systemMsg].concat(compactedMessages.slice());
   let toolsSupported = true;
   for (let iter = 0; iter < maxIter; iter++) {
+    if (opts.signal && opts.signal.aborted) throw new Error('Client disconnected');
     let r;
     let streamedText = '';
     try {
@@ -1345,7 +1441,7 @@ async function runAgent(model, messages, maxIter, opts) {
         if (chunk.type === 'thinking') {
           if (onEvent) onEvent({ type: 'thinking', content: chunk.content });
         }
-      });
+      }, opts.signal);
 
       // Accumulate token counts
       if (r && r.data) {
@@ -1411,7 +1507,8 @@ async function runAgent(model, messages, maxIter, opts) {
       if (onEvent) onEvent({ type: 'tool', name, args });
       let result;
       try {
-        if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
+        if (cleanRoom && isCleanRoomBlocked(name)) result = 'BLOCKED: this tool is disabled in clean room mode.';
+        else if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
         else result = await callMcpTool(name, args);
       } catch (e) { result = 'ERROR: ' + (e.message || String(e)); }
       const resultStr = (typeof result === 'string' ? result : JSON.stringify(result));
@@ -1626,7 +1723,7 @@ async function getComponents() {
       installed: mcpReady,
       installUrl: 'https://www.npmjs.com/package/rea-agents',
       homepage: 'https://github.com/morluto/rea',
-      about: 'Reverse engineering toolset via REA MCP. Tools: ' + mcpTools.length + '. ' + (mcpError ? 'Error: ' + mcpError : '') + '\\nCurrent: ' + (_cv.reaVer || 'unknown') + ', latest (npm): ' + (_cv.reaLatest || 'unknown'),
+      about: 'Reverse engineering toolset via REA MCP. Tools: ' + mcpTools.length + '. ' + (mcpError ? 'Error: ' + mcpError : '') + '\nCurrent: ' + (_cv.reaVer || 'unknown') + ', latest (npm): ' + (_cv.reaLatest || 'unknown'),
     });
     // REA source repo
     const reaRepoPath = path.join(__dirname, 'repos', 'rea');
@@ -1634,7 +1731,7 @@ async function getComponents() {
     let reaRepoAbout = 'Source repo not present at ' + reaRepoPath;
     if (!fs.existsSync(reaRepoPath)) {
       reaRepoStatus = 'not cloned';
-      reaRepoAbout = 'REA source repo not cloned locally.\\nLatest on GitHub: ' + ((_cv && _cv.reaRepo && _cv.reaRepo.remote) || 'unknown') + '\\nClone from https://github.com/morluto/rea';
+      reaRepoAbout = 'REA source repo not cloned locally.\nLatest on GitHub: ' + ((_cv && _cv.reaRepo && _cv.reaRepo.remote) || 'unknown') + '\nClone from https://github.com/morluto/rea';
     } else {
       try {
         const { execFileSync } = require('child_process');
@@ -1642,7 +1739,7 @@ async function getComponents() {
         const commit = execFileSync('git', ['-C', reaRepoPath, 'log', '-1', '--format=%h %s'], { encoding: 'utf8', timeout: 15000 }).trim();
         const dirty = execFileSync('git', ['-C', reaRepoPath, 'status', '--porcelain'], { encoding: 'utf8', timeout: 15000 }).trim();
         reaRepoStatus = branch + (dirty ? ' (dirty)' : ' (clean)');
-        reaRepoAbout = 'Local clone of https://github.com/morluto/rea\\nPath: ' + reaRepoPath + '\\nLatest: ' + commit;
+        reaRepoAbout = 'Local clone of https://github.com/morluto/rea\nPath: ' + reaRepoPath + '\nLatest: ' + commit;
       } catch (e) {
         reaRepoStatus = 'error: ' + (e.message || e).slice(0, 120);
       }
@@ -1660,7 +1757,7 @@ async function getComponents() {
       installed: fs.existsSync(reaRepoPath),
       installUrl: 'https://github.com/morluto/rea',
       homepage: 'https://github.com/morluto/rea',
-      about: reaRepoAbout + '\\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
+      about: reaRepoAbout + '\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
     });
     // Coding tools
     comps.push({
@@ -1724,14 +1821,27 @@ async function getComponents() {
   }
 
 // ---------- Server ----------
+function setSecurityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; " +
+    "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self' blob: data:");
+}
+
 function serveStatic(req, res) {
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/index.html';
-  const filePath = path.join(PUBLIC, urlPath);
-  if (!filePath.startsWith(PUBLIC)) { res.statusCode = 403; res.end('Forbidden'); return; }
+  let decoded;
+  try { decoded = decodeURIComponent(urlPath); } catch (e) { res.statusCode = 400; res.end('Bad request'); return; }
+  const filePath = path.resolve(PUBLIC, '.' + decoded);
+  if (filePath !== PUBLIC && !filePath.startsWith(PUBLIC + path.sep)) { res.statusCode = 403; res.end('Forbidden'); return; }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.statusCode = 404; res.end('Not found'); return; }
     const ext = path.extname(filePath).toLowerCase();
+    setSecurityHeaders(res);
     res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.end(data);
@@ -1803,6 +1913,9 @@ function rateLimit(ip) {
   const now = Date.now();
   const windowMs = 60000;
   const maxReq = 120;
+  if (_rateLimits.size > 5000) {
+    for (const [k, v] of _rateLimits) { if (now - v.start > windowMs) _rateLimits.delete(k); }
+  }
   let entry = _rateLimits.get(ip);
   if (!entry || now - entry.start > windowMs) {
     entry = { start: now, count: 0 };
@@ -1836,10 +1949,20 @@ const server = http.createServer(async (req, res) => {
   }
   // Auth check
   const token = getAuthToken();
-  if (token) {
+  // Static assets carry no secrets and must load so the browser can show the token prompt.
+  // Only API and OpenAI-compatible routes require the token.
+  const isApi = req.url.startsWith('/api/') || req.url.startsWith('/v1/');
+  if (token && isApi) {
     // Allow health check and static assets without auth? No - require auth for everything except a login hint
-    const provided = (req.headers['x-auth-token'] || req.headers['authorization'] || '').replace(/^Bearer\\s+/i, '').trim();
-    if (provided !== token) {
+    const provided = (req.headers['x-auth-token'] || req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+    // Constant-time comparison so the token cannot be recovered via response timing.
+    let providedValid = false;
+    try {
+      const a = Buffer.from(String(provided));
+      const b = Buffer.from(String(token));
+      providedValid = a.length === b.length && require('crypto').timingSafeEqual(a, b);
+    } catch (e) { providedValid = false; }
+    if (!providedValid) {
       res.statusCode = 401;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ error: 'Unauthorized', authRequired: true }));
@@ -1885,7 +2008,7 @@ const server = http.createServer(async (req, res) => {
         url: e.url,
         health: e.health,
       })) });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/are-data-status' && req.method === 'GET') {
@@ -1900,7 +2023,7 @@ const server = http.createServer(async (req, res) => {
       areDataCache = null;
       const data = await loadAreData();
       json(res, 200, { ok: true, count: Array.isArray(data) ? data.length : 0 });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/are-readme' && req.method === 'POST') {
@@ -1929,7 +2052,7 @@ const server = http.createServer(async (req, res) => {
       // Truncate to 2000 chars
       if (content.length > 2000) content = content.slice(0, 2000) + '\n... (truncated)';
       json(res, 200, { ok: true, content });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/project' && req.method === 'GET') {
@@ -1954,7 +2077,7 @@ const server = http.createServer(async (req, res) => {
       if (!text) { json(res, 400, { ok: false, message: 'text required' }); return; }
       const id = await addMemory(text, 'manual', tags || []);
       json(res, 200, { ok: true, id: id || null, message: id ? 'Saved' : 'Duplicate or too short' });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/memory/forget' && req.method === 'POST') {
@@ -1967,7 +2090,7 @@ const server = http.createServer(async (req, res) => {
       mems.splice(idx, 1);
       saveJsonFile(MEMORY_FILE, mems);
       json(res, 200, { ok: true, message: 'Deleted' });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/memory/edit' && req.method === 'POST') {
@@ -1982,7 +2105,7 @@ const server = http.createServer(async (req, res) => {
       mems[idx].updated = new Date().toISOString();
       saveJsonFile(MEMORY_FILE, mems);
       json(res, 200, { ok: true, message: 'Updated' });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/skills' && req.method === 'GET') {
@@ -2000,16 +2123,16 @@ const server = http.createServer(async (req, res) => {
       skills.splice(idx, 1);
       saveSkills(skills);
       json(res, 200, { ok: true, message: 'Deleted' });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/project' && req.method === 'POST') {
     try {
       const body = await readBody(req);
       const { root } = JSON.parse(body || '{}');
-      if (root) { projectRoot = root; }
+      if (root) { projectRoot = validateProjectRoot(root); }
       json(res, 200, { projectRoot });
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message }); }
     return;
   }
 
@@ -2019,7 +2142,7 @@ const server = http.createServer(async (req, res) => {
       if (u.searchParams.get('refresh') === '1') invalidateVersionCache();
       const comps = await getComponents();
       json(res, 200, { components: comps });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2031,7 +2154,7 @@ const server = http.createServer(async (req, res) => {
       const c = comps.find((x) => x.id === id);
       if (!c) { json(res, 404, { error: 'not found' }); return; }
       json(res, 200, c);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2134,74 +2257,11 @@ const server = http.createServer(async (req, res) => {
         json(res, 200, { ok: true, message: 'Ollama update started in background. This may take several minutes. Check status below.', async: true });
         return;
       } else if (id.startsWith('model:')) {
-        try {
-          const cv = await getCachedVersions();
-          if (cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest) {
-            // Attempt update: try winget first, then download+run installer
-            const { exec } = require('child_process');
-            const https = require('https');
-            const fs = require('fs');
-            const path = require('path');
-            const os = require('os');
-            // Try winget
-            const wg = await new Promise((resolve) => {
-              exec('winget upgrade Ollama.Ollama --accept-package-agreements --accept-source-agreements --silent', { timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-                resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
-              });
-            });
-            if (wg.ok) {
-              invalidateVersionCache();
-              result = { ok: true, message: 'Ollama updated via winget. Restart may be required. ' + wg.out.slice(0, 200) };
-            } else {
-              // Fallback: download installer and run it
-              const installerPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
-              try {
-                await new Promise((resolve, reject) => {
-                  const file = fs.createWriteStream(installerPath);
-                  function get(url) {
-                    https.get(url, { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
-                      if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) {
-                        get(r.headers.location);
-                        return;
-                      }
-                      if (r.statusCode !== 200) { reject(new Error('HTTP ' + r.statusCode)); return; }
-                      r.pipe(file);
-                      file.on('finish', () => { file.close(); resolve(); });
-                    }).on('error', reject);
-                  }
-                  get('https://ollama.com/download/OllamaSetup.exe');
-                });
-                // Run installer (silent)
-                const inst = await new Promise((resolve) => {
-                  exec('"' + installerPath + '" /S', { timeout: 600000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-                    resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
-                  });
-                });
-                try { fs.unlinkSync(installerPath); } catch (_) {}
-                if (inst.ok) {
-                  invalidateVersionCache();
-                  result = { ok: true, message: 'Ollama installer ran. Restart Ollama/server to apply. ' + inst.out.slice(0, 200) };
-                } else {
-                  result = { ok: false, message: 'Installer failed: ' + (inst.err || inst.out).slice(0, 300) + '. Update manually: https://ollama.com/download' };
-                }
-              } catch (e) {
-                result = { ok: false, message: 'Download failed: ' + (e.message || e) + '. Update manually: https://ollama.com/download' };
-              }
-            }
-          } else {
-            const r = await fetch(OLLAMA + '/api/tags');
-            result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'HTTP ' + r.status };
-          }
-        } catch (e) { result = { ok: false, message: String(e.message || e) }; }
-      } else if (id.startsWith('model:')) {
         const modelName = id.slice('model:'.length);
-        const { exec } = require('child_process');
-        result = await new Promise((resolve) => {
-          exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-            if (err) resolve({ ok: false, message: (stderr || err.message || '').slice(0, 500) });
-            else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
-          });
-        });
+        const r = isValidModelName(modelName)
+          ? await runProcess(resolveOllamaBin(), ['pull', modelName], { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 })
+          : { ok: false, out: 'Invalid model name' };
+        result = r.ok ? { ok: true, message: (r.out || 'done').trim().slice(0, 500) } : { ok: false, message: (r.out || '').slice(0, 500) };
       } else if (id === 're-tools') {
         // Update rea-agents from npm, then reconnect MCP
         const { exec } = require('child_process');
@@ -2251,7 +2311,7 @@ const server = http.createServer(async (req, res) => {
       }
       invalidateVersionCache();
       json(res, 200, result);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2274,7 +2334,7 @@ const server = http.createServer(async (req, res) => {
       cfg.engine = engine;
       saveSearchConfig(cfg);
       json(res, 200, { ok: true, engine });
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message }); }
     return;
   }
   if (req.url === '/api/search-keys' && req.method === 'POST') {
@@ -2285,7 +2345,7 @@ const server = http.createServer(async (req, res) => {
       cfg.keys = Object.assign({}, cfg.keys || {}, keys || {});
       saveSearchConfig(cfg);
       json(res, 200, { ok: true });
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message }); }
     return;
   }
 
@@ -2305,7 +2365,7 @@ const server = http.createServer(async (req, res) => {
       if (patch.keys) cfg.keys = Object.assign({}, cfg.keys || {}, patch.keys);
       saveSearchConfig(cfg);
       json(res, 200, { ok: true, config: cfg });
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message }); }
     return;
   }
 
@@ -2315,20 +2375,19 @@ const server = http.createServer(async (req, res) => {
       const { name } = JSON.parse(body || '{}');
       if (!name || !name.trim()) { json(res, 400, { ok: false, message: 'Model name required' }); return; }
       const modelName = name.trim();
-      const { exec } = require('child_process');
-      const result = await new Promise((resolve) => {
-        exec(JSON.stringify(resolveOllamaBin()) + ' pull ' + JSON.stringify(modelName), { timeout: 1800000, maxBuffer: 10 * 1024 * 1024, env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }) }, (err, stdout, stderr) => {
-          if (err) resolve({ ok: false, message: (stderr || err.message || ('exit code ' + (err.code || '?'))).slice(0, 500) });
-          else resolve({ ok: true, message: (stdout || stderr || 'done').trim().slice(0, 500) });
-        });
-      });
+      if (!isValidModelName(modelName)) { json(res, 400, { ok: false, message: 'Invalid model name' }); return; }
+      const r = await runProcess(resolveOllamaBin(), ['pull', modelName], { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 });
+      const result = r.ok
+        ? { ok: true, message: (r.out || 'done').trim().slice(0, 500) }
+        : { ok: false, message: (r.out || r.err || ('exit code ' + r.code)).slice(0, 500) };
       invalidateVersionCache();
       json(res, 200, result);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
   if (req.url === '/api/scan-models' && req.method === 'GET') {
+    if (_scanCache && Date.now() - _scanCache.ts < 10 * 60 * 1000) { json(res, 200, { found: _scanCache.found, cached: true }); return; }
     try {
       const fs = require('fs');
       const path = require('path');
@@ -2361,8 +2420,9 @@ const server = http.createServer(async (req, res) => {
         const root = letter + ':\\';
         try { if (fs.existsSync(root)) walk(root, 0); } catch (_) {}
       }
+      _scanCache = { ts: Date.now(), found };
       json(res, 200, { found });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2375,7 +2435,7 @@ const server = http.createServer(async (req, res) => {
       // check if git repo
       const isGit = fs.existsSync(path.join(__dirname, '.git'));
       json(res, 200, { version: current, isGit });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2385,9 +2445,9 @@ const server = http.createServer(async (req, res) => {
       const fs = require('fs');
       if (!fs.existsSync(ERROR_LOG_FILE)) { json(res, 200, { entries: [], count: 0 }); return; }
       const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
-      const entries = content.trim().split('\\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
+      const entries = content.trim().split('\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
       json(res, 200, { entries, count: entries.length });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/error-log/clear' && req.method === 'POST') {
@@ -2395,7 +2455,7 @@ const server = http.createServer(async (req, res) => {
       const fs = require('fs');
       if (fs.existsSync(ERROR_LOG_FILE)) fs.unlinkSync(ERROR_LOG_FILE);
       json(res, 200, { ok: true, message: 'Error log cleared.' });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/error-log/copy' && req.method === 'GET') {
@@ -2404,10 +2464,10 @@ const server = http.createServer(async (req, res) => {
       if (!fs.existsSync(ERROR_LOG_FILE)) { json(res, 200, { text: '(no errors logged)' }); return; }
       const content = fs.readFileSync(ERROR_LOG_FILE, 'utf8');
       // Format as readable text for copy/paste
-      const entries = content.trim().split('\\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
-      const text = entries.map((e) => '[' + (e.ts || '') + '] ' + (e.ctx || '') + ': ' + (e.msg || '') + (e.stack ? '\\n  ' + e.stack : '')).join('\\n\\n');
+      const entries = content.trim().split('\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch (e) { return { ts: '', msg: line }; } });
+      const text = entries.map((e) => '[' + (e.ts || '') + '] ' + (e.ctx || '') + ': ' + (e.msg || '') + (e.stack ? '\n  ' + e.stack : '')).join('\n\n');
       json(res, 200, { text });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2426,7 +2486,7 @@ const server = http.createServer(async (req, res) => {
         }).on('error', reject);
       });
       json(res, 200, { current, latest: data.tag_name, url: data.html_url, hasUpdate: data.tag_name && data.tag_name.replace(/^v/, '') !== current });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2459,33 +2519,35 @@ const server = http.createServer(async (req, res) => {
           backedUp.push('workspace/');
         } catch (_) {}
       }
-      if (backedUp.length) output += 'Backed up user data: ' + backedUp.join(', ') + '\\n';
+      if (backedUp.length) output += 'Backed up user data: ' + backedUp.join(', ') + '\n';
       if (isGit) {
-        output += 'Stashing local changes...\\n';
+        output += 'Stashing local changes...\n';
         await new Promise((resolve) => {
           exec('git stash', { cwd: __dirname, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-            output += (stdout || '') + (stderr || '') + '\\n';
+            output += (stdout || '') + (stderr || '') + '\n';
             resolve();
           });
         });
-        output += 'Cleaning untracked files...\\n';
-        await new Promise((resolve) => {
-          exec('git clean -fd', { cwd: __dirname, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-            output += (stdout || '') + (stderr || '') + '\\n';
-            resolve();
-          });
-        });
-        output += 'Fetching latest...\\n';
-        const pullRes = await new Promise((resolve) => {
-          exec('git fetch origin && (git reset --hard origin/main || git reset --hard origin/master)', { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-            resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
-          });
-        });
-        output += pullRes.out + '\\n';
-        if (!pullRes.ok) { json(res, 500, { ok: false, message: 'Update failed: ' + (pullRes.err || pullRes.out), output }); return; }
+        // Remember the current commit so a failed update can be rolled back.
+        const prevHead = (await runProcess('git', ['rev-parse', 'HEAD'], { cwd: __dirname, timeout: 15000 })).out.trim();
+        output += 'Cleaning untracked files (keeping the update backup)...\n';
+        await runProcess('git', ['clean', '-fd', '-e', '.update-backup'], { cwd: __dirname, timeout: 60000 });
+        output += 'Fetching latest...\n';
+        const fetchRes = await runProcess('git', ['fetch', 'origin'], { cwd: __dirname, timeout: 120000 });
+        let pullRes = { ok: fetchRes.ok, out: fetchRes.out, err: fetchRes.err };
+        if (fetchRes.ok) {
+          const r1 = await runProcess('git', ['reset', '--hard', 'origin/main'], { cwd: __dirname, timeout: 120000 });
+          pullRes = r1.ok ? r1 : await runProcess('git', ['reset', '--hard', 'origin/master'], { cwd: __dirname, timeout: 120000 });
+        }
+        output += pullRes.out + '\n';
+        if (!pullRes.ok) {
+          if (prevHead) await runProcess('git', ['reset', '--hard', prevHead], { cwd: __dirname, timeout: 120000 });
+          json(res, 500, { ok: false, message: 'Update failed (rolled back to previous commit): ' + (pullRes.err || pullRes.out), output });
+          return;
+        }
       } else {
         // Not a git repo (installed from release zip) - download latest release and extract
-        output += 'Not a git repo. Downloading latest release...\\n';
+        output += 'Not a git repo. Downloading latest release...\n';
         try {
           const https = require('https');
           const os = require('os');
@@ -2499,7 +2561,7 @@ const server = http.createServer(async (req, res) => {
           });
           const zipUrl = (releaseInfo.assets && releaseInfo.assets[0] && releaseInfo.assets[0].browser_download_url) || null;
           if (!zipUrl) { json(res, 400, { ok: false, message: 'No release zip found. Please re-install from https://github.com/user6811992/LocalAI/releases', output }); return; }
-          output += 'Downloading ' + releaseInfo.tag_name + '...\\n';
+          output += 'Downloading ' + releaseInfo.tag_name + '...\n';
           const zipPath = path.join(os.tmpdir(), 'aegisai-update.zip');
           await new Promise((resolve, reject) => {
             const file = fs.createWriteStream(zipPath);
@@ -2508,7 +2570,7 @@ const server = http.createServer(async (req, res) => {
               file.on('finish', () => { file.close(); resolve(); });
             }).on('error', (e) => { fs.unlinkSync(zipPath); reject(e); });
           });
-          output += 'Extracting...\\n';
+          output += 'Extracting...\n';
           const isWin = process.platform === 'win32';
           const extractCmd = isWin
             ? 'powershell -NoProfile -Command "Expand-Archive -Path \\"' + zipPath + '\\" -DestinationPath \\"' + __dirname + '\\" -Force"'
@@ -2518,15 +2580,15 @@ const server = http.createServer(async (req, res) => {
               resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
             });
           });
-          output += extractRes.out + '\\n';
+          output += extractRes.out + '\n';
           try { fs.unlinkSync(zipPath); } catch (_) {}
           if (!extractRes.ok) { json(res, 500, { ok: false, message: 'Extraction failed: ' + (extractRes.err || extractRes.out), output }); return; }
-          output += 'Update extracted successfully. Restart the server to apply.\\n';
+          output += 'Update extracted successfully. Restart the server to apply.\n';
           // Clean up stale files: remove .tmp, .old, .bak files
           try {
             const staleFiles = fs.readdirSync(__dirname).filter((f) => f.endsWith('.tmp') || f.endsWith('.old') || f.endsWith('.bak') || f.endsWith('.orig'));
             for (const f of staleFiles) { try { fs.unlinkSync(path.join(__dirname, f)); } catch (_) {} }
-            if (staleFiles.length) output += 'Cleaned ' + staleFiles.length + ' stale temp files.\\n';
+            if (staleFiles.length) output += 'Cleaned ' + staleFiles.length + ' stale temp files.\n';
           } catch (_) {}
         } catch (e) {
           json(res, 500, { ok: false, message: 'Update failed: ' + (e.message || String(e)), output }); return;
@@ -2535,15 +2597,15 @@ const server = http.createServer(async (req, res) => {
       // npm install with retry
       let npmRes = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
-        output += 'Running npm install (attempt ' + attempt + '/3)...\\n';
+        output += 'Running npm install (attempt ' + attempt + '/3)...\n';
         npmRes = await new Promise((resolve) => {
           exec('npm install', { cwd: __dirname, timeout: 300000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
             resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
           });
         });
-        output += npmRes.out + '\\n';
+        output += npmRes.out + '\n';
         if (npmRes.ok) break;
-        if (attempt < 3) { output += 'npm install failed, retrying...\\n'; await new Promise((r) => setTimeout(r, 2000)); }
+        if (attempt < 3) { output += 'npm install failed, retrying...\n'; await new Promise((r) => setTimeout(r, 2000)); }
       }
       if (!npmRes.ok) { json(res, 500, { ok: false, message: 'npm install failed after 3 attempts: ' + (npmRes.err || npmRes.out), output }); return; }
       // Restore user data
@@ -2564,7 +2626,7 @@ const server = http.createServer(async (req, res) => {
           restored.push('workspace/');
         } catch (_) {}
       }
-      if (restored.length) output += 'Restored user data: ' + restored.join(', ') + '\\n';
+      if (restored.length) output += 'Restored user data: ' + restored.join(', ') + '\n';
       // read new version
       let newVersion = 'unknown';
       try { newVersion = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
@@ -2572,10 +2634,10 @@ const server = http.createServer(async (req, res) => {
       const keyFiles = ['server.js', 'package.json', 'public/index.html'];
       const missing = keyFiles.filter((f) => !fs.existsSync(path.join(__dirname, f)));
       if (missing.length) {
-        output += 'WARNING: Missing files after update: ' + missing.join(', ') + '\\n';
-        output += 'Update may be incomplete.\\n';
+        output += 'WARNING: Missing files after update: ' + missing.join(', ') + '\n';
+        output += 'Update may be incomplete.\n';
       } else {
-        output += 'Verification passed: all key files present.\\n';
+        output += 'Verification passed: all key files present.\n';
       }
       // Clean stale files: remove .update-backup of old versions (keep only latest)
       try {
@@ -2586,8 +2648,8 @@ const server = http.createServer(async (req, res) => {
           for (const f of tmpFiles) { try { fs.unlinkSync(path.join(backupDir, f)); } catch (_) {} }
         }
       } catch (_) {}
-      output += 'Updated to v' + newVersion + '.\\n';
-      output += 'IMPORTANT: The server will restart automatically in 3 seconds.\\n';
+      output += 'Updated to v' + newVersion + '.\n';
+      output += 'IMPORTANT: The server will restart automatically in 3 seconds.\n';
       json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Server restarting...', version: newVersion, output, restart: true });
       // Auto-restart: spawn new server process after a short delay
       setTimeout(() => {
@@ -2607,7 +2669,7 @@ const server = http.createServer(async (req, res) => {
         // Exit current process to allow new one to take over
         setTimeout(() => { process.exit(0); }, 1000);
       }, 3000);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2631,7 +2693,7 @@ const server = http.createServer(async (req, res) => {
         tags: m.tags || [],
       }));
       json(res, 200, { items });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2658,12 +2720,6 @@ const server = http.createServer(async (req, res) => {
     for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
     return dot / (Math.sqrt(na)*Math.sqrt(nb) + 1e-9);
   }
-  async function embedText(text) {
-    try {
-      const r = await ollamaRequest('/api/embeddings', { model: 'nomic-embed-text', prompt: text.slice(0, 4000) });
-      return r.embedding || null;
-    } catch (e) { return null; }
-  }
 
   if (req.url === '/api/rag-collections' && req.method === 'GET') {
     const store = loadRag();
@@ -2689,7 +2745,7 @@ const server = http.createServer(async (req, res) => {
       }
       saveRag(store);
       json(res, 200, { ok: true, active: store.activeCollection, collections: Object.keys(store.collections) });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2745,7 +2801,7 @@ const server = http.createServer(async (req, res) => {
       }
       saveRag(store);
       json(res, 200, { ok: true, message: 'Indexed ' + chunks.length + ' chunks from ' + name + ' into "' + coll + '"', docId, collection: coll });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2768,7 +2824,7 @@ const server = http.createServer(async (req, res) => {
         return { text: c.text, docName: doc ? doc.name : 'unknown', score: c.score };
       });
       json(res, 200, { chunks: topChunks.map(s => s.text), citations, collection: coll });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2783,7 +2839,7 @@ const server = http.createServer(async (req, res) => {
       }
       saveRag(store);
       json(res, 200, { ok: true, collection: coll });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2796,27 +2852,23 @@ const server = http.createServer(async (req, res) => {
       const path = require('path');
       const os = require('os');
       const tmp = path.join(os.tmpdir(), 'localai-run-' + Date.now());
-      let cmd = '';
+      let runner = '', f = '';
       if (lang === 'python') {
-        const f = tmp + '.py';
+        f = tmp + '.py';
         fs.writeFileSync(f, code || '');
-        cmd = 'python "' + f + '"';
+        runner = 'python';
       } else if (lang === 'javascript' || lang === 'js') {
-        const f = tmp + '.js';
+        f = tmp + '.js';
         fs.writeFileSync(f, code || '');
-        cmd = 'node "' + f + '"';
+        runner = process.execPath;
       } else {
         json(res, 400, { ok: false, message: 'Unsupported language. Use python or javascript.' }); return;
       }
-      const result = await new Promise((resolve) => {
-        exec(cmd, { timeout: 15000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-          // cleanup
-          try { fs.unlinkSync(tmp + (lang === 'python' ? '.py' : '.js')); } catch (_) {}
-          resolve({ ok: !err, stdout: (stdout || '').slice(0, 4000), stderr: (stderr || '').slice(0, 2000), code: err ? (err.code || 1) : 0 });
-        });
-      });
+      const r = await runProcess(runner, [f], { timeout: 15000, maxBuffer: 1024 * 1024 });
+      try { fs.unlinkSync(f); } catch (_) {}
+      const result = { ok: r.ok, stdout: r.out.slice(0, 4000), stderr: '', code: r.code };
       json(res, 200, result);
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2855,7 +2907,7 @@ const server = http.createServer(async (req, res) => {
       }
       invalidateVersionCache();
       json(res, 200, result);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2869,7 +2921,7 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
       const d = await r.json();
       json(res, 200, { info: d });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2879,7 +2931,7 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
       const d = await r.json();
       json(res, 200, d);
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2891,7 +2943,7 @@ const server = http.createServer(async (req, res) => {
       const r = await fetch(OLLAMA + '/api/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
       if (!r.ok) { const t = await r.text(); json(res, r.status, { error: t || ('HTTP ' + r.status) }); return; }
       json(res, 200, { ok: true, message: 'Deleted ' + name });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2903,7 +2955,7 @@ const server = http.createServer(async (req, res) => {
       // Unload by sending a chat with keep_alive=0
       const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, messages: [], keep_alive: 0 }) });
       json(res, 200, { ok: r.ok, message: r.ok ? 'Unloaded ' + name : 'HTTP ' + r.status });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2930,7 +2982,7 @@ const server = http.createServer(async (req, res) => {
       if (chats.length > 50) chats.length = 50;
       saveChats(chats);
       json(res, 200, { ok: true, id: chatId });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
   if (req.url === '/api/chats/delete' && req.method === 'POST') {
@@ -2940,7 +2992,7 @@ const server = http.createServer(async (req, res) => {
       const chats = loadChats().filter(c => c.id !== id);
       saveChats(chats);
       json(res, 200, { ok: true });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
   if (req.url.startsWith('/api/chats/') && req.method === 'GET') {
@@ -2948,6 +3000,32 @@ const server = http.createServer(async (req, res) => {
     const chat = loadChats().find(c => c.id === id);
     if (!chat) { json(res, 404, { error: 'not found' }); return; }
     json(res, 200, chat);
+    return;
+  }
+  if (req.url === '/api/stats' && req.method === 'GET') {
+    try {
+      const chats = loadChats();
+      let msgCount = 0, userCount = 0, assistantCount = 0, tokenPrompt = 0, tokenGenerated = 0;
+      for (const c of chats) {
+        const msgs = c.messages || [];
+        for (const m of msgs) {
+          if (!m || !m.role) continue;
+          if (m.role !== 'user' && m.role !== 'assistant') continue;
+          msgCount++;
+          if (m.role === 'user') userCount++; else assistantCount++;
+          const ts = m.tokenStats;
+          if (ts) { tokenPrompt += ts.prompt || 0; tokenGenerated += ts.generated || 0; }
+        }
+      }
+      json(res, 200, {
+        ok: true,
+        chats: chats.length,
+        messages: { total: msgCount, user: userCount, assistant: assistantCount },
+        tokenUsage: { prompt: tokenPrompt, generated: tokenGenerated },
+        memories: loadJsonFile(MEMORY_FILE).length,
+        skills: loadSkills().length,
+      });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -2965,7 +3043,7 @@ const server = http.createServer(async (req, res) => {
       const filePath = path.join(wsDir, safeName);
       fs.writeFileSync(filePath, Buffer.from(content, 'base64'));
       json(res, 200, { ok: true, path: filePath, message: 'Uploaded ' + safeName });
-    } catch (e) { json(res, 500, { ok: false, message: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
   }
 
@@ -2979,7 +3057,7 @@ const server = http.createServer(async (req, res) => {
         try { const st = fs.statSync(path.join(wsDir, f)); return { name: f, size: st.size, path: path.join(wsDir, f) }; } catch (e) { return null; }
       }).filter(Boolean);
       json(res, 200, { files });
-    } catch (e) { json(res, 500, { error: e.message || String(e) }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
 
@@ -3026,18 +3104,11 @@ const server = http.createServer(async (req, res) => {
       fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\n', 'utf8');
       console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
       console.log('Import: file size:', stat.size, 'path:', modelPath);
-      const { exec } = require('child_process');
-      const ollamaBin = resolveOllamaBin();
-      const cmd = JSON.stringify(ollamaBin) + ' create ' + JSON.stringify(safeName) + ' -f "' + tmpModelfile + '"';
-      console.log('Import: running:', cmd);
-      exec(cmd, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-        try { fs.unlinkSync(tmpModelfile); } catch (_) {}
-        console.log('Import stderr:', (stderr || '').slice(0, 300));
-        console.log('Import err:', err ? err.message : 'none');
-        // Strip ANSI escape codes from output
-        const cleanOut = (stderr || err?.message || 'done').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[\?[0-9]*[hl]/g, '').trim();
-        json(res, 200, { ok: !err, message: cleanOut.slice(0, 200), name: safeName });
-      });
+      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 300000, maxBuffer: 10 * 1024 * 1024 });
+      try { fs.unlinkSync(tmpModelfile); } catch (_) {}
+      // Strip ANSI escape codes from output
+      const cleanOut = ((r.out || r.err) || 'done').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[\?[0-9]*[hl]/g, '').trim();
+      json(res, 200, { ok: r.ok, message: cleanOut.slice(0, 200), name: safeName });
       return;
   }
 
@@ -3049,10 +3120,13 @@ const server = http.createServer(async (req, res) => {
       'Connection': 'keep-alive',
     });
     res.flushHeaders();
-    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\\n\\n'); if (typeof res.flush === 'function') res.flush(); } catch (e) { aborted = true; } };
+    const sendEvent = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); if (typeof res.flush === 'function') res.flush(); } catch (e) { aborted = true; } };
     let aborted = false;
-    // Don't use req.on('close') for abort detection - it fires after body is consumed
-    // Instead, rely on res.write() errors to detect client disconnect
+    // Client disconnect: res 'close' fires on disconnect and also after a normal end,
+    // so only abort when the response was not finished. This stops the Ollama stream
+    // and the tool loop instead of burning model time for nobody.
+    const ac = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) { aborted = true; ac.abort(); } });
     try {
       const body = await readBody(req);
       const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
@@ -3062,6 +3136,7 @@ const server = http.createServer(async (req, res) => {
         cleanRoom: cleanRoom === true,
         options: options || undefined,
         keep_alive: keep_alive,
+        signal: ac.signal,
         onEvent: (ev) => { if (!aborted) sendEvent(ev); },
       });
       if (!aborted) {
@@ -3071,8 +3146,8 @@ const server = http.createServer(async (req, res) => {
         setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
       }
     } catch (e) {
-      console.error('agent error:', e && e.stack || e);
-      logError('agent', e);
+      if (!aborted) console.error('agent error:', e && e.stack || e);
+      if (!aborted) logError('agent', e);
       if (!aborted) sendEvent({ type: 'error', message: e.message || String(e) });
     } finally {
       try { res.end(); } catch (_) {}
@@ -3086,20 +3161,21 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`AegisAI web UI: http://0.0.0.0:${PORT}`);
-  console.log(`Ollama backend: ${OLLAMA}`);
-  if (!getAuthToken()) {
-    console.warn('WARNING: No auth token set. Set LOCALAI_TOKEN env var or auth.json for LAN security.');
-    console.warn('Anyone on your network can access this UI. For remote access, use Tailscale or set a token.');
-  }
-});
+if (require.main === module) {
+  server.listen(PORT, HOST, () => {
+    console.log(`AegisAI web UI: http://${HOST}:${PORT}`);
+    console.log(`Ollama backend: ${OLLAMA}`);
+    if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+      console.warn('WARNING: No auth token set and the server is reachable from the network. Set LOCALAI_TOKEN or auth.json.');
+    }
+  });
 
-// Init MCP after server start
-initMcp();
-initAwesomeReMcp();
-initGhidrAssistMcp();
-initCraftMcp();
+  // Init MCP after server start
+  initMcp();
+  initAwesomeReMcp();
+  initGhidrAssistMcp();
+  initCraftMcp();
+}
 
 // ---------- Default skill: search before RE ----------
 const DEFAULT_SKILL_NAME = 'search-before-re';
@@ -3122,7 +3198,7 @@ function ensureDefaultSkill() {
   }
 }
 // Save default skill after a short delay (let MCP init finish)
-setTimeout(ensureDefaultSkill, 5000);
+if (require.main === module) setTimeout(ensureDefaultSkill, 5000);
 
 // ---------- Nightly auto-refresh for ARE data ----------
 // Check every hour if data is older than 24 hours and refresh
@@ -3142,7 +3218,7 @@ setInterval(async () => {
   } catch (e) {
     console.error('ARE auto-refresh failed:', e.message);
   }
-}, 60 * 60 * 1000); // every hour
+}, 60 * 60 * 1000).unref(); // every hour
 
 // ---------- Awesome-RE data cache ----------
 const ARE_DATA_FILE = path.join(DATA_DIR, 'data', 'are-entries.json');
@@ -3229,3 +3305,26 @@ function searchAreData(query, opts) {
   }
   return results;
 }
+
+module.exports = {
+  runProcess,
+  isValidModelName,
+  validateProjectRoot,
+  safePath,
+  isCleanRoomBlocked,
+  readBody,
+  searchAreData,
+  cosineSim,
+  sanitizeForLog,
+  setProjectRoot: (r) => { projectRoot = r; },
+  // Test-only hook: inject external MCP tool lists without starting those servers.
+  __setExternalTools: (name, tools) => {
+    if (name === 'ghidra') { ghidraReady = true; ghidraTools = tools; }
+    if (name === 'craft') { craftReady = true; craftTools = tools; }
+    if (name === 'are') { areReady = true; areTools = tools; }
+  },
+  getProjectRoot: () => projectRoot,
+  server,
+  TOOL_BUDGET,
+  MAX_BODY_BYTES,
+};

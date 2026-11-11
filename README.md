@@ -93,7 +93,7 @@ cloudflared tunnel --url http://localhost:8080
 
 ## Reverse Engineering Tools
 
-Requires [REA](https://github.com/...) installed separately. Set the following environment variables:
+Requires [REA](https://github.com/morluto/rea) installed separately. Set the following environment variables:
 
 ```bash
 GHIDRA_INSTALL_DIR=C:\Ghidra\ghidra_12.1.4_PUBLIC
@@ -101,7 +101,7 @@ JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot
 REA_JADX_MCP_JAR=C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar
 ```
 
-The web UI's "RE tools" checkbox enables agent mode with 229 RE tools.
+The web UI's "RE tools" checkbox enables agent mode with RE tools from REA, plus Ghidra (GhidrAssistMCP) and Craft Anything when they are running. Each agent request is limited to a tool budget (default 64 tools, including the built-in coding tools) so small models are not overwhelmed. Raise it with `AEGISAI_TOOL_BUDGET`.
 
 ### Clean Room / Deep Mode
 
@@ -221,7 +221,17 @@ Then re-run `install.vbs`.
 
 ## Security / Auth
 
-By default, LocalAI has **no authentication** (suitable for localhost use). For LAN or remote access, set a token:
+LocalAI **binds to localhost (`127.0.0.1`) by default**. For LAN access, set `HOST=0.0.0.0` (the Windows installer does this when you choose LAN access) and also set a token. Without a token the UI works only on the local machine.
+
+| Variable | Purpose |
+|---|---|
+| `HOST` | Bind address (default `127.0.0.1`) |
+| `LOCALAI_TOKEN` | Require this token on every request |
+| `AEGISAI_PROJECT_ROOT_ALLOWLIST` | Directories the agent project root may point into (`;` separated) |
+| `AEGISAI_MAX_BODY` | Max request body in bytes (default 100 MB) |
+| `AEGISAI_TOOL_BUDGET` | Max tools sent to the model per agent request (default 64) |
+
+To set a token:
 
 **Environment variable:**
 ```
@@ -237,7 +247,9 @@ When a token is set, all API requests require `X-Auth-Token: <token>` header. Th
 
 **Rate limiting:** 120 requests/minute per IP (built-in).
 
-**LAN access warning:** If no token is set and the server binds to 0.0.0.0, a warning is printed to the console. Use Tailscale or Cloudflare Tunnel for secure remote access.
+**LAN access warning:** If no token is set and the server binds to a non-loopback address, a warning is printed to the console. Use Tailscale or Cloudflare Tunnel for secure remote access.
+
+**Code execution:** `/api/run-code` and the Python tools run code without a sandbox, as your user. See [SECURITY.md](SECURITY.md).
 
 ## Privacy
 

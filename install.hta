@@ -275,6 +275,10 @@
       // Step 10: Firewall
       if (document.getElementById('optFirewall').checked) {
         setProgress(90, "Adding firewall rule...");
+        // LAN marker: the launcher binds to 0.0.0.0 only when this file exists.
+        const lanFlag = fso.CreateTextFile(destBase + "\\lan-access.txt", true);
+        lanFlag.WriteLine("LAN access enabled by installer. Delete this file to return to localhost-only.");
+        lanFlag.Close();
         runCmd("netsh advfirewall firewall add rule name=\"AegisAI\" dir=in action=allow protocol=tcp localport=8080");
         log("Firewall rule added.");
       }

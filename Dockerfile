@@ -17,5 +17,6 @@ EXPOSE 8080
 # Env
 ENV OLLAMA_URL=http://ollama:11434
 ENV PORT=8080
+ENV HOST=0.0.0.0
 
 CMD ["node", "server.js"]

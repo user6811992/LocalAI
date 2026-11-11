@@ -7,7 +7,7 @@ on:
     branches: [master, main]
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,8 +19,12 @@ jobs:
         run: node --check server.js
       - name: Syntax check public JS
         run: |
-          node -e "const fs=require('fs'); const h=fs.readFileSync('public/index.html','utf8'); const s=h.indexOf('<script>'); const e=h.lastIndexOf('</script>'); const js=h.slice(s+8,e); fs.writeFileSync('/tmp/check.js', js);"
-          node --check /tmp/check.js
+          node -e "const fs=require('fs'); const h=fs.readFileSync('public/index.html','utf8'); const s=h.indexOf('<script>'); const e=h.lastIndexOf('</script>'); fs.writeFileSync(process.env.RUNNER_TEMP + '/check.js', h.slice(s+8,e));"
+          node --check "$RUNNER_TEMP/check.js"
+      - name: Unit and integration tests
+        run: npm test
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Check for large files
         run: |
           find . -name '*.js' -size +500k -not -path './node_modules/*' -exec echo "Large file: {}" \;

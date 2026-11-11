@@ -13,7 +13,7 @@ $icon.Visible = $true
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $openItem = $menu.Items.Add("Open Local AI")
 $openItem.Add_Click({ Start-Process "msedge" -ArgumentList "--app=http://127.0.0.1:8080","--window-size=1200,800" })
-$exitItem = $menu.Items.Add("Exit")
+$exitItem = $menu.Items.Add("Exit tray icon")
 $exitItem.Add_Click({ $icon.Visible = $false; $icon.Dispose(); exit })
 $icon.ContextMenuStrip = $menu
 

@@ -24,8 +24,8 @@ If Not fso.FileExists(ollamaDir & "\ollama.exe") Then
 End If
 
 ' Env vars
-wshShell.Environment("Process")("OLLAMA_HOST") = "0.0.0.0"
-wshShell.Environment("Process")("OLLAMA_ORIGINS") = "*"
+wshShell.Environment("Process")("OLLAMA_HOST") = "127.0.0.1"
+wshShell.Environment("Process")("OLLAMA_ORIGINS") = "http://127.0.0.1:8080,http://localhost:8080"
 wshShell.Environment("Process")("OLLAMA_NO_ANALYTICS") = "1"
 wshShell.Environment("Process")("OLLAMA_NO_CLOUD") = "1"
 wshShell.Environment("Process")("OLLAMA_NO_UPDATE_CHECK") = "1"
@@ -69,6 +69,12 @@ If Not portOpen Then
   Dim nodeExe
   nodeExe = "node"
   If fso.FileExists("C:\Program Files\nodejs\node.exe") Then nodeExe = """C:\Program Files\nodejs\node.exe"""
+  ' Bind to the LAN only when the installer recorded LAN access; default is localhost.
+  If fso.FileExists(base & "\lan-access.txt") Then
+    wshShell.Environment("Process")("HOST") = "0.0.0.0"
+  Else
+    wshShell.Environment("Process")("HOST") = "127.0.0.1"
+  End If
   wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js", 0, False
   WScript.Sleep 4000
 End If
