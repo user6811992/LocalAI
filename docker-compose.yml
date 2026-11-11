@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ollama:
     image: ollama/ollama:latest
@@ -8,6 +6,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   aegisai:
     build: .
@@ -16,9 +19,24 @@ services:
     environment:
       - OLLAMA_URL=http://ollama:11434
       - PORT=8080
+      - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}
+    volumes:
+      - aegisai_data:/app/data
+      - ./memory.json:/app/memory.json
+      - ./chats.json:/app/chats.json
+      - ./skills.json:/app/skills.json
+      - ./search-config.json:/app/search-config.json
+      - ./workspace:/app/workspace
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   ollama_data:
+  aegisai_data:
