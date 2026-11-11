@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.23</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.24</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -212,15 +212,16 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.23</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.24</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
       <div><b>Search engines:</b> 8 keyless + LangSearch</div>
       <div><b>Features:</b> Chat, agent mode (coding + RE tools), memory, skills, components manager, right-click menu, PWA, Tailscale remote access, AdGuard DNS filtering.</div>
       <div style="margin-top:8px;color:var(--muted);font-size:12px;">Built for reverse engineering and local AI experimentation. Uncensored models included. Data stays on your machine.</div>
-      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Special thanks to OpenCode (opencode.ai), Beam.ai (beam.ai), Ollama (ollama.com), HuggingFace (huggingface.co), morluto/rea (github.com/morluto), Alex Gao (github.com/alexgaoth) for awesome-reverse-engineered, and all contributors to this project.</div>
-      <div style="margin-top:4px;color:var(--muted);font-size:11px;">Third-party data: awesome-reverse-engineered entries (CC0 1.0) by Alex Gao. Code: MIT License. See README for full license details.</div>
+      <div style="margin-top:8px;color:var(--muted);font-size:12px;">Special thanks to OpenCode (opencode.ai), Beam.ai (beam.ai), Ollama (ollama.com), HuggingFace (huggingface.co), morluto/rea (github.com/morluto), Alex Gao (github.com/alexgaoth) for awesome-reverse-engineered, symgraph/RevGraph Labs (github.com/symgraph) for GhidrAssistMCP, and all contributors to this project.</div>
+      <div style="margin-top:4px;color:var(--muted);font-size:11px;">Third-party data: awesome-reverse-engineered entries (CC0 1.0) by Alex Gao. GhidrAssistMCP (MIT) by symgraph. See README for full license details.</div>
+      <div style="margin-top:4px;color:var(--muted);font-size:11px;">Companion tools: GhidrAssist, IDAssist, BinAssist (optional, see README).</div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button id="checkUpdateBtn" style="font-size:12px;padding:6px 10px;">Check for updates</button>
         <button id="doUpdateBtn" style="font-size:12px;padding:6px 10px;" disabled>Update now</button>

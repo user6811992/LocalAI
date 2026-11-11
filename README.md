@@ -108,6 +108,18 @@ AegisAI includes a searchable index of **17,000+ reverse-engineered projects** f
 - Data is cached locally (~7.5MB) and refreshed automatically when older than 24 hours
 - Optional: set `GITHUB_TOKEN` env var for higher GitHub API rate limits (README previews)
 
+### Companion RE Tools (Optional)
+
+AegisAI works with several external reverse-engineering tools. These are **not bundled** but can be installed separately for enhanced capabilities:
+
+| Tool | Description | Link |
+|------|-------------|------|
+| **GhidrAssistMCP** | Native MCP server for Ghidra (100+ tools, resources, prompts). Optional integration available when Ghidra 12.0/12.1 + Java 25+ is installed. | [github.com/symgraph/GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP) |
+| **GhidrAssist** | LLM extension for Ghidra with built-in chat UI | [github.com/symgraph/GhidrAssist](https://github.com/symgraph/GhidrAssist) |
+| **IDAssist** | AI-powered reverse engineering plugin for IDA Pro | [github.com/symgraph/IDAssist](https://github.com/symgraph/IDAssist) |
+| **BinAssist** | LLM assistance plugin for Binary Ninja | [github.com/symgraph/BinAssist](https://github.com/symgraph/BinAssist) |
+| **REA** | Agentic RE toolset (229 tools) — bundled via MCP | [github.com/morluto/rea](https://github.com/morluto/rea) |
+
 ## Installer (Linux / macOS)
 
 A bash installer is included: **`install.sh`**. Works on Linux and macOS.
@@ -215,6 +227,7 @@ Special thanks to:
 - **[HuggingFace](https://huggingface.co)** - for the model hub and open weights.
 - **[morluto/rea](https://github.com/morluto)** - for the REA reverse-engineering toolset.
 - **[Alex Gao](https://github.com/alexgaoth)** - for [awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered), a curated index of 17,000+ reverse-engineered projects (MIT code license, CC0 data license). Integrated search, category browsing, README preview, and project lookup help users find existing RE work before starting their own. Data is cached locally and refreshed automatically when older than 24 hours.
+- **[symgraph (RevGraph Labs)](https://github.com/symgraph)** - for [GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP) (MIT license), a native MCP server extension for Ghidra providing 100+ granular RE tools. Optional integration available when Ghidra 12.0/12.1 + Java 25+ is installed.
 - All other contributors, testers, and the open-source community.
 
 ## Support

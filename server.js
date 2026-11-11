@@ -53,6 +53,12 @@ let areTools = [];
 let areReady = false;
 let areError = null;
 
+// GhidrAssistMCP (optional, requires Ghidra + GhidrAssistMCP extension)
+let ghidraClient = null;
+let ghidraTools = [];
+let ghidraReady = false;
+let ghidraError = null;
+
 function resolveReaBin() {
   if (process.env.REA_BIN && fs.existsSync(process.env.REA_BIN)) return process.env.REA_BIN;
   const candidates = [
@@ -161,6 +167,44 @@ async function initAwesomeReMcp() {
   }
 }
 
+async function initGhidrAssistMcp() {
+  const url = process.env.GHIDRASSIST_MCP_URL || 'http://localhost:8081/mcp';
+  try {
+    let Client, StreamableHTTPClientTransport;
+    try {
+      const sdk = require('@modelcontextprotocol/sdk/client');
+      Client = sdk.Client;
+      const http = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
+      StreamableHTTPClientTransport = http.StreamableHTTPClientTransport;
+    } catch (e) {
+      try {
+        const sdk = require('@modelcontextprotocol/sdk');
+        Client = sdk.Client;
+        StreamableHTTPClientTransport = sdk.StreamableHTTPClientTransport;
+      } catch (e2) {
+        throw new Error('MCP SDK not installed. Run: npm install in the AegisAI folder.');
+      }
+    }
+    const transport = new StreamableHTTPClientTransport(new URL(url), {});
+    const client = new Client({ name: 'aegisai-ghidra', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+    const res = await client.listTools();
+    ghidraTools = res.tools || [];
+    ghidraClient = client;
+    ghidraReady = true;
+    console.log('GhidrAssistMCP ready. Tools:', ghidraTools.length, 'from', url);
+  } catch (e) {
+    ghidraError = e && e.message ? e.message : String(e);
+    ghidraReady = false;
+    // Only log if it's not a connection refused (expected when Ghidra isn't running)
+    if (!/ECONNREFUSED|fetch failed|not found/i.test(ghidraError)) {
+      console.error('GhidrAssistMCP init failed:', ghidraError);
+    } else {
+      console.log('GhidrAssistMCP not available (Ghidra not running or extension not installed).');
+    }
+  }
+}
+
 function mcpToolsAsOllama() {
   const tools = mcpTools.map((t) => ({
     type: 'function',
@@ -183,6 +227,19 @@ function mcpToolsAsOllama() {
       });
     }
   }
+  // Add GhidrAssistMCP tools (prefixed to avoid collisions)
+  if (ghidraReady) {
+    for (const t of ghidraTools) {
+      tools.push({
+        type: 'function',
+        function: {
+          name: 'ghidra_' + t.name,
+          description: ((t.description || '') + ' [from GhidrAssistMCP]').slice(0, 120),
+          parameters: t.inputSchema || { type: 'object', properties: {} },
+        },
+      });
+    }
+  }
   return tools;
 }
 
@@ -192,6 +249,21 @@ async function callMcpTool(name, args) {
     if (!areClient) throw new Error('Awesome-RE MCP not ready: ' + (areError || 'unknown'));
     const origName = name.slice(4);
     const r = await areClient.callTool({ name: origName, arguments: args || {} });
+    let text = '';
+    if (r && r.content) {
+      for (const c of r.content) {
+        if (c.type === 'text') text += c.text;
+        else text += JSON.stringify(c);
+      }
+    }
+    if (r && r.isError) text = 'ERROR: ' + text;
+    return text;
+  }
+  // Route to GhidrAssistMCP client if prefixed
+  if (name.startsWith('ghidra_')) {
+    if (!ghidraClient) throw new Error('GhidrAssistMCP not ready: ' + (ghidraError || 'unknown'));
+    const origName = name.slice(7);
+    const r = await ghidraClient.callTool({ name: origName, arguments: args || {} });
     let text = '';
     if (r && r.content) {
       for (const c of r.content) {
@@ -1496,7 +1568,12 @@ const server = http.createServer(async (req, res) => {
         allTools.push({ name: 'are_' + t.name, description: (t.description || '') + ' [awesome-reverse-engineered]' });
       }
     }
-    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError });
+    if (ghidraReady) {
+      for (const t of ghidraTools) {
+        allTools.push({ name: 'ghidra_' + t.name, description: (t.description || '') + ' [GhidrAssistMCP]' });
+      }
+    }
+    json(res, 200, { ready: mcpReady, error: mcpError, projectRoot, tools: allTools, areReady, areTools: areTools.length, areError, ghidraReady, ghidraTools: ghidraTools.length, ghidraError });
     return;
   }
 
@@ -1616,9 +1693,11 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/api/reconnect-mcp' && req.method === 'POST') {
     mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
     areReady = false; areError = null; areClient = null; areTools = [];
+    ghidraReady = false; ghidraError = null; ghidraClient = null; ghidraTools = [];
     await initMcp();
     await initAwesomeReMcp();
-    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length, areReady, areTools: areTools.length });
+    await initGhidrAssistMcp();
+    json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length + ghidraTools.length, areReady, areTools: areTools.length, ghidraReady, ghidraTools: ghidraTools.length });
     return;
   }
 
@@ -2565,6 +2644,7 @@ server.listen(PORT, '0.0.0.0', () => {
 // Init MCP after server start
 initMcp();
 initAwesomeReMcp();
+initGhidrAssistMcp();
 
 // ---------- Default skill: search before RE ----------
 const DEFAULT_SKILL_NAME = 'search-before-re';
