@@ -1034,6 +1034,7 @@ async function runAgent(model, messages, maxIter, opts) {
   opts = opts || {};
   const includeRe = opts.includeRe !== false;
   const includeCoding = opts.includeCoding !== false;
+  const cleanRoom = opts.cleanRoom === true;
   const onEvent = opts.onEvent || null;
   maxIter = maxIter || 8;
   const tools = [];
@@ -1065,7 +1066,8 @@ async function runAgent(model, messages, maxIter, opts) {
   const log = [];
   const memBlock = '';
   const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
-  const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint };
+  const cleanRoomHint = cleanRoom ? ' CLEAN ROOM MODE: Do NOT read, view, or access any original source code, binaries, or files from the target. Work only from visible behavior: screenshots, UI layout, text content, and observable functionality. Refuse any tool that would read original code or files. If the user asks to read source, explain that clean room mode prevents this and suggest switching to Deep mode.' : '';
+  const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint + cleanRoomHint };
   let finalThinking = '';
   let msgs = [systemMsg].concat(messages.slice());
   let toolsSupported = true;
@@ -2611,10 +2613,11 @@ const server = http.createServer(async (req, res) => {
     // Return JSON (non-streaming) for reliability
     try {
       const body = await readBody(req);
-      const { model, messages, includeRe, includeCoding, options, keep_alive } = JSON.parse(body || '{}');
+      const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
       const result = await runAgent(model, messages || [], undefined, {
         includeRe: includeRe !== false,
         includeCoding: includeCoding !== false,
+        cleanRoom: cleanRoom === true,
         options: options || undefined,
         keep_alive: keep_alive,
         onEvent: () => {},
