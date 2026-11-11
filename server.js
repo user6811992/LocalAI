@@ -3077,7 +3077,15 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === '/api/chats' && req.method === 'GET') {
     const chats = loadChats();
-    json(res, 200, { chats: chats.map(c => ({ id: c.id, title: c.title, updated: c.updated, parent_id: c.parent_id, branch_from: c.branch_from })) });
+    json(res, 200, { chats: chats.map(c => {
+      let prompt = 0, generated = 0, msgs = 0;
+      for (const m of (c.messages || [])) {
+        msgs++;
+        const ts = m.tokenStats;
+        if (ts) { prompt += ts.prompt || 0; generated += ts.generated || 0; }
+      }
+      return { id: c.id, title: c.title, updated: c.updated, parent_id: c.parent_id, branch_from: c.branch_from, messages: msgs, tokenUsage: { prompt, generated } };
+    }) });
     return;
   }
   if (req.url === '/api/chats' && req.method === 'POST') {
