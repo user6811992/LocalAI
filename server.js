@@ -917,8 +917,11 @@ return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join(
     const { execFileSync } = require('child_process');
     const fn = args.filename || ('speech_' + Date.now() + '.wav');
     const fp = safePath(fn);
+    const voice = args.voice || '';
     const speak = (args.speak === true || args.speak === 'true') ? '$synth.Speak($text);' : '';
-    const ps = "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $text = @'\n" + args.text.replace(/'/g, "''") + "\n'@; $synth.SetOutputToWaveFile('" + fp.replace(/'/g, "''") + "'); $synth.Speak($text); $synth.Dispose(); Write-Output 'ok'";
+    let voiceCmd = '';
+    if (voice) voiceCmd = "$synth.SelectVoice('" + voice.replace(/'/g, "''") + "');";
+    const ps = "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; " + voiceCmd + " $text = @'\n" + args.text.replace(/'/g, "''") + "\n'@; $synth.SetOutputToWaveFile('" + fp.replace(/'/g, "''") + "'); $synth.Speak($text); $synth.Dispose(); Write-Output 'ok'";
     try {
       execFileSync('powershell', ['-Command', ps], { encoding: 'utf8', timeout: 120000 });
       return 'Saved TTS audio: ' + fp;
@@ -927,7 +930,8 @@ return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join(
   if (name === 'speech_to_text') {
     const { execFileSync } = require('child_process');
     const fp = safePath(args.path);
-    const ps = "Add-Type -AssemblyName System.Speech; $rec = New-Object System.Speech.Recognition.SpeechRecognitionEngine; $rec.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar)); $rec.SetInputToWaveFile('" + fp.replace(/'/g, "''") + "'); $r = $rec.Recognize(); if ($r) { $r.Text } else { '(no speech recognized)' }";
+    const lang = args.language || 'en-US';
+    const ps = "Add-Type -AssemblyName System.Speech; $culture = New-Object System.Globalization.CultureInfo('" + lang.replace(/'/g, "''") + "'); $rec = New-Object System.Speech.Recognition.SpeechRecognitionEngine($culture); $rec.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar)); $rec.SetInputToWaveFile('" + fp.replace(/'/g, "''") + "'); $r = $rec.Recognize(); if ($r) { $r.Text } else { '(no speech recognized)' }";
     try {
       const out = execFileSync('powershell', ['-Command', ps], { encoding: 'utf8', timeout: 120000 });
       return out.trim() || '(no text)';
@@ -1063,8 +1067,8 @@ const extraToolsDef = [
   { name: 'skill_list', description: 'List saved skills.', parameters: { type: 'object', properties: {} } },
   { name: 'skill_get', description: 'Get a saved skill by name.', parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'skill_run', description: 'Run a saved skill (executes its code as Python).', parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
-  { name: 'text_to_speech', description: 'Convert text to speech and save as WAV in project root (Windows SAPI). Optionally speak on server speakers.', parameters: { type: 'object', properties: { text: { type: 'string' }, filename: { type: 'string' }, speak: { type: 'boolean' } }, required: ['text'] } },
-  { name: 'speech_to_text', description: 'Transcribe a WAV audio file to text (Windows Speech Recognition).', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+  { name: 'text_to_speech', description: 'Convert text to speech and save as WAV in project root (Windows SAPI). Optional voice param for voice selection. Optionally speak on server speakers.', parameters: { type: 'object', properties: { text: { type: 'string' }, filename: { type: 'string' }, speak: { type: 'boolean' }, voice: { type: 'string', description: 'Voice name (e.g. Microsoft Zira Desktop)' } }, required: ['text'] } },
+  { name: 'speech_to_text', description: 'Transcribe a WAV audio file to text (Windows Speech Recognition). Optional language param (e.g. en-US, fr-FR).', parameters: { type: 'object', properties: { path: { type: 'string' }, language: { type: 'string', description: 'Language code (default: en-US)' } }, required: ['path'] } },
   { name: 'analyze_image', description: 'Analyze an image file (screenshot etc.) using a vision model and answer a question about it.', parameters: { type: 'object', properties: { path: { type: 'string' }, question: { type: 'string' }, model: { type: 'string' } }, required: ['path'] } },
 ];
 
