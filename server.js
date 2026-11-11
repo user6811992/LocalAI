@@ -1193,6 +1193,49 @@ function ollamaRequest(path, bodyObj) {
   });
 }
 
+// ---------- Context compaction helpers ----------
+const _ctxCache = new Map();
+async function getModelContextLength(model) {
+  if (_ctxCache.has(model)) return _ctxCache.get(model);
+  try {
+    const r = await ollamaRequest('/api/show', { name: model });
+    if (r.status === 200 && r.data && r.data.model_info) {
+      const info = r.data.model_info;
+      for (const key of Object.keys(info)) {
+        if (key.endsWith('.context_length')) {
+          const val = info[key];
+          _ctxCache.set(model, val);
+          return val;
+        }
+      }
+    }
+  } catch (e) {}
+  _ctxCache.set(model, 0);
+  return 0;
+}
+
+function estimateTokens(text) {
+  // Rough estimate: ~4 chars per token for English
+  return Math.ceil((text || '').length / 4);
+}
+
+async function summarizeMessages(messages, model) {
+  if (!messages || messages.length === 0) return null;
+  try {
+    const convo = messages.map((m) => (m.role + ': ' + (m.content || '').slice(0, 500))).join('\n').slice(0, 4000);
+    const r = await ollamaRequest('/api/chat', {
+      model: model,
+      messages: [
+        { role: 'system', content: 'Summarize the following conversation concisely (3-5 sentences). Focus on key facts, decisions, and context needed to continue. Return only the summary, no preamble.' },
+        { role: 'user', content: convo },
+      ],
+      stream: false,
+    });
+    const content = (r.data && r.data.message && r.data.message.content) || '';
+    return content.trim() || null;
+  } catch (e) { return null; }
+}
+
 // Agent tool loop (non-streaming)
 async function runAgent(model, messages, maxIter, opts) {
   opts = opts || {};
@@ -1247,7 +1290,25 @@ async function runAgent(model, messages, maxIter, opts) {
   const cleanRoomHint = cleanRoom ? ' CLEAN ROOM MODE: Do NOT read, view, or access any original source code, binaries, or files from the target. Work only from visible behavior: screenshots, UI layout, text content, and observable functionality. Refuse any tool that would read original code or files. If the user asks to read source, explain that clean room mode prevents this and suggest switching to Deep mode.' : '';
   const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant.' + areHint + craftHint + cleanRoomHint };
   let finalThinking = '';
-  let msgs = [systemMsg].concat(messages.slice());
+  // Context compaction: summarize old messages if conversation is too long
+  let compactedMessages = messages.slice();
+  try {
+    const ctxLen = await getModelContextLength(model);
+    if (ctxLen > 0 && messages.length > 8) {
+      const estTokens = estimateTokens(systemMsg.content + messages.map((m) => m.content || '').join(' '));
+      if (estTokens > ctxLen * 0.75) {
+        // Summarize older messages, keep last 6
+        const toSummarize = messages.slice(0, -6);
+        const recent = messages.slice(-6);
+        const summary = await summarizeMessages(toSummarize, model);
+        if (summary) {
+          compactedMessages = [{ role: 'system', content: 'Summary of earlier conversation:\n' + summary }].concat(recent);
+          console.log('Context compacted: ' + toSummarize.length + ' messages summarized');
+        }
+      }
+    }
+  } catch (e) { /* ignore compaction errors */ }
+  let msgs = [systemMsg].concat(compactedMessages.slice());
   let toolsSupported = true;
   for (let iter = 0; iter < maxIter; iter++) {
     let r;
