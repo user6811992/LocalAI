@@ -1248,56 +1248,6 @@
           status.textContent = 'Done (agent).';
           status.className = 'status';
         }
-        // show thinking block if present
-        if (thinkingText && thinkingText.trim()) {
-          const det = document.createElement('details');
-          det.className = 'thinking-block';
-          const sum = document.createElement('summary');
-          sum.textContent = 'Reasoning';
-          const tc = document.createElement('div');
-          tc.className = 'thinking-content';
-          tc.textContent = thinkingText.trim();
-          det.appendChild(sum);
-          det.appendChild(tc);
-          assistantDiv.insertBefore(det, contentEl);
-        }
-        // show tool log
-        if (data.toolLog && data.toolLog.length) {
-          const logDiv = document.createElement('div');
-          logDiv.style.marginTop = '8px';
-          logDiv.style.fontSize = '12px';
-          logDiv.style.color = 'var(--muted)';
-          logDiv.innerHTML = '<b>Tools used:</b><br>' + data.toolLog.map(t =>
-            '\u2022 ' + escHtml(t.name) + ' ' + escHtml(JSON.stringify(t.args || {}).slice(0,120)) +
-            (toolConfidence(t.resultPreview) ? ' ' + toolConfidence(t.resultPreview) : '') +
-            (t.resultPreview ? '<br>&nbsp;&nbsp;\u2192 ' + escHtml(t.resultPreview.slice(0,200)) : '')
-          ).join('<br>');
-          assistantDiv.appendChild(logDiv);
-        }
-        // show web citations if any
-        if (data.webCitations && data.webCitations.length) {
-          const webCitDiv = document.createElement('div');
-          webCitDiv.style.marginTop = '8px';
-          webCitDiv.style.fontSize = '11px';
-          webCitDiv.style.color = 'var(--muted)';
-          webCitDiv.innerHTML = '<b>Web sources:</b><br>' + data.webCitations.slice(0, 8).map((u, i) => (i+1) + '. <a href="' + escHtml(u) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">' + escHtml(u) + '</a>').join('<br>');
-          assistantDiv.appendChild(webCitDiv);
-        }
-        // update messages with final assistant
-        messages.push({ role: 'assistant', content: finalText });
-        scheduleAutoSave();
-        if (ragCitations.length) {
-          const citDiv = document.createElement('div');
-          citDiv.style.marginTop = '8px';
-          citDiv.style.fontSize = '11px';
-          citDiv.style.color = 'var(--muted)';
-          citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + escHtml(c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
-          assistantDiv.appendChild(citDiv);
-        }
-        if (!toolsDisabled) {
-          status.textContent = 'Done (agent).';
-          status.className = 'status';
-        }
       } else {
         const res = await fetch('/api/chat', {
           method: 'POST',
