@@ -2280,6 +2280,12 @@ const server = http.createServer(async (req, res) => {
           try { fs.unlinkSync(zipPath); } catch (_) {}
           if (!extractRes.ok) { json(res, 500, { ok: false, message: 'Extraction failed: ' + (extractRes.err || extractRes.out), output }); return; }
           output += 'Update extracted successfully. Restart the server to apply.\\n';
+          // Clean up stale files: remove .tmp, .old, .bak files
+          try {
+            const staleFiles = fs.readdirSync(__dirname).filter((f) => f.endsWith('.tmp') || f.endsWith('.old') || f.endsWith('.bak') || f.endsWith('.orig'));
+            for (const f of staleFiles) { try { fs.unlinkSync(path.join(__dirname, f)); } catch (_) {} }
+            if (staleFiles.length) output += 'Cleaned ' + staleFiles.length + ' stale temp files.\\n';
+          } catch (_) {}
         } catch (e) {
           json(res, 500, { ok: false, message: 'Update failed: ' + (e.message || String(e)), output }); return;
         }

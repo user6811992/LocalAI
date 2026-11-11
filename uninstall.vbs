@@ -15,6 +15,40 @@ confirm = MsgBox("Uninstall LocalAI from:" & vbCrLf & base & vbCrLf & vbCrLf & _
                  vbYesNoCancel + vbQuestion, "LocalAI Uninstaller")
 If confirm = vbCancel Then WScript.Quit 0
 
+' ---------- stop running server ----------
+Dim wmiProc, colProc, pNode
+Set wmiProc = GetObject("winmgmts:\\.\root\cimv2")
+Set colProc = wmiProc.ExecQuery("SELECT * FROM Win32_Process WHERE Name='node.exe'")
+For Each pNode In colProc
+  If InStr(1, pNode.CommandLine, "server.js", vbTextCompare) > 0 Then
+    pNode.Terminate
+    WScript.Sleep 1000
+  End If
+Next
+
+' ---------- export user data before removal ----------
+Dim backupDir, udFiles, udf
+backupDir = sh.SpecialFolders("Desktop") & "\AegisAI-backup-" & Year(Now) & Month(Now) & Day(Now)
+If confirm = vbYes Then
+  fso.CreateFolder backupDir
+  udFiles = Array("search-config.json", "memory.json", "skills.json", "chats.json", "rag-store.json", "auth.json")
+  Dim exported
+  exported = ""
+  For Each udf In udFiles
+    If fso.FileExists(base & "\" & udf) Then
+      fso.CopyFile base & "\" & udf, backupDir & "\" & udf, True
+      exported = exported & udf & vbCrLf
+    End If
+  Next
+  If fso.FolderExists(base & "\workspace") Then
+    fso.CopyFolder base & "\workspace", backupDir & "\workspace", True
+    exported = exported & "workspace/" & vbCrLf
+  End If
+  If exported <> "" Then
+    MsgBox "User data exported to:" & vbCrLf & backupDir & vbCrLf & vbCrLf & exported, vbInformation, "LocalAI Uninstaller"
+  End If
+End If
+
 ' Remove shortcuts
 Dim removed
 removed = ""
@@ -30,9 +64,23 @@ If removed = "" Then removed = "No shortcuts found." & vbCrLf
 
 ' Remove app files if requested
 If confirm = vbYes Then
-  ' Stop running server? best-effort: kill node processes running server.js (skip; user can stop manually)
-  MsgBox "Please ensure LocalAI is not running before files are deleted.", vbExclamation, "LocalAI Uninstaller"
   On Error Resume Next
+  ' Remove node_modules
+  If fso.FolderExists(base & "\node_modules") Then
+    fso.DeleteFolder base & "\node_modules", True
+    If Err.Number = 0 Then removed = removed & "node_modules removed." & vbCrLf
+  End If
+  ' Remove .update-backup
+  If fso.FolderExists(base & "\.update-backup") Then
+    fso.DeleteFolder base & "\.update-backup", True
+    If Err.Number = 0 Then removed = removed & ".update-backup removed." & vbCrLf
+  End If
+  ' Remove data cache
+  If fso.FolderExists(base & "\data") Then
+    fso.DeleteFolder base & "\data", True
+    If Err.Number = 0 Then removed = removed & "data cache removed." & vbCrLf
+  End If
+  ' Remove app folder
   fso.DeleteFolder base, True
   If Err.Number <> 0 Then
     MsgBox "Could not fully remove folder: " & Err.Description & vbCrLf & _
