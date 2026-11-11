@@ -169,6 +169,20 @@ Run it by double-clicking `install.vbs`. Or from a command prompt:
 wscript.exe install.vbs
 ```
 
+**Alternative: HTA Installer with Progress Bar**
+
+For a richer installation experience with a visual progress bar, use `install.hta` instead. It provides:
+- Visual progress bar showing installation steps
+- Real-time status log
+- Folder browser dialog
+- All the same features as install.vbs (model pull, shortcuts, firewall, auto-start)
+
+Run it by double-clicking `install.hta`. Or from a command prompt:
+
+```
+mshta.exe install.hta
+```
+
 The launcher itself is **`launcher.vbs`** (Windows Script Host / standard Windows shell) and is portable — it resolves all paths relative to its own location and starts Ollama, the web UI, and the Edge app window. Desktop shortcuts created by the installer point at `launcher.vbs`.
 
 > Note: `tray.ps1` is retained (used by `tray.vbs` for the system-tray icon). The legacy `launch-gui.ps1` and `start.bat` have been removed in favor of `install.vbs` + `launcher.vbs`.

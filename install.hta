@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="ie=edge" />
+<title>AegisAI Installer</title>
+<hta:application id="AegisAIInstaller"
+  applicationname="AegisAI Installer"
+  border="thin"
+  borderstyle="normal"
+  caption="yes"
+  icon=""
+  maximizebutton="no"
+  minimizebutton="yes"
+  showintaskbar="yes"
+  singleinstance="yes"
+  sysmenu="yes"
+  windowstate="normal" />
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #1e1e2e; color: #cdd6f4; }
+  h1 { color: #89b4fa; margin: 0 0 10px; font-size: 22px; }
+  .subtitle { color: #a6adc8; font-size: 13px; margin-bottom: 20px; }
+  .progress-container { background: #313244; border-radius: 8px; height: 24px; overflow: hidden; margin: 15px 0; }
+  .progress-bar { background: linear-gradient(90deg, #89b4fa, #cba6f7); height: 100%; width: 0%; transition: width 0.3s; border-radius: 8px; }
+  .progress-text { text-align: center; font-size: 12px; color: #a6adc8; margin-bottom: 15px; }
+  .status { background: #313244; border-radius: 6px; padding: 10px; font-size: 12px; min-height: 60px; max-height: 200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; }
+  .btn { background: #89b4fa; color: #1e1e2e; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; margin-right: 8px; }
+  .btn:hover { background: #b4befe; }
+  .btn:disabled { background: #585b70; color: #a6adc8; cursor: not-allowed; }
+  .btn-secondary { background: #45475a; color: #cdd6f4; }
+  .row { display: flex; gap: 10px; margin: 10px 0; align-items: center; }
+  .row label { font-size: 13px; min-width: 120px; }
+  .row input[type=text] { flex: 1; padding: 6px 10px; background: #313244; border: 1px solid #45475a; color: #cdd6f4; border-radius: 4px; font-size: 12px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .checkbox-row input { width: 16px; height: 16px; }
+  .section { margin: 15px 0; padding: 12px; background: #181825; border-radius: 8px; }
+  .section h3 { margin: 0 0 8px; font-size: 14px; color: #cba6f7; }
+</style>
+</head>
+<body>
+<h1>AegisAI Installer</h1>
+<p class="subtitle">Local AI web UI with Ollama backend</p>
+
+<div class="progress-container">
+  <div class="progress-bar" id="progressBar"></div>
+</div>
+<div class="progress-text" id="progressText">Ready to install</div>
+
+<div class="section">
+  <h3>Install Location</h3>
+  <div class="row">
+    <label>Destination:</label>
+    <input type="text" id="destPath" value="" />
+    <button class="btn btn-secondary" onclick="browseFolder()">Browse</button>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Options</h3>
+  <div class="checkbox-row"><input type="checkbox" id="optModels" checked /> Pull recommended models (~59 GB)</div>
+  <div class="checkbox-row"><input type="checkbox" id="optDesktop" checked /> Create desktop shortcut</div>
+  <div class="checkbox-row"><input type="checkbox" id="optAutostart" /> Start at login</div>
+  <div class="checkbox-row"><input type="checkbox" id="optFirewall" /> Allow LAN access (firewall rule)</div>
+  <div class="checkbox-row"><input type="checkbox" id="optLaunch" checked /> Launch after install</div>
+</div>
+
+<div class="section">
+  <h3>Log</h3>
+  <div class="status" id="statusLog"></div>
+</div>
+
+<div style="margin-top: 15px;">
+  <button class="btn" id="installBtn" onclick="startInstall()">Install</button>
+  <button class="btn btn-secondary" id="cancelBtn" onclick="window.close()">Cancel</button>
+</div>
+
+<script>
+  const fso = new ActiveXObject("Scripting.FileSystemObject");
+  const sh = new ActiveXObject("WScript.Shell");
+  let srcBase = "";
+  let destBase = "";
+
+  // Determine source folder
+  function init() {
+    srcBase = fso.GetParentFolderName(location.pathname.replace(/^file:\/\//, '').replace(/\//g, '\\'));
+    if (!srcBase) srcBase = sh.CurrentDirectory;
+    if (!fso.FileExists(srcBase + "\\server.js")) {
+      // Try current directory
+      srcBase = sh.CurrentDirectory;
+    }
+    document.getElementById('destPath').value = sh.ExpandEnvironmentStrings("%USERPROFILE%") + "\\Documents\\AegisAI";
+    log("Source: " + srcBase);
+    log("Ready to install.");
+  }
+
+  function log(msg) {
+    const el = document.getElementById('statusLog');
+    el.textContent += new Date().toLocaleTimeString() + " - " + msg + "\n";
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setProgress(pct, text) {
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressText').textContent = text || (pct + '%');
+  }
+
+  function browseFolder() {
+    // Use Shell.Application for folder picker
+    try {
+      const shell = new ActiveXObject("Shell.Application");
+      const folder = shell.BrowseForFolder(0, "Select install location", 0, 0);
+      if (folder) {
+        document.getElementById('destPath').value = folder.Self.Path;
+      }
+    } catch (e) {
+      log("Folder picker not available: " + e.message);
+    }
+  }
+
+  function runCmd(cmd) {
+    try {
+      const rc = sh.Run(cmd, 0, true);
+      return rc;
+    } catch (e) {
+      log("Command error: " + e.message);
+      return -1;
+    }
+  }
+
+  function resolveOllama() {
+    const p = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") + "\\Programs\\Ollama\\ollama.exe";
+    if (fso.FileExists(p)) return p;
+    return "ollama";
+  }
+
+  async function startInstall() {
+    const btn = document.getElementById('installBtn');
+    btn.disabled = true;
+    document.getElementById('cancelBtn').disabled = true;
+    destBase = document.getElementById('destPath').value;
+    if (!destBase) { log("No destination selected."); btn.disabled = false; return; }
+
+    try {
+      // Step 1: Create destination
+      setProgress(5, "Creating destination folder...");
+      if (!fso.FolderExists(destBase)) fso.CreateFolder(destBase);
+      log("Installing to: " + destBase);
+
+      // Step 2: Stop running server
+      setProgress(10, "Stopping running servers...");
+      try {
+        const wmi = GetObject("winmgmts:\\\\.\\root\\cimv2");
+        const procs = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='node.exe'");
+        const e = new Enumerator(procs);
+        for (; !e.atEnd(); e.moveNext()) {
+          const p = e.item();
+          if (p.CommandLine && p.CommandLine.indexOf("server.js") >= 0) {
+            p.Terminate();
+            log("Terminated server process (PID " + p.ProcessId + ")");
+          }
+        }
+      } catch (e) { log("WMI error: " + e.message); }
+      // Wait for process to exit
+      // (simple delay)
+      var delay = new Date().getTime() + 2000;
+      while (new Date().getTime() < delay) {}
+
+      // Step 3: Backup if updating
+      setProgress(15, "Checking for existing installation...");
+      if (fso.FileExists(destBase + "\\server.js")) {
+        log("Existing installation found. Creating backup...");
+        const backupDir = destBase + "\\.update-backup";
+        if (fso.FolderExists(backupDir)) fso.DeleteFolder(backupDir, true);
+        fso.CreateFolder(backupDir);
+        const udFiles = ["search-config.json", "memory.json", "skills.json", "chats.json", "rag-store.json", "auth.json"];
+        for (let i = 0; i < udFiles.length; i++) {
+          if (fso.FileExists(destBase + "\\" + udFiles[i])) {
+            fso.CopyFile(destBase + "\\" + udFiles[i], backupDir + "\\" + udFiles[i], true);
+          }
+        }
+        if (fso.FolderExists(destBase + "\\workspace")) {
+          fso.CopyFolder(destBase + "\\workspace", backupDir + "\\workspace", true);
+        }
+        log("Backup created.");
+      }
+
+      // Step 4: Copy files
+      setProgress(25, "Copying application files...");
+      if (srcBase.toLowerCase() !== destBase.toLowerCase()) {
+        const srcFolder = fso.GetFolder(srcBase);
+        const files = new Enumerator(srcFolder.Files);
+        for (; !files.atEnd(); files.moveNext()) {
+          const f = files.item();
+          fso.CopyFile(f.Path, destBase + "\\" + f.Name, true);
+        }
+        const subFolders = new Enumerator(srcFolder.SubFolders);
+        for (; !subFolders.atEnd(); subFolders.moveNext()) {
+          const sf = subFolders.item();
+          if (sf.Name.toLowerCase() !== "node_modules") {
+            const target = destBase + "\\" + sf.Name;
+            if (fso.FolderExists(target)) fso.DeleteFolder(target, true);
+            fso.CopyFolder(sf.Path, target, true);
+          }
+        }
+        log("Files copied.");
+      }
+
+      // Step 5: Verify copy
+      setProgress(50, "Verifying files...");
+      const verifyFiles = ["server.js", "package.json", "launcher.vbs", "public\\index.html"];
+      let allPresent = true;
+      for (let i = 0; i < verifyFiles.length; i++) {
+        if (!fso.FileExists(destBase + "\\" + verifyFiles[i])) {
+          allPresent = false;
+          log("MISSING: " + verifyFiles[i]);
+        }
+      }
+      if (!allPresent) {
+        log("WARNING: Some files missing after copy.");
+      } else {
+        log("Verification passed.");
+      }
+
+      // Step 6: npm install
+      setProgress(60, "Installing npm dependencies...");
+      log("Running npm install...");
+      const npmRc = runCmd("cmd /c cd /d \"" + destBase + "\" && npm install");
+      if (npmRc !== 0) {
+        log("npm install may have failed (code " + npmRc + "). Run manually.");
+      } else {
+        log("npm install completed.");
+      }
+      if (!fso.FolderExists(destBase + "\\node_modules")) {
+        log("ERROR: node_modules not found after npm install.");
+      }
+
+      // Step 7: Version check
+      setProgress(75, "Checking versions...");
+      log("Install complete.");
+
+      // Step 8: Desktop shortcut
+      const createDesktop = document.getElementById('optDesktop').checked;
+      if (createDesktop) {
+        setProgress(80, "Creating desktop shortcut...");
+        try {
+          const sc = sh.CreateShortcut(sh.SpecialFolders("Desktop") + "\\AegisAI.lnk");
+          sc.TargetPath = "wscript.exe";
+          sc.Arguments = "\"" + destBase + "\\launcher.vbs\"";
+          sc.WorkingDirectory = destBase;
+          sc.Description = "AegisAI";
+          const iconPath = destBase + "\\public\\icon.ico";
+          if (fso.FileExists(iconPath)) sc.IconLocation = iconPath;
+          else sc.IconLocation = "shell32.dll,13";
+          sc.Save();
+          log("Desktop shortcut created.");
+        } catch (e) {
+          log("Shortcut failed: " + e.message);
+        }
+      }
+
+      // Step 9: Auto-start
+      if (document.getElementById('optAutostart').checked) {
+        setProgress(85, "Setting up auto-start...");
+        try {
+          const sc = sh.CreateShortcut(sh.SpecialFolders("Startup") + "\\AegisAI.lnk");
+          sc.TargetPath = "wscript.exe";
+          sc.Arguments = "\"" + destBase + "\\launcher.vbs\"";
+          sc.WorkingDirectory = destBase;
+          sc.Description = "AegisAI (auto-start)";
+          sc.Save();
+          log("Auto-start shortcut created.");
+        } catch (e) {
+          log("Auto-start failed: " + e.message);
+        }
+      }
+
+      // Step 10: Firewall
+      if (document.getElementById('optFirewall').checked) {
+        setProgress(90, "Adding firewall rule...");
+        runCmd("netsh advfirewall firewall add rule name=\"AegisAI\" dir=in action=allow protocol=tcp localport=8080");
+        log("Firewall rule added.");
+      }
+
+      // Step 11: Pull models
+      if (document.getElementById('optModels').checked) {
+        setProgress(92, "Pulling models (this will take a while)...");
+        log("Pulling recommended models...");
+        const models = ["llama3.2:3b", "llama3.2:1b", "qwen2.5:14b", "qwen2.5-coder:14b", "mistral:7b", "phi3:mini", "gemma2:9b", "deepseek-coder:6.7b", "nomic-embed-text", "moondream"];
+        const ollamaBin = resolveOllama();
+        for (let i = 0; i < models.length; i++) {
+          setProgress(92 + Math.floor(i / models.length * 6), "Pulling " + models[i] + "...");
+          log("Pulling " + models[i] + "...");
+          runCmd("cmd /c \"" + ollamaBin + "\" pull " + models[i]);
+        }
+        log("Model pull complete.");
+      }
+
+      // Step 12: Launch
+      setProgress(99, "Finalizing...");
+      if (document.getElementById('optLaunch').checked) {
+        try {
+          sh.Run("wscript.exe \"" + destBase + "\\launcher.vbs\"", 1, false);
+          log("Launched AegisAI.");
+        } catch (e) {
+          log("Launch failed: " + e.message);
+        }
+      }
+
+      setProgress(100, "Installation complete!");
+      log("=== Installation complete ===");
+      log("Installed to: " + destBase);
+      document.getElementById('installBtn').disabled = false;
+      document.getElementById('cancelBtn').disabled = false;
+      document.getElementById('cancelBtn').textContent = "Close";
+
+    } catch (e) {
+      log("ERROR: " + e.message);
+      setProgress(0, "Installation failed");
+      document.getElementById('installBtn').disabled = false;
+      document.getElementById('cancelBtn').disabled = false;
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
