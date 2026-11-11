@@ -22,11 +22,11 @@ services:
       - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}
     volumes:
       - aegisai_data:/app/data
-      - ./memory.json:/app/memory.json
-      - ./chats.json:/app/chats.json
-      - ./skills.json:/app/skills.json
-      - ./search-config.json:/app/search-config.json
-      - ./workspace:/app/workspace
+      - aegisai_memory:/app/memory.json
+      - aegisai_chats:/app/chats.json
+      - aegisai_skills:/app/skills.json
+      - aegisai_search:/app/search-config.json
+      - aegisai_workspace:/app/workspace
     depends_on:
       ollama:
         condition: service_healthy
@@ -40,3 +40,8 @@ services:
 volumes:
   ollama_data:
   aegisai_data:
+  aegisai_memory:
+  aegisai_chats:
+  aegisai_skills:
+  aegisai_search:
+  aegisai_workspace:

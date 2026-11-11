@@ -9,8 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>AegisAI</title>
-<!-- Markdown rendering + syntax highlighting (CDN) -->
+<!-- Markdown rendering + syntax highlighting + sanitization (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
 <style>
@@ -1017,7 +1018,8 @@
         // Render markdown + code highlighting
         if (typeof marked !== 'undefined' && finalText) {
           try {
-            contentEl.innerHTML = marked.parse(finalText);
+            const rawHtml2 = marked.parse(finalText);
+            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml2) : rawHtml2;
             if (typeof hljs !== 'undefined') {
               contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
             }
@@ -1143,7 +1145,8 @@
         // Render markdown + code highlighting
         if (typeof marked !== 'undefined') {
           try {
-            contentEl.innerHTML = marked.parse(accumulated);
+            const rawHtml = marked.parse(accumulated);
+            contentEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
             if (typeof hljs !== 'undefined') {
               contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
             }

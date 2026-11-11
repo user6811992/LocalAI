@@ -1738,6 +1738,10 @@ function proxyToOllama(req, res) {
   req.on('data', (c) => bodyChunks.push(c));
   req.on('end', () => {
     const bodyBuf = Buffer.concat(bodyChunks);
+    // Handle client disconnect
+    req.on('close', () => {
+      if (proxyReq) { try { proxyReq.destroy(); } catch (_) {} }
+    });
     const opts = {
       hostname: OLLAMA_URL.hostname,
       port: OLLAMA_URL.port || 80,
@@ -1747,8 +1751,9 @@ function proxyToOllama(req, res) {
     };
     delete opts.headers['transfer-encoding'];
     let retries = 0;
+    let proxyReq = null;
     function attempt() {
-      const proxyReq = http.request(opts, (proxyRes) => {
+      proxyReq = http.request(opts, (proxyRes) => {
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         proxyRes.pipe(res);
       });
