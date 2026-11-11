@@ -1063,6 +1063,18 @@ async function runAgent(model, messages, maxIter, opts) {
     tools.length = 0;
     tools.push(...newTools);
   }
+  // Clean room mode: filter out tools that read original code/files
+  if (cleanRoom) {
+    const blockedPatterns = ['read_file', 'replace_in_file', 'write_file', 'list_files', 'run_command', 'inspect_', 'decompile', 'disassemble', 'get_pseudocode', 'get_disassembly', 'get_hexdump', 'list_strings', 'list_imports', 'list_exports', 'get_function_info', 'get_function_prototype', 'get_function_hash', 'get_function_byte_pattern', 'get_control_flow_graph', 'get_callers', 'get_callees', 'get_xrefs', 'get_comment', 'list_function_variables', 'rename_local_variable', 'set_local_variable', 'set_function_prototype', 'list_data_types', 'get_data_type', 'set_data_type', 'create_structure', 'set_structure_field', 'infer_structure', 'get_structure_field_xrefs', 'list_classes', 'get_class_info', 'analyze_program', 'get_analysis_status', 'list_tasks', 'get_task_status', 'cancel_task', 'open_program', 'close_program', 'import_file', 'export_program'];
+    const filtered = tools.filter((t) => {
+      const name = (t.function && t.function.name) || '';
+      return !blockedPatterns.some((p) => name.includes(p));
+    });
+    if (filtered.length > 0) {
+      tools.length = 0;
+      tools.push(...filtered);
+    }
+  }
   const log = [];
   const memBlock = '';
   const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
