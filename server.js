@@ -2623,7 +2623,8 @@ const server = http.createServer(async (req, res) => {
         onEvent: () => {},
       });
       json(res, 200, { final: result.final, thinking: result.thinking, toolLog: result.toolLog, toolsDisabled: result.toolsDisabled });
-      autoExtractMemories(result.messages || messages || []).catch(() => {});
+      // Extract memories in background (delayed to avoid blocking Ollama)
+      setTimeout(() => { autoExtractMemories(result.messages || messages || []).catch(() => {}); }, 5000);
     } catch (e) {
       console.error('agent error:', e && e.stack || e);
       json(res, 500, { error: e.message || String(e) });

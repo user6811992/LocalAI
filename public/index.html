@@ -135,7 +135,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.28</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.29</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -215,7 +215,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.28</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.29</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -878,7 +878,7 @@
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: currentAbort ? currentAbort.signal : undefined,
+          // signal removed - was causing hang
           body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked, cleanRoom: document.getElementById('cleanRoomMode').checked, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
@@ -887,10 +887,12 @@
           throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
         }
         console.log('Agent: res.ok=', res.ok, 'status=', res.status);
-        const data = await res.json();
+        let data;
+        try { data = await res.json(); } catch (e) { console.log('Agent: JSON parse error:', e.message); throw e; }
         console.log('Agent: parsed data, final length:', (data.final || '').length);
         const finalText = data.final || '';
         const thinkingText = data.thinking || '';
+        console.log('Agent: setting contentEl.textContent to:', finalText.substring(0, 50));
         contentEl.textContent = finalText;
         if (data.toolsDisabled) {
           status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';
@@ -940,7 +942,7 @@
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: currentAbort ? currentAbort.signal : undefined,
+          // signal removed - was causing hang
           body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages) : messages), stream: true, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
