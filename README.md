@@ -51,12 +51,18 @@ cd LocalAI
 npm install
 ```
 
-### Install (Linux / macOS)
+### Install (Linux / macOS — from source)
 ```bash
 git clone https://github.com/user6811992/LocalAI.git
 cd LocalAI
 npm install
 ```
+
+### Install (macOS — .dmg, coming soon)
+Download `AegisAI-<version>.dmg` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, open it, and drag AegisAI to Applications. Build locally with `bash installer/build-dmg.sh` (requires `create-dmg`: `brew install create-dmg`).
+
+### Install (Linux — AppImage, coming soon)
+Download `AegisAI-<version>-x86_64.AppImage` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, make it executable (`chmod +x`), and run it. Build locally with `bash installer/build-appimage.sh` (requires `appimagetool`).
 
 ### Run
 ```bash

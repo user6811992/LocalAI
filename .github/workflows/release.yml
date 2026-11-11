@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Build installer
+        run: .\installer\build.ps1 -BundleNode
+      - name: Upload installer
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/output/AegisAI-Setup-*.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Install create-dmg
+        run: brew install create-dmg
+      - name: Build .dmg
+        run: bash installer/build-dmg.sh
+      - name: Upload .dmg
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/output/AegisAI-*.dmg
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Install appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool
+          chmod +x /tmp/appimagetool
+          sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
+      - name: Build AppImage
+        run: bash installer/build-appimage.sh
+      - name: Upload AppImage
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/output/AegisAI-*.AppImage
