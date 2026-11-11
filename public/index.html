@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.55</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.56</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -237,7 +237,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.55</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.56</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -1107,6 +1107,7 @@
         let toolsDisabled = false;
         let webCitations = [];
         let tokenStats = null;
+        let compacted = 0;
         let accumulated = '';
         while (true) {
           const { done, value } = await reader.read();
@@ -1133,6 +1134,7 @@
               toolsDisabled = obj.toolsDisabled || false;
               webCitations = obj.webCitations || [];
               tokenStats = obj.tokenStats || null;
+              compacted = obj.compacted || compacted;
               contentEl.textContent = finalText;
             }
             if (obj.type === 'done') {
@@ -1142,6 +1144,7 @@
               toolsDisabled = obj.toolsDisabled || toolsDisabled;
               webCitations = obj.webCitations || webCitations;
               tokenStats = obj.tokenStats || tokenStats;
+              compacted = obj.compacted || compacted;
               contentEl.textContent = finalText;
             }
             if (obj.type === 'error') {
@@ -1182,6 +1185,14 @@
           ts.style.marginTop = '4px';
           ts.textContent = 'Tokens: ' + (tokenStats.prompt || 0) + ' prompt + ' + (tokenStats.generated || 0) + ' generated';
           assistantDiv.appendChild(ts);
+        }
+        if (compacted) {
+          const cb = document.createElement('div');
+          cb.style.fontSize = '10px';
+          cb.style.color = 'var(--accent2)';
+          cb.style.marginTop = '2px';
+          cb.textContent = '\\u26A1 Compacted ' + compacted + ' earlier messages into a summary';
+          assistantDiv.appendChild(cb);
         }
         if (toolsDisabled) {
           status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';

@@ -1304,6 +1304,7 @@ async function runAgent(model, messages, maxIter, opts) {
   let totalPromptEvalCount = 0;
   // Context compaction: summarize old messages if conversation is too long
   let compactedMessages = messages.slice();
+  let compactedCount = 0;
   try {
     const ctxLen = await getModelContextLength(model);
     if (ctxLen > 0 && messages.length > 8) {
@@ -1315,7 +1316,7 @@ async function runAgent(model, messages, maxIter, opts) {
         const summary = await summarizeMessages(toSummarize, model);
         if (summary) {
           compactedMessages = [{ role: 'system', content: 'Summary of earlier conversation:\n' + summary }].concat(recent);
-          console.log('Context compacted: ' + toSummarize.length + ' messages summarized');
+          compactedCount = toSummarize.length;
         }
       }
     }
@@ -1363,7 +1364,7 @@ async function runAgent(model, messages, maxIter, opts) {
         msgs.push({ role: 'assistant', content: msg.content || '', thinking: msg.thinking || '' });
         const tokenStats = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
         if (onEvent) onEvent({ type: 'final', content: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats });
-        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats };
+        return { messages: msgs, final: msg.content || '', thinking: msg.thinking || finalThinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats, compacted: compactedCount };
       } else {
         throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
       }
@@ -1392,7 +1393,7 @@ async function runAgent(model, messages, maxIter, opts) {
       msgs.push({ role: 'assistant', content: content, thinking: thinking });
       const tokenStats2 = (totalEvalCount || totalPromptEvalCount) ? { prompt: totalPromptEvalCount, generated: totalEvalCount } : null;
       if (onEvent) onEvent({ type: 'final', content: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2 });
-      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2 };
+      return { messages: msgs, final: content, thinking: thinking, toolLog: log, webCitations, toolsDisabled: !toolsSupported, tokenStats: tokenStats2, compacted: compactedCount };
     }
     if (msg.thinking) finalThinking += msg.thinking + '\n';
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls, thinking: msg.thinking || '' });
