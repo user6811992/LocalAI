@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.53</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.54</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -237,7 +237,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.53</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.54</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -888,7 +888,73 @@
         });
       });
       btnBar.appendChild(copyBtn);
+      // Regenerate button
+      const regenBtn = document.createElement('button');
+      regenBtn.textContent = 'Regenerate';
+      regenBtn.style.fontSize = '10px';
+      regenBtn.style.padding = '1px 6px';
+      regenBtn.addEventListener('click', () => {
+        // Remove this assistant message from DOM and messages array
+        const idx = messages.findIndex((m, i) => i === messages.length - 1 && m.role === 'assistant');
+        if (idx >= 0) messages.splice(idx, 1);
+        div.remove();
+        // Re-send (find last user message)
+        const lastUser = [...messages].reverse().find(m => m.role === 'user');
+        if (lastUser) {
+          // Re-trigger send with the last user message
+          input.value = lastUser.content;
+          send();
+        }
+      });
+      btnBar.appendChild(regenBtn);
       div.appendChild(btnBar);
+    }
+    // Edit button for user messages
+    if (role === 'user') {
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.style.fontSize = '10px';
+      editBtn.style.padding = '1px 6px';
+      editBtn.style.marginTop = '4px';
+      editBtn.addEventListener('click', () => {
+        const ce = div.querySelector('.content');
+        const original = ce.textContent;
+        const textarea = document.createElement('textarea');
+        textarea.value = original;
+        textarea.style.width = '100%';
+        textarea.style.minHeight = '60px';
+        textarea.style.fontSize = '13px';
+        textarea.style.background = 'var(--panel2)';
+        textarea.style.color = 'var(--text)';
+        textarea.style.border = '1px solid var(--border)';
+        textarea.style.borderRadius = '6px';
+        textarea.style.padding = '6px';
+        ce.replaceWith(textarea);
+        editBtn.textContent = 'Save';
+        editBtn.onclick = () => {
+          const newText = textarea.value.trim();
+          if (!newText) return;
+          // Find this message in the array and truncate after it
+          const msgIdx = messages.findIndex(m => m.role === 'user' && m.content === original);
+          if (msgIdx >= 0) {
+            messages[msgIdx].content = newText;
+            messages.length = msgIdx + 1;
+          }
+          // Remove all subsequent messages from DOM
+          let next = div.nextElementSibling;
+          while (next) { const n = next.nextElementSibling; next.remove(); next = n; }
+          // Re-render the edited message
+          const newCe = document.createElement('div');
+          newCe.className = 'content';
+          newCe.textContent = newText;
+          textarea.replaceWith(newCe);
+          editBtn.textContent = 'Edit';
+          // Re-send
+          input.value = newText;
+          send();
+        };
+      });
+      div.appendChild(editBtn);
     }
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
