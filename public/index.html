@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.56</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.57</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -237,7 +237,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.56</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.57</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -996,7 +996,7 @@
   function buildMessageText(text, atts) {
     let out = text || '';
     (atts || []).forEach(a => {
-      if (a.text) out += '\\n\\n--- ' + a.name + ' ---\\n' + a.text;
+      if (a.text) out += '\n\n--- ' + a.name + ' ---\n' + a.text;
       else if (a.type && a.type.startsWith('image/')) out += '\\n\\n[Image attached: ' + a.name + ']';
       else out += '\\n\\n[File attached: ' + a.name + ']';
     });
@@ -1027,7 +1027,7 @@
     try {
       const rr = await fetch('/api/rag-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: rawText, topK: 4, collection: currentRagCollection }) });
       const rd = await rr.json();
-      if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
+      if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\n---\n');
       if (rd.citations) ragCitations = rd.citations;
 
     } catch (e) {}
@@ -1039,7 +1039,7 @@
         if (b64) imageB64.push(b64);
       }
     }
-    const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
+    const text = buildMessageText(rawText, atts) + (ragContext ? '\n\n[Relevant document context:]\n' + ragContext : '');
     input.value = '';
     attachments = [];
     renderAttachments();
@@ -1294,7 +1294,7 @@
           citDiv.innerHTML = '<b>Sources:</b><br>' + ragCitations.map((c, i) => (i+1) + '. ' + escHtml(c.docName || 'doc') + ' (score: ' + (c.score || 0).toFixed(2) + ')').join('<br>');
           assistantDiv.appendChild(citDiv);
         }
-        if (!data.toolsDisabled) {
+        if (!toolsDisabled) {
           status.textContent = 'Done (agent).';
           status.className = 'status';
         }
