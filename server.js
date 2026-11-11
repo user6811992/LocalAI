@@ -3205,6 +3205,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url === '/api/setup/status' && req.method === 'GET') {
+    let needsSetup = true;
+    try {
+      const fs2 = require('fs');
+      const flagFile = path.join(DATA_DIR, 'setup-done.flag');
+      if (fs2.existsSync(flagFile)) needsSetup = false;
+    } catch (e) {}
+    json(res, 200, { needsSetup, ollamaUrl: OLLAMA });
+    return;
+  }
+  if (req.url === '/api/setup/complete' && req.method === 'POST') {
+    try {
+      const fs2 = require('fs');
+      fs2.writeFileSync(path.join(DATA_DIR, 'setup-done.flag'), new Date().toISOString(), 'utf8');
+      json(res, 200, { ok: true });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/stats' && req.method === 'GET') {
     try {
       const chats = loadChats();

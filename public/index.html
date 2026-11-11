@@ -2798,6 +2798,17 @@
     });
   }
 
+  // Redirect to first-run setup wizard if needed
+  (async function checkSetup() {
+    try {
+      const r = await fetch('/api/setup/status');
+      const d = await r.json();
+      if (d && d.needsSetup && window.location.pathname !== '/setup.html') {
+        window.location.href = '/setup.html';
+      }
+    } catch (e) {}
+  })();
+
   // Auto-clear stale service worker cache when version changes
   (async function checkVersion() {
     try {
