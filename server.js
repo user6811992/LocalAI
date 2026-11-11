@@ -1334,13 +1334,12 @@ async function getModelContextLength(model) {
       for (const key of Object.keys(info)) {
         if (key.endsWith('.context_length')) {
           const val = info[key];
-          _ctxCache.set(model, val);
-          return val;
+          if (val > 0) _ctxCache.set(model, val);
+          return val || 0;
         }
       }
     }
   } catch (e) {}
-  _ctxCache.set(model, 0);
   return 0;
 }
 
