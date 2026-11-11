@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>AegisAI</title>
+<!-- Markdown rendering + syntax highlighting (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -135,7 +139,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.41</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.42</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -216,7 +220,7 @@
     <button class="close-btn" id="aboutClose" onclick="document.getElementById('aboutBackdrop').classList.remove('open')">&times;</button>
     <h2>AegisAI � About</h2>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;">
-      <div><b>Version:</b> <span id="aboutVersion">v2.1.41</span></div>
+      <div><b>Version:</b> <span id="aboutVersion">v2.1.42</span></div>
       <div><b>Backend:</b> Ollama at 127.0.0.1:11434</div>
       <div><b>Web UI:</b> http://127.0.0.1:8080</div>
       <div><b>Models:</b> <span id="aboutModels">�</span></div>
@@ -845,7 +849,6 @@
   }
 
   async function send() {
-    console.log('send() called, generating:', generating);
     if (generating) {
       // queue instead of dropping
       const t = input.value.trim();
@@ -860,8 +863,7 @@
       return;
     }
     const rawText = input.value.trim();
-    console.log('send: rawText=', rawText, 'attachments=', attachments.length);
-    if (!rawText && attachments.length === 0) { console.log('send: early return (empty)'); return; }
+    if (!rawText && attachments.length === 0) { return; }
     if (rawText) { inputHistory.push(rawText); historyIndex = -1; }
     const atts = attachments.slice();
     // RAG: fetch relevant chunks from indexed docs
@@ -872,8 +874,8 @@
       const rd = await rr.json();
       if (rd.chunks && rd.chunks.length) ragContext = rd.chunks.join('\\n---\\n');
       if (rd.citations) ragCitations = rd.citations;
-      console.log('send: RAG done, chunks:', rd.chunks ? rd.chunks.length : 0);
-    } catch (e) { console.log('send: RAG error:', e.message); }
+
+    } catch (e) {}
     const text = buildMessageText(rawText, atts) + (ragContext ? '\\n\\n[Relevant document context:]\\n' + ragContext : '');
     input.value = '';
     attachments = [];
@@ -919,7 +921,6 @@
 
     try {
       if (useAgent) {
-        console.log('Agent path: fetching /api/agent');
         const res = await fetch('/api/agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -931,14 +932,20 @@
           try { t = await res.text(); } catch (e) { t = ''; }
           throw new Error('HTTP ' + res.status + (t ? ': ' + t.slice(0, 300) : ''));
         }
-        console.log('Agent: res.ok=', res.ok, 'status=', res.status);
         let data;
-        try { data = await res.json(); } catch (e) { console.log('Agent: JSON parse error:', e.message); throw e; }
-        console.log('Agent: parsed data, final length:', (data.final || '').length);
+        try { data = await res.json(); } catch (e) { throw e; }
         const finalText = data.final || '';
         const thinkingText = data.thinking || '';
-        console.log('Agent: setting contentEl.textContent to:', finalText.substring(0, 50));
         contentEl.textContent = finalText;
+        // Render markdown + code highlighting
+        if (typeof marked !== 'undefined' && finalText) {
+          try {
+            contentEl.innerHTML = marked.parse(finalText);
+            if (typeof hljs !== 'undefined') {
+              contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
+            }
+          } catch (e) {}
+        }
         if (data.toolsDisabled) {
           status.textContent = 'Note: this model does not support tools (agent mode disabled for this model).';
           status.className = 'status err';
@@ -984,7 +991,6 @@
           status.className = 'status';
         }
       } else {
-        console.log('Non-agent path: fetching /api/chat');
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1000,10 +1006,9 @@
         const decoder = new TextDecoder();
         let buffer = '';
         let accumulated = '';
-        console.log('Non-agent: reader obtained, reading...');
         while (true) {
           const { done, value } = await reader.read();
-          if (done) { console.log('Non-agent: stream done'); break; }
+          if (done) { break; }
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop();
@@ -1011,8 +1016,7 @@
             if (!line.trim()) continue;
             try {
               const obj = JSON.parse(line);
-              console.log('Non-agent: parsed line, content:', (obj.message && obj.message.content) ? obj.message.content.substring(0, 30) : '(none)');
-              if (obj.message && obj.message.content) {
+                    if (obj.message && obj.message.content) {
                 accumulated += obj.message.content;
                 contentEl.textContent = accumulated;
                 chat.scrollTop = chat.scrollHeight;
@@ -1028,6 +1032,15 @@
           } catch (e) {}
         }
         messages.push({ role: 'assistant', content: accumulated });
+        // Render markdown + code highlighting
+        if (typeof marked !== 'undefined') {
+          try {
+            contentEl.innerHTML = marked.parse(accumulated);
+            if (typeof hljs !== 'undefined') {
+              contentEl.querySelectorAll('pre code').forEach((block) => { hljs.highlightElement(block); });
+            }
+          } catch (e) { contentEl.textContent = accumulated; }
+        }
         if (ragCitations.length) {
           const citDiv = document.createElement('div');
           citDiv.style.marginTop = '8px';
@@ -1076,7 +1089,7 @@
     }
   }
 
-  if (sendBtn) { sendBtn.addEventListener('click', send); console.log('Send button listener attached'); } else { console.error('sendBtn is null!'); }
+  if (sendBtn) { sendBtn.addEventListener('click', send); }
   const stopBtn = document.getElementById('stopBtn');
   if (stopBtn) {
     stopBtn.addEventListener('click', () => {
