@@ -196,7 +196,7 @@ async function initMcp() {
         Client = sdk.Client;
         StdioClientTransport = sdk.StdioClientTransport;
       } catch (e2) {
-        throw new Error('MCP SDK not installed. Run: npm install in the AegisAI folder. (' + (e.message || e) + ')');
+        throw new Error('MCP SDK missing. In the AegisAI folder run: npm install  (then restart the server). If npm is not on PATH, install Node.js from https://nodejs.org first. Underlying error: ' + (e.message || e));
       }
     }
     const reaBin = resolveReaBin();

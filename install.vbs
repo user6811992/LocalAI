@@ -287,8 +287,26 @@ If fso.FileExists(destBase & "\package.json") Then
   MsgBox "Installing npm dependencies..." & vbCrLf & "This may take a moment.", vbInformation, "AegisAI Installer"
   On Error Resume Next
   Dim npmRc
-  npmRc = sh.Run("cmd /c cd /d """ & destBase & """ && npm install", 1, True)
-  If Err.Number <> 0 Or npmRc <> 0 Then
+  ' Retry npm install up to 3 times (network hiccups are common)
+  Dim npmAttempt
+  For npmAttempt = 1 To 3
+    LogMsg logPath, "npm install attempt " & npmAttempt & "/3"
+    npmRc = sh.Run("cmd /c cd /d """ & destBase & """ && npm install", 1, True)
+    If Err.Number = 0 And npmRc = 0 Then Exit For
+    If npmAttempt < 3 Then
+      MsgBox "npm install attempt " & npmAttempt & " failed (code " & npmRc & "). Retrying...", vbExclamation, "AegisAI Installer"
+      WScript.Sleep 2000
+    End If
+  Next
+  ' Verify the critical dependency actually landed
+  If Not fso.FolderExists(destBase & "\node_modules\@modelcontextprotocol\sdk") Then
+    MsgBox "npm install did not produce node_modules/@modelcontextprotocol/sdk." & vbCrLf & _
+           "RE tools and PDF parsing will not work until you run:" & vbCrLf & _
+           "  cd """ & destBase & """" & vbCrLf & _
+           "  npm install" & vbCrLf & vbCrLf & _
+           "from a command prompt. See install.log for details.", vbExclamation, "AegisAI Installer"
+    LogMsg logPath, "CRITICAL: @modelcontextprotocol/sdk missing after npm install."
+  ElseIf Err.Number <> 0 Or npmRc <> 0 Then
     MsgBox "npm install may have failed (code " & npmRc & ")." & vbCrLf & _
            "Run manually: cd """ & destBase & """ && npm install", vbExclamation, "AegisAI Installer"
     LogMsg logPath, "npm install failed (rc=" & npmRc & ")."

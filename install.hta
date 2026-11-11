@@ -219,17 +219,21 @@
         log("Verification passed.");
       }
 
-      // Step 6: npm install
+      // Step 6: npm install (with retries)
       setProgress(60, "Installing npm dependencies...");
-      log("Running npm install...");
-      const npmRc = runCmd("cmd /c cd /d \"" + destBase + "\" && npm install");
-      if (npmRc !== 0) {
+      let npmRc = 0;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        log("npm install attempt " + attempt + "/3...");
+        npmRc = runCmd("cmd /c cd /d \"" + destBase + "\" && npm install");
+        if (npmRc === 0) break;
+        if (attempt < 3) { log("Attempt " + attempt + " failed (code " + npmRc + "). Retrying..."); }
+      }
+      if (!fso.FolderExists(destBase + "\\node_modules\\@modelcontextprotocol\\sdk")) {
+        log("ERROR: node_modules/@modelcontextprotocol/sdk missing. RE tools and PDF parsing will not work until you run: cd \"" + destBase + "\" && npm install");
+      } else if (npmRc !== 0) {
         log("npm install may have failed (code " + npmRc + "). Run manually.");
       } else {
         log("npm install completed.");
-      }
-      if (!fso.FolderExists(destBase + "\\node_modules")) {
-        log("ERROR: node_modules not found after npm install.");
       }
 
       // Step 7: Version check
