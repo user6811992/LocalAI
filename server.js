@@ -2455,9 +2455,20 @@ const server = http.createServer(async (req, res) => {
           : { ok: false, out: 'Invalid model name' };
         result = r.ok ? { ok: true, message: (r.out || 'done').trim().slice(0, 500) } : { ok: false, message: (r.out || '').slice(0, 500) };
       } else if (id === 're-tools') {
-        // Update rea-agents from npm, then reconnect MCP
-        const { exec } = require('child_process');
-        const npmUpdate = await new Promise((resolve) => {
+        // Disconnect MCP client BEFORE npm install so rea process releases file locks
+        try { if (mcpClient) await mcpClient.close(); } catch (_) {}
+        mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
+        // Kill lingering rea processes that might hold locks
+        const { exec, execSync } = require('child_process');
+        const isWin = process.platform === 'win32';
+        try {
+          if (isWin) execSync('taskkill /F /IM rea.exe 2>nul', { stdio: 'ignore' });
+          else execSync('pkill -f rea 2>/dev/null || true', { stdio: 'ignore' });
+        } catch (_) {}
+        // Wait for processes to exit
+        await new Promise((r) => setTimeout(r, 1000));
+        // Run npm install
+        let npmUpdate = await new Promise((resolve) => {
           exec('npm install -g rea-agents@latest', {
             timeout: 300000,
             maxBuffer: 1024 * 1024,
@@ -2467,7 +2478,21 @@ const server = http.createServer(async (req, res) => {
             else resolve({ ok: true, msg: (stdout || stderr || 'updated').trim().slice(0, 400) });
           });
         });
-        mcpReady = false; mcpError = null; mcpClient = null; mcpTools = [];
+        // Retry with --force if failed with lock/permission error
+        if (!npmUpdate.ok && /EPERM|EBUSY|locked|operation not permitted/i.test(npmUpdate.msg)) {
+          await new Promise((r) => setTimeout(r, 3000));
+          npmUpdate = await new Promise((resolve) => {
+            exec('npm install -g rea-agents@latest --force', {
+              timeout: 300000,
+              maxBuffer: 1024 * 1024,
+              env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') }),
+            }, (err, stdout, stderr) => {
+              if (err) resolve({ ok: false, msg: (stderr || err.message || '').slice(0, 400) });
+              else resolve({ ok: true, msg: (stdout || stderr || 'updated').trim().slice(0, 400) });
+            });
+          });
+        }
+        // Reconnect MCP after npm install
         await initMcp();
         const connMsg = mcpReady ? ('RE tools ready. ' + mcpTools.length + ' tools.') : (mcpError || 'reconnect failed');
         result = { ok: npmUpdate.ok && mcpReady, message: (npmUpdate.ok ? 'npm: ' + npmUpdate.msg + ' | ' : 'npm failed: ' + npmUpdate.msg + ' | ') + connMsg };
