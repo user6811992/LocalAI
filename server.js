@@ -140,7 +140,7 @@ const MAX_BODY_BYTES = parseInt(process.env.AEGISAI_MAX_BODY || (100 * 1024 * 10
 // Optional allow-list for the agent project root (AEGISAI_PROJECT_ROOT_ALLOWLIST).
 // Entries are separated by the platform path-list separator (or ';').
 const PROJECT_ROOT_ALLOWLIST = (process.env.AEGISAI_PROJECT_ROOT_ALLOWLIST || '')
-  .split(/[;:]/).map((s) => s.trim()).filter(Boolean)
+  .split(/[;]|:(?!\\|\/)/).map((s) => s.trim()).filter(Boolean)
   .map((s) => path.resolve(s));
 // Total tool budget for the agent (coding tools are always included).
 const TOOL_BUDGET = Math.max(1, parseInt(process.env.AEGISAI_TOOL_BUDGET || '64', 10));
@@ -207,7 +207,7 @@ function isValidModelName(name) {
 }
 
 // ---------- Anonymous Error Logging ----------
-const ERROR_LOG_FILE = path.join(__dirname, 'error.log');
+const ERROR_LOG_FILE = path.join(process.env.AEGISAI_DATA_DIR || __dirname, 'error.log');
 const MAX_ERROR_LOG_SIZE = 100 * 1024; // 100KB max
 
 function sanitizeForLog(text) {
@@ -725,9 +725,9 @@ async function httpGet(url, headers) {
   const lib = url.startsWith('https') ? https : http;
   return new Promise((resolve) => {
     const req = lib.get(url, { headers: headers || { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => resolve({ status: res.statusCode, data }));
+      let chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString('utf8') }));
     });
     req.on('error', (e) => resolve({ status: 0, data: 'ERROR: ' + e.message }));
     req.setTimeout(20000, () => { req.destroy(); resolve({ status: 0, data: 'TIMEOUT' }); });
@@ -1363,8 +1363,9 @@ function ollamaStream(path, bodyObj, onChunk, signal) {
         let done = false;
         let evalCount = 0;
         let promptEvalCount = 0;
+        const _ollamaDec = new TextDecoder('utf-8', { fatal: false });
         res.on('data', (c) => {
-          buf += c.toString();
+          buf += _ollamaDec.decode(c, { stream: true });
           const lines = buf.split('\n');
           buf = lines.pop();
           for (const line of lines) {
@@ -3504,6 +3505,7 @@ const server = http.createServer(async (req, res) => {
       // Ensure name starts with a letter (Ollama requirement)
       if (safeName && !/^[a-z]/.test(safeName)) safeName = 'm' + safeName;
       if (!safeName) safeName = 'imported-model';
+      if (safeName && !safeName.includes(':')) safeName += ':latest';
       if (!safeName || !/^[a-z0-9]/.test(safeName)) {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;

@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "AegisAI"
-#define MyAppVersion "2.1.75"
+#define MyAppVersion "2.1.82"
 #define MyAppPublisher "AegisAI"
 #define MyAppURL "https://github.com/user6811992/LocalAI"
 #define MyAppExeName "launcher.vbs"
@@ -105,6 +105,9 @@ Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "{cm
 
 [UninstallRun]
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""AegisAI"""; Flags: runhidden; RunOnceId: "RemoveFirewall"
+
+[Run]
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=\"AegisAI\" dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: IsTaskSelected('firewall')
 
 [Code]
 function NodeRuntimeExists: Boolean;
