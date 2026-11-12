@@ -1,6 +1,6 @@
 {
   "name": "aegisai",
-  "version": "2.1.75",
+  "version": "2.1.76",
   "description": "AegisAI - local AI web UI with Ollama backend",
   "scripts": {
     "start": "node server.js",
@@ -10,4 +10,4 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "pdf-parse": "^1.1.1"
   }
-}
+}\n
