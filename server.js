@@ -3365,18 +3365,27 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // Use forward slashes in Modelfile (Ollama prefers them)
-      const posixPath = resolvedModelPath.replace(/\\/g, '/');
+      // Ollama 0.40.x cannot parse absolute Windows paths in FROM (drive-letter colon).
+      // Use a relative path and run ollama in the GGUF's own folder.
+      const modelDir = path.dirname(resolvedModelPath);
+      const modelBaseName = path.basename(resolvedModelPath);
       const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
-      // Write Modelfile with FROM directive (quoted path for spaces)
-      fs.writeFileSync(tmpModelfile, 'FROM ' + posixPath + '\n', 'utf8');
+      // Write Modelfile with relative FROM directive
+      fs.writeFileSync(tmpModelfile, 'FROM ./' + modelBaseName + '\n', 'utf8');
       console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
       console.log('Import: file size:', stat.size, 'path:', modelPath);
-      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 300000, maxBuffer: 10 * 1024 * 1024 });
+      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 300000, maxBuffer: 10 * 1024 * 1024, cwd: modelDir });
       try { fs.unlinkSync(tmpModelfile); } catch (_) {}
-      // Strip ANSI escape codes from output
-      const cleanOut = ((r.out || r.err) || 'done').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[\?[0-9]*[hl]/g, '').trim();
-      json(res, 200, { ok: r.ok, message: cleanOut.slice(0, 200), name: safeName });
-      return;
+      // Strip ANSI escape codes and spinner glyphs from output
+      const rawOut = (r.out || r.err) || 'done';
+      const cleanOut = rawOut
+        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        .replace(/\x1b\[\?[0-9]*[hl]/g, '')
+        .replace(/[\u280b\u2819\u2839\u2838\u283c\u2834\u2836\u2837\u2807\u280f]/g, '')
+        .replace(/gathering model components\s*/gi, '')
+        .trim();
+      console.log('Import result:', cleanOut.slice(0, 500));
+      json(res, 200, { ok: r.ok, message: cleanOut.slice(0, 500), name: safeName });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); return; }
   }
 
