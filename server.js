@@ -135,6 +135,7 @@ function logError(context, error) {
 process.on('uncaughtException', (err) => {
   logError('uncaughtException', err);
   console.error('Uncaught exception:', err && err.message);
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
   logError('unhandledRejection', reason);
@@ -464,11 +465,17 @@ function toolCacheSet(key, value) {
   while (_toolCache.size > TOOL_CACHE_MAX) _toolCache.delete(_toolCache.keys().next().value);
 }
 
+// Tools that should never be cached (mutating, polling, status checks)
+const NO_CACHE_PATTERNS = /status|poll|open|close|delete|write|create|update|set_|move|copy|remove|rename|exec|run_|call_|start|stop|restart|launch/i;
+function isCacheableTool(name) {
+  return !NO_CACHE_PATTERNS.test(name);
+}
+
 async function callMcpTool(name, args) {
-  // Check cache first
+  // Check cache first (only for read-only tools)
   const cacheKey = toolCacheKey(name, args);
   const cached = _toolCache.get(cacheKey);
-  if (cached && (Date.now() - cached.ts) < 5 * 60 * 1000) {
+  if (isCacheableTool(name) && cached && (Date.now() - cached.ts) < 5 * 60 * 1000) {
     return cached.result + '\n[cached]';
   }
   // Route to awesome-re client if prefixed
@@ -484,7 +491,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
+    if (isCacheableTool(name)) toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   // Route to GhidrAssistMCP client if prefixed
@@ -500,7 +507,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
+    if (isCacheableTool(name)) toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   // Route to Craft Anything client if prefixed
@@ -516,7 +523,7 @@ async function callMcpTool(name, args) {
       }
     }
     if (r && r.isError) text = 'ERROR: ' + text;
-    toolCacheSet(cacheKey, { result: text, ts: Date.now() });
+    if (isCacheableTool(name)) toolCacheSet(cacheKey, { result: text, ts: Date.now() });
     return text;
   }
   if (!mcpClient) throw new Error('MCP not ready: ' + (mcpError || 'unknown'));
@@ -918,7 +925,7 @@ async function execCodingTool(name, args) {
     } else {
       result = 'Unknown search engine: ' + engine;
     }
-    if (result && result.length && !result.startsWith('ERROR') && !result.startsWith('TIMEOUT')) {
+    if (result && result.length && !result.startsWith('ERROR') && !result.startsWith('TIMEOUT') && process.env.AEGISAI_AUTO_SAVE_SEARCH === '1') {
       await addMemory('Web search (' + engine + '): ' + args.query + '\n' + result.slice(0, 1500), 'web_search', ['search']).catch(() => {});
     }
     return result;
@@ -1351,7 +1358,7 @@ function ollamaRequest(path, bodyObj) {
       }
     );
     req.on('error', reject);
-    req.setTimeout(60000, () => { req.destroy(new Error('Ollama request timeout (60s)')); });
+    req.setTimeout(120000, () => { req.destroy(new Error('Ollama request timeout (120s)')); });
     req.write(data);
     req.end();
   });
@@ -1988,9 +1995,12 @@ const server = http.createServer(async (req, res) => {
   // Cross-site request and DNS-rebinding guard. A cross-site HTML form can only send
   // text/plain, and a rebinding page presents its own Host name; both are refused here.
   const hostHeader = String(req.headers.host || '').toLowerCase();
+  const allowedHosts = (process.env.AEGISAI_ALLOWED_HOSTS || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
   if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') {
-    // Accept any port on loopback.
-    if (!/^127\.0\.0\.1:\d+$/.test(hostHeader) && !/^localhost:\d+$/.test(hostHeader) && !/^\[::1\]:\d+$/.test(hostHeader)) {
+    // Accept any port on loopback, or any host in AEGISAI_ALLOWED_HOSTS.
+    const isLoopback = /^127\.0\.0\.1:\d+$/.test(hostHeader) || /^localhost:\d+$/.test(hostHeader) || /^\[::1\]:\d+$/.test(hostHeader);
+    const isAllowed = allowedHosts.some((h) => hostHeader === h || hostHeader.startsWith(h + ':'));
+    if (!isLoopback && !isAllowed) {
       json(res, 421, { error: 'Misdirected request: unexpected Host header' });
       return;
     }

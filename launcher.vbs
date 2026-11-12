@@ -33,9 +33,9 @@ wshShell.Environment("Process")("DO_NOT_TRACK") = "1"
 wshShell.Environment("Process")("HF_HUB_DISABLE_TELEMETRY") = "1"
 wshShell.Environment("Process")("DISABLE_TELEMETRY") = "1"
 wshShell.Environment("Process")("OLLAMA_NOHISTORY") = "true"
-If wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = "" Then wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = "C:\Ghidra\ghidra_12.1.4_PUBLIC"
-If wshShell.Environment("Process")("JAVA_HOME") = "" Then wshShell.Environment("Process")("JAVA_HOME") = "C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot"
-wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar"
+If wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = "" Then wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") = ""
+If wshShell.Environment("Process")("JAVA_HOME") = "" Then wshShell.Environment("Process")("JAVA_HOME") = ""
+If wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "" Then wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar"
 wshShell.Environment("Process")("PATH") = "C:\jadx\bin;" & wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") & ";" & wshShell.Environment("Process")("JAVA_HOME") & "\bin;" & ollamaDir & ";" & "C:\Program Files\nodejs;" & wshShell.ExpandEnvironmentStrings("%APPDATA%") & "\npm;" & wshShell.Environment("Process")("PATH")
 
 ' Start Ollama if not running

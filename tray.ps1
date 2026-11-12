@@ -20,4 +20,4 @@ $icon.ContextMenuStrip = $menu
 # Auto-start at login: place a shortcut in Startup folder
 # (handled by install.ps1)
 
-while ($true) { Start-Sleep -Seconds 5 }
+while ($true) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 }

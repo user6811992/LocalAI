@@ -58,7 +58,7 @@ echo "Installing to: $DEST"
 # ---------- stop running server before update ----------
 if [ -f "$DEST/server.js" ]; then
   echo "Stopping any running AegisAI server..."
-  pkill -f "node.*server.js" 2>/dev/null || true
+  if [ -f "$DEST/.pid" ]; then kill "$(cat "$DEST/.pid")" 2>/dev/null || true; rm -f "$DEST/.pid"; fi
   sleep 2
 fi
 
