@@ -22,9 +22,13 @@ Set colProc = wmiProc.ExecQuery("SELECT * FROM Win32_Process WHERE Name='node.ex
 For Each pNode In colProc
   If InStr(1, pNode.CommandLine, "server.js", vbTextCompare) > 0 Then
     pNode.Terminate
-    WScript.Sleep 1000
+    WScript.Sleep 2000
   End If
 Next
+' Also kill by taskkill as backup
+On Error Resume Next
+sh.Run "taskkill /F /IM node.exe /FI ""WINDOWTITLE eq AegisAI*"" 2>nul", 0, True
+On Error GoTo 0
 
 ' ---------- remove the firewall rule added for LAN access ----------
 On Error Resume Next

@@ -203,7 +203,14 @@ function doInstall() {
     advance('Copying application files...');
     // Determine source folder from the HTA file location (more reliable than CurrentDirectory)
     var srcBase = '';
-    try { srcBase = fso.GetParentFolderName(location.pathname.replace(/^file:\/\//i, '').replace(/\//g, '\\')); } catch (e) {}
+    try {
+      var lp = location.pathname || '';
+      lp = lp.replace(/^file:\/\//i, '');
+      lp = decodeURIComponent(lp);
+      lp = lp.replace(/\//g, '\\');
+      if (lp.charAt(0) === '\\') lp = lp.substring(1);
+      srcBase = fso.GetParentFolderName(lp);
+    } catch (e) { srcBase = ''; }
     if (!srcBase || !fso.FileExists(srcBase + '\\server.js')) {
       srcBase = sh.CurrentDirectory;
     }
