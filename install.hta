@@ -201,8 +201,48 @@ function doInstall() {
   try {
     // Step 1: Copy files
     advance('Copying application files...');
-    var srcBase = sh.CurrentDirectory;
-    // (File copy handled by the VBS installer; HTA just reports)
+    // Determine source folder from the HTA file location (more reliable than CurrentDirectory)
+    var srcBase = '';
+    try { srcBase = fso.GetParentFolderName(location.pathname.replace(/^file:\/\//i, '').replace(/\//g, '\\')); } catch (e) {}
+    if (!srcBase || !fso.FileExists(srcBase + '\\server.js')) {
+      srcBase = sh.CurrentDirectory;
+    }
+    if (!fso.FileExists(srcBase + '\\server.js')) {
+      log('ERROR: Source files not found. Run install.hta from the extracted AegisAI folder.');
+      setStatus('Source files not found. Extract the release zip first, then run install.hta from that folder.', 'err');
+      setButtons('<button onclick="currentStep=0;renderStep();">Back</button>');
+      return;
+    }
+    // Copy application files if destination differs from source
+    if (srcBase.toLowerCase() !== destBase.toLowerCase()) {
+      try {
+        var srcFolder = fso.GetFolder(srcBase);
+        var item;
+        var eFiles = new Enumerator(srcFolder.Files);
+        for (; !eFiles.atEnd(); eFiles.moveNext()) {
+          fso.CopyFile(eFiles.item().Path, destBase + '\\' + eFiles.item().Name, True);
+        }
+        var eSubs = new Enumerator(srcFolder.SubFolders);
+        for (; !eSubs.atEnd(); eSubs.moveNext()) {
+          var sfName = eSubs.item().Name;
+          if (sfName.toLowerCase() !== 'node_modules' && sfName.toLowerCase() !== '.git' && sfName.toLowerCase() !== 'repos' && sfName.toLowerCase() !== 'tools') {
+            fso.CopyFolder(eSubs.item().Path, destBase + '\\' + sfName, True);
+          }
+        }
+        log('Files copied successfully.');
+      } catch (e) {
+        log('WARNING: File copy error: ' + e.message);
+      }
+    } else {
+      log('Source and destination are the same; skipping copy.');
+    }
+    // Verify key files exist
+    if (!fso.FileExists(destBase + '\\server.js') || !fso.FileExists(destBase + '\\package.json')) {
+      log('ERROR: Key files missing after copy.');
+      setStatus('Installation failed: server.js or package.json not found in ' + destBase, 'err');
+      setButtons('<button onclick="currentStep=4;renderStep();">Retry</button>');
+      return;
+    }
     var _t = new Date().getTime(); while (new Date().getTime() - _t < 500) {}
 
     // Step 2: npm install
@@ -263,7 +303,7 @@ function doInstall() {
       }
       for (var j = 0; j < toPull.length; j++) {
         log('Pulling ' + toPull[j] + ' (' + (j+1) + '/' + toPull.length + ')...');
-        var rc = sh.Run('cmd /c "' + resolveOllama() + '" pull ' + toPull[j], 1, True);
+        var rc = sh.Run('cmd /c ""' + resolveOllama() + '"" pull ' + toPull[j], 1, True);
         if (rc !== 0) log('  WARNING: pull returned code ' + rc);
       }
     } else {
