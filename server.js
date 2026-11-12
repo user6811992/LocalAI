@@ -10,9 +10,128 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 // Prevent a single request error from crashing the whole server
 // (moved to error logging section below)
-const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+const BACKEND_TYPE = (process.env.BACKEND_TYPE || 'ollama').toLowerCase();
+const BACKEND_URL = process.env.BACKEND_URL || process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+const OLLAMA = BACKEND_URL;
 const PUBLIC = path.join(__dirname, 'public');
 const OLLAMA_URL = new URL(OLLAMA);
+const IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+
+// ---------- Multi-backend adapter ----------
+// Normalizes OpenAI-compatible backends (llama.cpp, LM Studio) to Ollama format
+
+async function backendListModels() {
+  if (!IS_OPENAI_COMPAT) {
+    // Ollama native
+    const r = await fetch(OLLAMA + '/api/tags');
+    if (!r.ok) throw new Error('Failed to list models: ' + r.status);
+    return r.json();
+  }
+  // OpenAI-compatible: GET /v1/models
+  const r = await fetch(OLLAMA + '/v1/models');
+  if (!r.ok) throw new Error('Failed to list models: ' + r.status);
+  const data = await r.json();
+  const models = (data.data || []).map((m) => ({
+    name: m.id,
+    model: m.id,
+    modified_at: new Date().toISOString(),
+    size: 0,
+    digest: '',
+    details: { format: 'gguf', family: 'unknown', parameter_size: '', quantization_level: '' },
+  }));
+  return { models };
+}
+
+async function backendShowModel(name) {
+  if (!IS_OPENAI_COMPAT) {
+    const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!r.ok) throw new Error('Model not found: ' + r.status);
+    return r.json();
+  }
+  // OpenAI-compatible: find in model list
+  const models = await backendListModels();
+  const found = (models.models || []).find((m) => m.name === name);
+  if (!found) throw new Error('Model not found: ' + name);
+  return { modelfile: '', parameters: '', template: '', details: found.details || {} };
+}
+
+async function backendChat(bodyObj, onChunk, signal) {
+  if (!IS_OPENAI_COMPAT) {
+    // Ollama native - use existing ollamaStream
+    return ollamaStream('/api/chat', bodyObj, onChunk, signal);
+  }
+  // OpenAI-compatible: POST /v1/chat/completions
+  const oaiBody = {
+    model: bodyObj.model,
+    messages: bodyObj.messages || [],
+    stream: bodyObj.stream !== false,
+    temperature: bodyObj.options && bodyObj.options.temperature,
+  };
+  if (bodyObj.tools && bodyObj.tools.length) {
+    oaiBody.tools = bodyObj.tools;
+    oaiBody.tool_choice = 'auto';
+  }
+  const r = await fetch(OLLAMA + '/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(oaiBody),
+    signal,
+  });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error('Chat failed: ' + r.status + ' ' + errText);
+  }
+  if (bodyObj.stream === false) {
+    const data = await r.json();
+    const choice = (data.choices && data.choices[0]) || {};
+    const msg = choice.message || {};
+    const result = { message: { role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls }, done: true };
+    if (onChunk) onChunk({ type: 'token', content: msg.content || '' });
+    return { status: 200, data: result };
+  }
+  // Streaming
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === '[DONE]') continue;
+      try {
+        const obj = JSON.parse(payload);
+        const delta = (obj.choices && obj.choices[0] && obj.choices[0].delta) || {};
+        if (delta.content) {
+          fullContent += delta.content;
+          if (onChunk) onChunk({ type: 'token', content: delta.content });
+        }
+        if (delta.tool_calls) {
+          // Forward tool calls
+          if (onChunk) onChunk({ type: 'tool_calls', tool_calls: delta.tool_calls });
+        }
+      } catch (_) {}
+    }
+  }
+  if (onChunk) onChunk({ type: 'done' });
+  return { status: 200, data: { message: { role: 'assistant', content: fullContent }, done: true } };
+}
+
+// Model pull (Ollama only; OpenAI backends don't support pull)
+async function backendPullModel(name, onProgress) {
+  if (IS_OPENAI_COMPAT) {
+    throw new Error('Model pulling is not supported for OpenAI-compatible backends. Download models manually.');
+  }
+  // Use existing Ollama pull logic
+  return null; // handled by existing code
+}
+
 
 // Maximum accepted HTTP request body (bytes). Guards against memory-exhaustion
 // attacks on the JSON upload endpoints.
@@ -1220,6 +1339,9 @@ const codingToolNames = new Set(codingToolsDef.map((t) => t.name));
 
 // ---------- Streaming helper for Ollama ----------
 function ollamaStream(path, bodyObj, onChunk, signal) {
+  if (IS_OPENAI_COMPAT) {
+    return backendChat(bodyObj, onChunk, signal);
+  }
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(bodyObj);
     const req = http.request(
@@ -1709,9 +1831,8 @@ async function getComponents() {
     let ollamaStatus = 'unknown';
     let models = [];
     try {
-      const r = await fetch(OLLAMA + '/api/tags');
-      if (r.ok) {
-        const d = await r.json();
+      const d = await backendListModels();
+      if (d && d.models) {
         models = d.models || [];
         ollamaStatus = 'connected';
       } else {
@@ -2258,8 +2379,8 @@ const server = http.createServer(async (req, res) => {
       if (id === 'ollama-backend') {
         const cv = await getCachedVersions();
         if (!(cv.ollamaVer && cv.ollamaLatest && cv.ollamaVer !== cv.ollamaLatest)) {
-          const r = await fetch(OLLAMA + '/api/tags');
-          result = r.ok ? { ok: true, message: 'Ollama reachable. ' + ((await r.json()).models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'HTTP ' + r.status };
+          const d = await backendListModels();
+          result = d ? { ok: true, message: 'Backend reachable. ' + (d.models || []).length + ' model(s). Up to date.' } : { ok: false, message: 'Backend unreachable' };
           json(res, 200, result);
           return;
         }
@@ -2505,7 +2626,7 @@ const server = http.createServer(async (req, res) => {
       try { current = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || 'unknown'; } catch (_) {}
       // check if git repo
       const isGit = fs.existsSync(path.join(__dirname, '.git'));
-      json(res, 200, { version: current, isGit });
+      json(res, 200, { version: current, isGit, backend: BACKEND_TYPE, backendUrl: BACKEND_URL, isOpenAICompat: IS_OPENAI_COMPAT });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
@@ -3015,9 +3136,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const { name } = JSON.parse(body || '{}');
       if (!name) { json(res, 400, { error: 'model name required' }); return; }
-      const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-      if (!r.ok) { json(res, r.status, { error: 'HTTP ' + r.status }); return; }
-      const d = await r.json();
+      const d = await backendShowModel(name);
       json(res, 200, { info: d });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
