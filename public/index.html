@@ -662,7 +662,7 @@
     }
   })();
 
-  hostEl.textContent = 'Backend: Ollama (local)';
+  fetch('/api/version').then(r=>r.json()).then(d=>{ if(hostEl) hostEl.textContent = 'Backend: ' + (d.backend||'ollama') + ' at ' + (d.backendUrl||'127.0.0.1:11434'); }).catch(()=>{ if(hostEl) hostEl.textContent = 'Backend: unknown'; });
 
   // Auth: inject token into all fetch calls
   const _origFetch = window.fetch;
@@ -1058,7 +1058,7 @@
         const hr = await fetch('/api/version');
         if (!hr.ok) throw new Error('Ollama not reachable (HTTP ' + hr.status + ')');
       } catch (he) {
-        throw new Error('Ollama not running. Start it with: ollama serve (or launch the Ollama app).');
+        throw new Error('Backend not reachable. Start it and click Refresh.');
       }
       const r = await fetch('/api/tags');
       if (!r.ok) throw new Error('HTTP ' + r.status);
