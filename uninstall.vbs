@@ -67,9 +67,23 @@ If fso.FileExists(sh.SpecialFolders("Startup") & "\AegisAI.lnk") Then
 End If
 If removed = "" Then removed = "No shortcuts found." & vbCrLf
 
+' Validate this is actually an AegisAI folder before deleting
+Dim isAegisAI
+isAegisAI = False
+If fso.FileExists(base & "\server.js") And fso.FileExists(base & "\package.json") Then
+  Dim pkgContent
+  pkgContent = fso.OpenTextFile(base & "\package.json", 1).ReadAll()
+  If InStr(1, pkgContent, "aegisai", vbTextCompare) > 0 Then
+    isAegisAI = True
+  End If
+End If
+
 ' Remove app files if requested
 If confirm = vbYes Then
-  On Error Resume Next
+  If Not isAegisAI Then
+    MsgBox "This does not appear to be an AegisAI installation folder. Aborting file removal." & vbCrLf & base, vbExclamation, "LocalAI Uninstaller"
+  Else
+    On Error Resume Next
   ' Remove node_modules
   If fso.FolderExists(base & "\node_modules") Then
     fso.DeleteFolder base & "\node_modules", True
@@ -94,6 +108,7 @@ If confirm = vbYes Then
     removed = removed & "Application folder removed." & vbCrLf
   End If
   On Error GoTo 0
+  End If
 End If
 
 MsgBox "Uninstall complete." & vbCrLf & vbCrLf & removed, vbInformation, "LocalAI Uninstaller"

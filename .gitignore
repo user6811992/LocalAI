@@ -29,3 +29,10 @@ chats.json
 # Awesome-RE cached data
 data/are-entries.json
 
+
+# Secret and state files
+auth.json
+settings.json
+setup-done.flag
+aegisai.db
+.update-backup/

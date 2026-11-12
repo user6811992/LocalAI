@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "AegisAI"
-#define MyAppVersion "2.1.70"
+#define MyAppVersion "2.1.75"
 #define MyAppPublisher "AegisAI"
 #define MyAppURL "https://github.com/user6811992/LocalAI"
 #define MyAppExeName "launcher.vbs"
@@ -30,8 +30,6 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\public\icon.ico
-WizardImageFile=installer\assets\wizard.bmp
-WizardSmallImageFile=installer\assets\wizard-small.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -71,7 +69,6 @@ Source: "..\SECURITY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 Source: "..\tests\*"; DestDir: "{app}\tests"; Flags: ignoreversion recursesubdirs
 Source: "..\lib\*"; DestDir: "{app}\lib"; Flags: ignoreversion recursesubdirs
-Source: "..\installer\assets\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 ; Installers (kept for compatibility)
 Source: "..\install.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\install.sh"; DestDir: "{app}"; Flags: ignoreversion
@@ -111,12 +108,6 @@ Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "{cm
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""AegisAI"""; Flags: runhidden; RunOnceId: "RemoveFirewall"
 
 [Code]
-var
-  NodeRuntimeExists: Boolean;
-  OllamaRuntimeExists: Boolean;
-  IsBundledNode: Boolean;
-  HasSelectedModels: Boolean;
-
 function NodeRuntimeExists: Boolean;
 begin
   Result := DirExists(ExpandConstant('{app}\runtime\node'));

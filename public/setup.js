@@ -216,10 +216,12 @@ function renderDone() {
   stepContent.innerHTML = `
     <h2>Setup complete!</h2>
     <p>AegisAI is ready to use.</p>
-    <div class="check ok"><span class="icon">✓</span><span class="label">Ollama ${setupData.ollamaOk ? 'connected' : 'not connected (start it later)'}</span></div>
-    <p style="font-size:12px;color:var(--muted);margin-top:12px;">You can re-run this wizard from Settings → "Re-run setup".</p>
+    <div class="check ok"><span class="icon">&#10003;</span><span class="label">Ollama ${setupData.ollamaOk ? 'connected' : 'not connected (start it later)'}</span></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:12px;">You can re-run this wizard from Settings -> "Re-run setup".</p>
   `;
   try { localStorage.setItem('localai_firstRunDone', '1'); } catch (e) {}
+  // Mark setup as complete on the server so the redirect stops happening
+  fetch('/api/setup/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => {});
   setButtons(true, () => { window.location.href = '/'; }, 'Open AegisAI');
 }
 

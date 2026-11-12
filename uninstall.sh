@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST="${1:-$HOME/AegisAI}"
+DEST="${1:-$SCRIPT_DIR}"
 if [ ! -d "$DEST" ]; then
   DEST="$HOME/AegisAI/AegisAI"
 fi

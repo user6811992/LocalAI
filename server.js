@@ -919,7 +919,7 @@ async function execCodingTool(name, args) {
       result = 'Unknown search engine: ' + engine;
     }
     if (result && result.length && !result.startsWith('ERROR') && !result.startsWith('TIMEOUT')) {
-      addMemory('Web search (' + engine + '): ' + args.query + '\n' + result.slice(0, 1500), 'web_search', ['search']);
+      await addMemory('Web search (' + engine + '): ' + args.query + '\n' + result.slice(0, 1500), 'web_search', ['search']).catch(() => {});
     }
     return result;
   }
@@ -1084,8 +1084,7 @@ if (USE_SQLITE) {
   }
 }
 // Modularized data-access layer (lib/). Inline helpers below delegate to these.
-const memoryModule = require('./lib/memory').make({ dataDir: DATA_DIR, ollamaRequest });
-const settingsModule = require('./lib/settings').make(DATA_DIR);
+// lib/memory and lib/settings are unused dead code; removed to avoid startup failure in Docker
 function loadSkills() { return loadJsonFile(SKILLS_FILE); }
 function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
 function loadSettings() {
@@ -1094,7 +1093,7 @@ function loadSettings() {
 function saveSettings(s) { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s || {}, null, 2), 'utf8'); } catch (e) {} }
 
 function loadJsonFile(fp) { try { return JSON.parse(require('fs').readFileSync(fp, 'utf8')); } catch (e) { return []; } }
-function saveJsonFile(fp, data) { require('fs').writeFileSync(fp, JSON.stringify(data, null, 2), 'utf8'); }
+function saveJsonFile(fp, data) { const fs = require('fs'); const tmp = fp + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8'); fs.renameSync(tmp, fp); }
 
 async function embedText(text) {
   try {
@@ -1115,10 +1114,12 @@ function cosineSim(a, b) {
 async function addMemory(text, source, tags) {
   text = (text || '').trim();
   if (!text || text.length < 8) return null;
+  // Compute embedding FIRST (before loading), to avoid stale reads
+  const emb = await embedText(text);
+  // Then load -> check dedup -> push -> save with no await in between
   const memories = loadJsonFile(MEMORY_FILE);
   // dedup by exact text
   if (memories.some((m) => m.text === text)) return null;
-  const emb = await embedText(text);
   const entry = { id: 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, source: source || 'manual', tags: tags || [], created: new Date().toISOString(), embedding: emb };
   memories.push(entry);
   // cap at 5000
@@ -1298,7 +1299,7 @@ function ollamaStream(path, bodyObj, onChunk, signal) {
 function readBody(req, maxBytes) {
   const limit = maxBytes || MAX_BODY_BYTES;
   return new Promise((resolve, reject) => {
-    let data = '';
+    let chunks = [];
     let size = 0;
     let tooLarge = false;
     req.on('data', (c) => {
@@ -1312,12 +1313,10 @@ function readBody(req, maxBytes) {
         ));
         return;
       }
-      data += c;
+      chunks.push(c);
     });
-    req.on('end', () => { if (!tooLarge) resolve(data); });
+    req.on('end', () => { if (!tooLarge) resolve(Buffer.concat(chunks).toString('utf8')); });
     req.on('error', reject);
-    // Note: an oversized body is rejected above, but the request is still drained so the
-    // client receives the 413 response instead of a connection reset.
   });
 }
 
@@ -1492,7 +1491,7 @@ async function runAgent(model, messages, maxIter, opts) {
     if (r.status !== 200) {
       const errText = (r.data && r.data.error) ? String(r.data.error) : JSON.stringify(r.data);
       // Retry without tools on any 400 error (model may not support tools or tools payload too large)
-      if (r.status === 400 || /does not support tools/i.test(errText) || /invalid/i.test(errText)) {
+      if (r.status === 400 || /does not support tools/i.test(errText) || /does not support tool/i.test(errText) || /tool calling/i.test(errText) || /function calling/i.test(errText) || /invalid/i.test(errText)) {
         toolsSupported = false;
         r = await ollamaRequest('/api/chat', { model, messages: msgs, stream: false, options: opts.options || undefined, keep_alive: opts.keep_alive });
         if (r.status !== 200) throw new Error('Ollama error ' + r.status + ': ' + JSON.stringify(r.data));
@@ -1891,9 +1890,10 @@ function proxyToOllama(req, res) {
   req.on('data', (c) => bodyChunks.push(c));
   req.on('end', () => {
     const bodyBuf = Buffer.concat(bodyChunks);
-    // Handle client disconnect
-    req.on('close', () => {
-      if (proxyReq) { try { proxyReq.destroy(); } catch (_) {} }
+    // Handle client disconnect (use res.on('close'), not req.on('close'),
+    // because req 'close' fires after body consumption in Node 16+)
+    res.on('close', () => {
+      if (!res.writableFinished && proxyReq) { try { proxyReq.destroy(); } catch (_) {} }
     });
     const opts = {
       hostname: OLLAMA_URL.hostname,
@@ -1911,7 +1911,8 @@ function proxyToOllama(req, res) {
         proxyRes.pipe(res);
       });
       proxyReq.on('error', (e) => {
-        if (retries < 2 && (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT')) {
+        const isRetryable = req.method === 'GET' || req.method === 'HEAD';
+        if (isRetryable && retries < 2 && (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT')) {
           retries++;
           setTimeout(attempt, 500 * retries);
           return;
@@ -2558,7 +2559,7 @@ const server = http.createServer(async (req, res) => {
       const isGit = fs.existsSync(path.join(__dirname, '.git'));
       let output = '';
       // Files that contain user data/API keys (gitignored, but back up just in case)
-      const userDataFiles = ['search-config.json', 'memory.json', 'skills.json', 'chats.json', 'rag-store.json', 'auth.json'];
+      const userDataFiles = ['search-config.json', 'memory.json', 'skills.json', 'chats.json', 'rag-store.json', 'auth.json', 'settings.json', 'setup-done.flag', 'aegisai.db'];
       const backupDir = path.join(__dirname, '.update-backup');
       try { if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true }); } catch (_) {}
       // Back up user data before update
@@ -2625,11 +2626,29 @@ const server = http.createServer(async (req, res) => {
           const zipPath = path.join(os.tmpdir(), 'aegisai-update.zip');
           await new Promise((resolve, reject) => {
             const file = fs.createWriteStream(zipPath);
-            https.get(zipUrl, (r) => {
-              r.pipe(file);
-              file.on('finish', () => { file.close(); resolve(); });
-            }).on('error', (e) => { fs.unlinkSync(zipPath); reject(e); });
+            // Follow redirects (GitHub returns 302 for asset downloads)
+            function download(url, redirects) {
+              if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+              https.get(url, { headers: { 'User-Agent': 'AegisAI' } }, (r) => {
+                if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 303 || r.statusCode === 307) {
+                  const loc = r.headers.location;
+                  r.resume();
+                  if (!loc) { reject(new Error('Redirect with no location')); return; }
+                  download(loc, redirects + 1);
+                  return;
+                }
+                if (r.statusCode !== 200) { reject(new Error('HTTP ' + r.statusCode)); return; }
+                r.pipe(file);
+                file.on('finish', () => { file.close(); resolve(); });
+              }).on('error', (e) => { try { fs.unlinkSync(zipPath); } catch (_) {} reject(e); });
+            }
+            download(zipUrl, 0);
           });
+          // Verify it's a valid zip
+          const zipBuf = fs.readFileSync(zipPath);
+          if (zipBuf.length < 4 || zipBuf[0] !== 0x50 || zipBuf[1] !== 0x4B) {
+            throw new Error('Downloaded file is not a valid ZIP (may be a redirect page)');
+          }
           output += 'Extracting...\n';
           const isWin = process.platform === 'win32';
           const extractCmd = isWin
@@ -2711,8 +2730,8 @@ const server = http.createServer(async (req, res) => {
       output += 'Updated to v' + newVersion + '.\n';
       output += 'IMPORTANT: The server will restart automatically in 3 seconds.\n';
       json(res, 200, { ok: true, message: 'Updated to v' + newVersion + '. Server restarting...', version: newVersion, output, restart: true });
-      // Auto-restart: spawn new server process after a short delay
-      setTimeout(() => {
+      // Auto-restart: close server first, then spawn replacement from close callback
+      server.close(() => {
         try {
           const { spawn } = require('child_process');
           const child = spawn(process.execPath, ['server.js'], {
@@ -2726,9 +2745,8 @@ const server = http.createServer(async (req, res) => {
         } catch (e) {
           console.error('Update: failed to spawn new server:', e.message);
         }
-        // Exit current process to allow new one to take over
-        setTimeout(() => { process.exit(0); }, 1000);
-      }, 3000);
+        setTimeout(() => { process.exit(0); }, 500);
+      });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
@@ -3062,7 +3080,7 @@ const server = http.createServer(async (req, res) => {
     const idx = chats.findIndex((c) => c.id === chat.id);
     const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: chat.messages || [], updated: new Date().toISOString(), parent_id: chat.parent_id, branch_from: chat.branch_from };
     if (idx >= 0) chats[idx] = entry; else chats.unshift(entry);
-    if (chats.length > 50) chats.length = 50;
+    // No hard cap on chat history (was 50, which silently dropped older chats)
     saveChats(chats);
     return entry.id;
   }
@@ -3285,6 +3303,7 @@ const server = http.createServer(async (req, res) => {
 
   // ---------- Import GGUF model into Ollama ----------
   if (req.url === '/api/import-model' && req.method === 'POST') {
+    try {
       const body = await readBody(req);
       const { path: modelPath, name } = JSON.parse(body || '{}');
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
@@ -3348,6 +3367,7 @@ const server = http.createServer(async (req, res) => {
       const cleanOut = ((r.out || r.err) || 'done').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[\?[0-9]*[hl]/g, '').trim();
       json(res, 200, { ok: r.ok, message: cleanOut.slice(0, 200), name: safeName });
       return;
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); return; }
   }
 
   if (req.url === '/api/agent' && req.method === 'POST') {
@@ -3403,6 +3423,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (require.main === module) {
+  if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+    console.error('FATAL: Refusing to start on non-loopback HOST (' + HOST + ') without an auth token. Set LOCALAI_TOKEN or create auth.json, or bind to 127.0.0.1.');
+    process.exit(1);
+  }
   server.listen(PORT, HOST, () => {
     console.log(`AegisAI web UI: http://${HOST}:${PORT}`);
     console.log(`Ollama backend: ${OLLAMA}`);

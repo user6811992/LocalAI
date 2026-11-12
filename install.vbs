@@ -425,7 +425,7 @@ End If
 
 If createDesktop Then
   On Error Resume Next
-  CreateShortcut destBase, sh.SpecialFolders("Desktop") & "\AegisAI.lnk", "LocalAI"
+  CreateShortcut destBase, sh.SpecialFolders("Desktop") & "\AegisAI.lnk", "AegisAI"
   If Err.Number <> 0 Then
     MsgBox "Could not create desktop shortcut: " & Err.Description, vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Desktop shortcut failed: " & Err.Description
@@ -474,7 +474,7 @@ If addFirewall Then
   Set lanFlag = fso.CreateTextFile(destBase & "\lan-access.txt", True)
   lanFlag.WriteLine "LAN access enabled by installer. Delete this file to return to localhost-only."
   lanFlag.Close
-  fwRc = sh.Run("netsh advfirewall firewall add rule name=""LocalAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
+  fwRc = sh.Run("netsh advfirewall firewall add rule name=""AegisAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
   If Err.Number <> 0 Or fwRc <> 0 Then
     MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _
            "Run this manually as Administrator:" & vbCrLf & _

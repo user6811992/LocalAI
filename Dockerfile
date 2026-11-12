@@ -9,6 +9,7 @@ RUN npm install --production
 # Copy app
 COPY server.js ./
 COPY public ./public
+COPY lib ./lib
 COPY mcp-config.json ./
 
 # Expose port

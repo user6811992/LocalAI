@@ -4,7 +4,7 @@
   "description": "AegisAI - local AI web UI with Ollama backend",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/"
+    "test": "node --test tests/server.test.js tests/frontend.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
