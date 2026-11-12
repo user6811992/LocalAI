@@ -81,7 +81,6 @@ Source: "..\tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; Bundled Node.js (if present in installer\node-runtime)
 Source: "node-runtime\*"; DestDir: "{app}\runtime\node"; Flags: ignoreversion recursesubdirs; Components: node; Check: NodeRuntimeExists
 ; Bundled Ollama (if present)
-Source: "ollama-runtime\ollama.exe"; DestDir: "{app}\runtime\ollama"; Flags: ignoreversion; Components: app; Check: OllamaRuntimeExists
 
 [Dirs]
 Name: "{app}\workspace"; Flags: uninsneveruninstall

@@ -93,7 +93,7 @@ cd "$ROOT"
 # 8. Build the AppImage
 mkdir -p installer/output
 if command -v appimagetool >/dev/null 2>&1; then
-  ARCH=x86_64 appimagetool "$APPDIR" "$APPIMAGE_OUT"
+  ARCH=x86_64 appimagetool --appimage-extract-and-run "$APPDIR" "$APPIMAGE_OUT"
 else
   echo "appimagetool not found. Install from https://github.com/AppImage/AppImageKit/releases"
   echo "AppDir prepared at: $APPDIR"
