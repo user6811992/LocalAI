@@ -1,0 +1,30 @@
+✔ runProcess never interprets shell metacharacters (48.4423ms)
+✔ isValidModelName accepts normal refs and rejects injection (0.2605ms)
+✔ /api/pull-model rejects injected model names before running anything (34.779ms)
+✔ /api/project rejects roots that do not exist (2.9888ms)
+✔ /api/project accepts an existing directory (4.1372ms)
+✔ validateProjectRoot enforces AEGISAI_PROJECT_ROOT_ALLOWLIST (1.1211ms)
+✔ /api/project returns 403 for a root outside the allow-list (2.7346ms)
+✔ safePath blocks traversal outside the project root (0.6056ms)
+✔ requests without the token are rejected (401) (1.2318ms)
+✔ wrong token is rejected (401) (0.9242ms)
+✔ Authorization: Bearer token is accepted (1.4258ms)
+✔ static responses carry security headers (3.8822ms)
+✔ the web UI itself loads without a token so the browser can prompt for one (7.0567ms)
+✔ static path traversal is blocked (1.9903ms)
+✔ oversized request bodies are rejected with 413 (4.3401ms)
+✔ memory save persists with a real embedding (duplicate embedText fixed) (7.5654ms)
+✔ chat branching creates a child chat from a message index (8.1097ms)
+✔ /api/stats counts only user and assistant messages (2.9526ms)
+✔ clean room blocks dangerous tool names and keeps safe ones (0.2156ms)
+✔ agent executes a coding tool and returns the final answer (7.7394ms)
+✔ external Ghidra/Craft/ARE tools reach the model and respect the budget (2.6929ms)
+✔ clean room mode refuses run_python even when the model asks for it (6.9347ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5237.046
