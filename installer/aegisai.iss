@@ -107,7 +107,7 @@ Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "{cm
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""AegisAI"""; Flags: runhidden; RunOnceId: "RemoveFirewall"
 
 [Run]
-Filename: "netsh"; Parameters: "advfirewall firewall add rule name=\"AegisAI\" dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: IsTaskSelected('firewall')
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=AegisAI dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: IsTaskSelected('firewall')
 
 [Code]
 function NodeRuntimeExists: Boolean;
