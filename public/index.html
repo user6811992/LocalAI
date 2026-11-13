@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.89</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.90</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -591,7 +591,7 @@
       if (!messages || messages.length === 0) return;
       try {
         const title = messages.find(m => m.role === 'user') ? messages.find(m => m.role === 'user').content.slice(0, 40) : 'Untitled';
-        const body = { title, messages: messages.slice(-50) };
+        const body = { title, messages: messages };
         if (currentChatId) body.id = currentChatId;
         const r = await fetch('/api/chats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const d = await r.json();

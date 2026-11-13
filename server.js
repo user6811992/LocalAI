@@ -1116,15 +1116,12 @@ async function execCodingTool(name, args) {
     } catch (e) { return 'ERROR: ' + (e.stderr || e.message); }
   }
   if (name === 'memory_recall') {
-    const fs = require('fs');
-    const memFile = path.join(projectRoot, '.memory.json');
-    let mem = {};
-    try { mem = JSON.parse(fs.readFileSync(memFile, 'utf8')); } catch (e) {}
+    const mems = loadJsonFile(MEMORY_FILE);
     if (args.key) {
-      return Object.prototype.hasOwnProperty.call(mem, args.key) ? mem[args.key] : '(not found)';
+      const m = mems.find((x) => x.id === args.key);
+      return m ? m.text : '(not found)';
     }
-    const keys = Object.keys(mem);
-    return keys.length ? keys.join('\n') : '(no memories)';
+    return mems.length ? mems.map((m) => m.id + ' | ' + m.text.slice(0, 120)).join('\n') : '(no memories)';
   }
   if (name === 'run_python') {
     const os = require('os');

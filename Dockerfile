@@ -11,6 +11,11 @@ COPY server.js ./
 COPY public ./public
 COPY lib ./lib
 COPY mcp-config.json ./
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+# Create non-root user and fix ownership
+RUN addgroup -S aegis && adduser -S aegis -G aegis && chown -R aegis:aegis /app
 
 # Expose port
 EXPOSE 8080
@@ -21,4 +26,4 @@ ENV PORT=8080
 ENV HOST=0.0.0.0
 ENV AEGISAI_DOCKER=1
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["./entrypoint.sh"]
