@@ -615,7 +615,7 @@ function toolCacheSet(key, value) {
 }
 
 // Tools that should never be cached (mutating, polling, status checks)
-const NO_CACHE_PATTERNS = /status|poll|open|close|delete|write|create|update|set_|move|copy|remove|rename|exec|run_|call_|start|stop|restart|launch/i;
+const NO_CACHE_PATTERNS = /status|poll|open|close|delete|write|create|update|set_|move|copy|remove|rename|exec|run_|call_|start|stop|restart|launch|add_|modify_|patch_|append_|insert_|comment|label|tag_/i;
 function isCacheableTool(name) {
   return !NO_CACHE_PATTERNS.test(name);
 }
@@ -1783,11 +1783,13 @@ async function getLatestOllamaVersion() {
   try {
     const https = require('https');
     const data = await new Promise((resolve, reject) => {
-      https.get('https://api.github.com/repos/ollama/ollama/releases/latest', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+      const req = https.get('https://api.github.com/repos/ollama/ollama/releases/latest', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
         let buf = '';
         r.on('data', (c) => (buf += c));
         r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
-      }).on('error', reject);
+      });
+      req.on('error', reject);
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error('timeout')); });
     });
     return (data && data.tag_name) ? data.tag_name.replace(/^v/, '') : null;
   } catch (e) { return null; }
@@ -2436,10 +2438,11 @@ const server = http.createServer(async (req, res) => { try {
     areReady = false; areError = null; areClient = null; areTools = [];
     ghidraReady = false; ghidraError = null; ghidraClient = null; ghidraTools = [];
     craftReady = false; craftError = null; craftClient = null; craftTools = [];
-    await initMcp();
-    await initAwesomeReMcp();
-    await initGhidrAssistMcp();
-    await initCraftMcp();
+    const _t = (ms) => new Promise((r) => setTimeout(r, ms));
+    await Promise.race([initMcp(), _t(20000)]);
+    await Promise.race([initAwesomeReMcp(), _t(20000)]);
+    await Promise.race([initGhidrAssistMcp(), _t(10000)]);
+    await Promise.race([initCraftMcp(), _t(20000)]);
     json(res, 200, { ready: mcpReady, error: mcpError, tools: mcpTools.length + areTools.length + ghidraTools.length + craftTools.length, areReady, areTools: areTools.length, ghidraReady, ghidraTools: ghidraTools.length, craftReady, craftTools: craftTools.length });
     return;
   }
@@ -2679,36 +2682,31 @@ const server = http.createServer(async (req, res) => { try {
   if (req.url === '/api/scan-models' && req.method === 'GET') {
     if (_scanCache && Date.now() - _scanCache.ts < 10 * 60 * 1000) { json(res, 200, { found: _scanCache.found, cached: true }); return; }
     try {
-      const fs = require('fs');
+      const fsp = require('fs').promises;
       const path = require('path');
       const found = [];
-      // Ollama default models dir
       const ollamaModels = path.join(process.env.USERPROFILE || '', '.ollama', 'models');
-      if (fs.existsSync(ollamaModels)) {
-        found.push({ type: 'ollama-store', path: ollamaModels, label: 'Ollama model store' });
-      }
-      // Scan drives for GGUF files (up to 4 levels deep, skip system dirs)
+      try { const st = await fsp.stat(ollamaModels); if (st.isDirectory()) found.push({ type: 'ollama-store', path: ollamaModels, label: 'Ollama model store' }); } catch (e) {}
       const skip = new Set(['Windows', 'Program Files', 'Program Files (x86)', 'ProgramData', '$Recycle.Bin', 'System Volume Information', 'node_modules', '.git']);
-      function walk(dir, depth) {
+      // Async, yielding walk so the event loop stays responsive.
+      async function walk(dir, depth) {
         if (depth > 4) return;
         let entries;
-        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+        try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch (e) { return; }
         for (const e of entries) {
           if (skip.has(e.name)) continue;
           const full = path.join(dir, e.name);
-          if (e.isDirectory()) walk(full, depth + 1);
+          if (e.isDirectory()) { await walk(full, depth + 1); }
           else if (e.isFile() && e.name.toLowerCase().endsWith('.gguf')) {
-            try { const st = fs.statSync(full); found.push({ type: 'gguf', path: full, label: e.name, size: st.size }); } catch (_) {}
+            try { const st = await fsp.stat(full); found.push({ type: 'gguf', path: full, label: e.name, size: st.size }); } catch (_) {}
           }
+          // yield to the event loop periodically
+          await new Promise((r) => setImmediate(r));
         }
       }
-      // scan drive roots
-      const os = require('os');
-      // enumerate drives via fs (try A-Z)
       for (let c = 65; c <= 90; c++) {
-        const letter = String.fromCharCode(c);
-        const root = letter + ':\\';
-        try { if (fs.existsSync(root)) walk(root, 0); } catch (_) {}
+        const root = String.fromCharCode(c) + ':\\';
+        try { const st = await fsp.stat(root); if (st.isDirectory()) await walk(root, 0); } catch (_) {}
       }
       _scanCache = { ts: Date.now(), found };
       json(res, 200, { found });
