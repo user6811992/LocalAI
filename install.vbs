@@ -474,6 +474,14 @@ If addFirewall Then
   Set lanFlag = fso.CreateTextFile(destBase & "\lan-access.txt", True)
   lanFlag.WriteLine "LAN access enabled by installer. Delete this file to return to localhost-only."
   lanFlag.Close
+  ' Generate an auth token so the server can bind to 0.0.0.0 (required by AegisAI).
+  Dim lanToken
+  lanToken = Replace(Replace(CreateObject("Scriptlet.TypeLib").GUID, "{", ""), "}", "")
+  lanToken = Replace(lanToken, "-", "")
+  Dim authFile
+  Set authFile = fso.CreateTextFile(destBase & "\auth.json", True)
+  authFile.WriteLine "{ ""token"": """ & lanToken & """ }"
+  authFile.Close
   fwRc = sh.Run("netsh advfirewall firewall add rule name=""AegisAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
   If Err.Number <> 0 Or fwRc <> 0 Then
     MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _
@@ -482,7 +490,8 @@ If addFirewall Then
            vbExclamation, "AegisAI Installer"
     LogMsg logPath, "Firewall rule failed (rc=" & fwRc & ")."
   Else
-    MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080", vbInformation, "AegisAI Installer"
+    MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080" & vbCrLf & vbCrLf & _
+           "Auth token (enter in the web UI):" & vbCrLf & lanToken, vbInformation, "AegisAI Installer"
     LogMsg logPath, "Firewall rule added."
   End If
   On Error GoTo 0

@@ -3277,8 +3277,8 @@
       div.style.marginBottom = '8px';
       div.style.padding = '6px';
       div.style.borderBottom = '1px solid var(--border)';
-      const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
-      const lang = it.language ? ' [' + it.language + ']' : '';
+      const stars = it.stars ? ' \\u2605 ' + escHtml(String(it.stars)) : '';
+      const lang = it.language ? ' [' + escHtml(it.language) + ']' : '';
       const safeUrl = it.url && /^https?:\/\//i.test(it.url) ? it.url : '';
       const urlHtml = safeUrl ? '<a href=\"' + escHtml(safeUrl) + '\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:var(--accent);font-size:11px;\">' + escHtml(safeUrl) + '</a>' : '';
       div.innerHTML = '<b>' + escHtml(it.name || '') + '</b>' + stars + lang + '<br><span style=\"color:var(--muted);\">' + escHtml((it.description || '').slice(0, 120)) + '</span><br><span style=\"font-size:10px;color:var(--muted);\">' + escHtml(it.category || '') + (it.health ? ' ' + escHtml(it.health) : '') + '</span><br>' + urlHtml;
@@ -3481,7 +3481,7 @@
           div.style.marginBottom = '6px';
           div.style.padding = '4px';
           div.style.borderBottom = '1px solid var(--border)';
-          const stars = it.stars ? ' \\u2605 ' + it.stars.toLocaleString() : '';
+          const stars = it.stars ? ' \\u2605 ' + escHtml(String(it.stars)) : '';
           const lang = it.language ? ' [' + escHtml(it.language) + ']' : '';
           const safeUrl = it.url && /^https?:\/\//i.test(it.url) ? it.url : '';
           const url = safeUrl ? '<a href="' + escHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:11px;">' + escHtml(safeUrl) + '</a>' : '';

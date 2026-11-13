@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "AegisAI"
-#define MyAppVersion "2.1.82"
+#define MyAppVersion "2.1.86"
 #define MyAppPublisher "AegisAI"
 #define MyAppURL "https://github.com/user6811992/LocalAI"
 #define MyAppExeName "launcher.vbs"
@@ -98,8 +98,6 @@ Filename: "cmd.exe"; Parameters: "/c cd /d ""{app}"" && npm install"; StatusMsg:
 Filename: "cmd.exe"; Parameters: "/c cd /d ""{app}"" && ""{app}\runtime\node\node.exe"" ""{app}\runtime\node\npm\bin\npm-cli.js"" install"; StatusMsg: "Installing npm dependencies (bundled Node)..."; Flags: runhidden waituntilterminated; Check: IsBundledNode
 ; Start Ollama if bundled
 Filename: "{app}\runtime\ollama\ollama.exe"; Parameters: "serve"; StatusMsg: "Starting Ollama..."; Flags: nowait; Check: OllamaRuntimeExists
-; Pull models (post-install)
-Filename: "cmd.exe"; Parameters: "/c ""{app}\pull-models.bat"""; StatusMsg: "Pulling selected models..."; Flags: runhidden waituntilterminated; Check: HasSelectedModels
 ; Launch app
 Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
@@ -123,12 +121,6 @@ end;
 function IsBundledNode: Boolean;
 begin
   Result := NodeRuntimeExists;
-end;
-
-function HasSelectedModels: Boolean;
-begin
-  // Check if any model component was selected
-  Result := IsComponentSelected('models');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

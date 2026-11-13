@@ -265,6 +265,12 @@ function doInstall() {
       var lanFlag = fso.CreateTextFile(destBase + "\\lan-access.txt", True);
       lanFlag.WriteLine("LAN access enabled by installer.");
       lanFlag.Close();
+      // Generate an auth token (required for non-loopback binding)
+      var lanToken = new ActiveXObject("Scriptlet.TypeLib").GUID.replace(/[{}-]/g, '');
+      var authFile = fso.CreateTextFile(destBase + "\\auth.json", True);
+      authFile.WriteLine('{ "token": "' + lanToken + '" }');
+      authFile.Close();
+      log('LAN auth token: ' + lanToken);
     } else {
       advance('Skipping firewall rule.');
     }

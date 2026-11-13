@@ -1,4 +1,4 @@
-﻿const http = require('http');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -324,7 +324,7 @@ async function initMcp() {
     const transport = new StdioClientTransport({
       command: reaBin,
       args: ['--mcp'],
-      env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') + ';' + path.dirname(reaBin) }),
+      env: Object.assign({}, process.env, { PATH: (process.env.PATH || '') + path.delimiter + path.dirname(reaBin) }),
       stderr: 'pipe',
     });
     const client = new Client({ name: 'local-ai', version: '1.0.0' }, { capabilities: {} });
@@ -1130,7 +1130,7 @@ async function execCodingTool(name, args) {
   }
   if (name === 'skill_list') {
     const skills = loadSkills();
-return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join('\n') : '(no skills)';
+return skills.length ? skills.map((s) => s.name + ' � ' + s.description).join('\n') : '(no skills)';
   }
   if (name === 'skill_get') {
     const skills = loadSkills();
@@ -1142,6 +1142,15 @@ return skills.length ? skills.map((s) => s.name + ' — ' + s.description).join(
     const skills = loadSkills();
     const s = skills.find((x) => x.name === args.name);
     if (!s) return 'Skill not found.';
+    const os = require('os');
+    if ((process.env.AEGISAI_SANDBOX || '').toLowerCase() === 'docker') {
+      const f = path.join(os.tmpdir(), 'localai-skill-' + Date.now() + '.py');
+      fs.writeFileSync(f, s.code || '');
+      const r = await runProcess('docker', ['run', '--rm', '--network', 'none', '--memory', '256m', '--cpus', '1', '-v', path.dirname(f) + ':/work', '-w', '/work', 'python:3.12-alpine', 'python', '/work/' + path.basename(f)], { timeout: 120000, maxBuffer: 1024 * 1024 });
+      try { fs.unlinkSync(f); } catch (e) {}
+      if (!r.ok) return 'EXIT ' + r.code + '\n' + (r.out || r.err);
+      return r.out || '(no output)';
+    }
     const { execFileSync } = require('child_process');
     try {
       const out = execFileSync('python', ['-c', s.code], { cwd: projectRoot, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 120000 });
@@ -1217,7 +1226,7 @@ function saveSkills(s) { saveJsonFile(SKILLS_FILE, s); }
 function loadSettings() {
   try { const j = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return (j && typeof j === 'object') ? j : {}; } catch (e) { return {}; }
 }
-function saveSettings(s) { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s || {}, null, 2), 'utf8'); } catch (e) {} }
+function saveSettings(s) { try { const _t = SETTINGS_FILE + '.tmp'; fs.writeFileSync(_t, JSON.stringify(s || {}, null, 2), 'utf8'); fs.renameSync(_t, SETTINGS_FILE); } catch (e) {} }
 
 function loadJsonFile(fp) { try { return JSON.parse(require('fs').readFileSync(fp, 'utf8')); } catch (e) { return []; } }
 function saveJsonFile(fp, data) { const fs = require('fs'); const tmp = fp + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8'); fs.renameSync(tmp, fp); }
@@ -1297,7 +1306,7 @@ function loadSearchConfig() {
   try { return JSON.parse(require('fs').readFileSync(SEARCH_CONFIG_FILE, 'utf8')); }
   catch (e) { return { engine: 'duckduckgo', keys: {} }; }
 }
-function saveSearchConfig(c) { require('fs').writeFileSync(SEARCH_CONFIG_FILE, JSON.stringify(c, null, 2), 'utf8'); }
+function saveSearchConfig(c) { const _fs = require('fs'); const _t = SEARCH_CONFIG_FILE + '.tmp'; _fs.writeFileSync(_t, JSON.stringify(c, null, 2), 'utf8'); _fs.renameSync(_t, SEARCH_CONFIG_FILE); }
 
 const SEARCH_ENGINES = [
   { id: 'duckduckgo', name: 'DuckDuckGo (instant)', needsKey: false },
@@ -1838,7 +1847,7 @@ async function getComponents() {
         models = d.models || [];
         ollamaStatus = 'connected';
       } else {
-        ollamaStatus = 'unreachable';
+        ollamaStatus = 'unreachable: ' + (d ? 'unexpected response (no models field)' : 'empty response');
       }
     } catch (e) {
       ollamaStatus = 'unreachable: ' + (e.message || e);
@@ -1866,7 +1875,7 @@ async function getComponents() {
         name: m.name,
         kind: 'model',
         status: 'available',
-        detail: (m.size ? (m.size / 1e9).toFixed(2) + ' GB' : '') + (m.digest ? ' · ' + m.digest.slice(0, 12) : ''),
+        detail: (m.size ? (m.size / 1e9).toFixed(2) + ' GB' : '') + (m.digest ? ' � ' + m.digest.slice(0, 12) : ''),
         version: m.digest ? m.digest.slice(0, 12) : 'unknown',
         latest: null,
         updateAvailable: false,
@@ -2093,8 +2102,10 @@ function rateLimit(ip) {
   return entry.count > maxReq;
 }
 
-const server = http.createServer(async (req, res) => {
-  req.setTimeout(300000, () => { if (!res.headersSent) { res.statusCode = 408; res.end('Request timeout'); } });
+const server = http.createServer(async (req, res) => { try {
+  // Per-endpoint timeouts (runProcess/ollamaRequest) handle long work; the
+  // blanket socket timeout here never delivered its 408 (callback never fires
+  // on IncomingMessage in Node 26) and only cut off long requests.
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin || '';
@@ -2196,9 +2207,9 @@ const server = http.createServer(async (req, res) => {
       const results = searchAreData(query, { category, language, minStars, limit });
       json(res, 200, { ok: true, count: results.length, results: results.map((e) => ({
         name: e.name,
-        description: e.description,
+        description: e.desc || e.description || '',
         stars: e.stars,
-        language: e.language,
+        language: e.lang || e.language || '',
         category: e.category,
         url: e.url,
         health: e.health,
@@ -2811,17 +2822,27 @@ const server = http.createServer(async (req, res) => {
           }
           output += 'Extracting...\n';
           const isWin = process.platform === 'win32';
+          const extractDir = path.join(os.tmpdir(), 'aegisai-update-extract-' + Date.now());
+          try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) {}
+          fs.mkdirSync(extractDir, { recursive: true });
           const extractCmd = isWin
-            ? 'powershell -NoProfile -Command "Expand-Archive -Path \\"' + zipPath + '\\" -DestinationPath \\"' + __dirname + '\\" -Force"'
-            : 'unzip -o "' + zipPath + '" -d "' + __dirname + '"';
+            ? 'powershell -NoProfile -Command "Expand-Archive -Path \\"' + zipPath + '\\" -DestinationPath \\"' + extractDir + '\\" -Force"'
+            : 'unzip -o "' + zipPath + '" -d "' + extractDir + '"';
           const extractRes = await new Promise((resolve) => {
             exec(extractCmd, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
               resolve({ ok: !err, out: (stdout || '') + (stderr || ''), err: err ? err.message : null });
             });
           });
           output += extractRes.out + '\n';
-          try { fs.unlinkSync(zipPath); } catch (_) {}
-          if (!extractRes.ok) { json(res, 500, { ok: false, message: 'Extraction failed: ' + (extractRes.err || extractRes.out), output }); return; }
+          try { fs.unlinkSync(zipPath); } catch (e) {}
+          if (!extractRes.ok) { try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) {} json(res, 500, { ok: false, message: 'Extraction failed: ' + (extractRes.err || extractRes.out), output }); return; }
+          // Published zips ship a single top-level folder (AegisAI/); copy its
+          // contents up so the app files land in __dirname, not __dirname/AegisAI.
+          let srcDir = extractDir;
+          const nested = path.join(extractDir, 'AegisAI');
+          if (fs.existsSync(path.join(nested, 'server.js'))) srcDir = nested;
+          try { fs.cpSync(srcDir, __dirname, { recursive: true, force: true }); } catch (e) { output += 'Copy failed: ' + (e.message || e) + '\n'; }
+          try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch (e) {}
           output += 'Update extracted successfully. Restart the server to apply.\n';
           // Clean up stale files: remove .tmp, .old, .bak files
           try {
@@ -3232,12 +3253,19 @@ const server = http.createServer(async (req, res) => {
     return loadChats().find((c) => c.id === id) || null;
   }
   function saveOneChat(chat) {
+    // Preserve existing messages/links when the caller (e.g. rename) omits them,
+    // so a rename doesn't wipe the chat (covers the SQLite path too).
+    if (!Array.isArray(chat.messages)) {
+      let _existing = null;
+      try { _existing = getChatById(chat.id); } catch (e) { _existing = null; }
+      chat.messages = (_existing && Array.isArray(_existing.messages)) ? _existing.messages : [];
+    }
     if (dbModule) { try { return dbModule.saveChat(chat); } catch (e) { console.error('saveOneChat sqlite failed:', e.message); } }
     // JSON fallback: upsert into chats.json
     const chats = loadChats();
     const idx = chats.findIndex((c) => c.id === chat.id);
     const existing = idx >= 0 ? chats[idx] : null;
-    const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: (Array.isArray(chat.messages) ? chat.messages : (existing ? existing.messages : [])), updated: new Date().toISOString(), parent_id: chat.parent_id || (existing ? existing.parent_id : null), branch_from: chat.branch_from || (existing ? existing.branch_from : null) };
+    const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: (Array.isArray(chat.messages) ? chat.messages : (existing ? existing.messages : [])), updated: new Date().toISOString(), parent_id: (chat.parent_id === undefined ? (existing ? existing.parent_id : null) : chat.parent_id), branch_from: (chat.branch_from === undefined ? (existing ? existing.branch_from : null) : chat.branch_from) };
     if (idx >= 0) chats[idx] = entry; else chats.unshift(entry);
     // No hard cap on chat history (was 50, which silently dropped older chats)
     saveChats(chats);
@@ -3589,17 +3617,24 @@ const server = http.createServer(async (req, res) => {
   } else {
     serveStatic(req, res);
   }
+  } catch (e) { logError('request', e); if (!res.headersSent) json(res, 500, { error: e.message || String(e) }); }
 });
 
 if (require.main === module) {
   if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
-    console.error('FATAL: Refusing to start on non-loopback HOST (' + HOST + ') without an auth token. Set LOCALAI_TOKEN or create auth.json, or bind to 127.0.0.1.');
-    process.exit(1);
+    if (process.env.AEGISAI_DOCKER === '1') {
+      console.warn('WARNING: No auth token set (Docker mode). Container binds to all interfaces; restrict via the host port mapping or set LOCALAI_TOKEN for LAN exposure.');
+    } else {
+      console.error('FATAL: Refusing to start on non-loopback HOST (' + HOST + ') without an auth token. Set LOCALAI_TOKEN or create auth.json, or bind to 127.0.0.1.');
+      process.exit(1);
+    }
   }
+  server.requestTimeout = 0;
+  server.headersTimeout = 60000;
   server.listen(PORT, HOST, () => {
     console.log(`AegisAI web UI: http://${HOST}:${PORT}`);
     console.log(`Ollama backend: ${OLLAMA}`);
-    if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+    if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1' && process.env.AEGISAI_DOCKER !== '1') {
       console.warn('WARNING: No auth token set and the server is reachable from the network. Set LOCALAI_TOKEN or auth.json.');
     }
   });
@@ -3730,13 +3765,15 @@ function searchAreData(query, opts) {
     if (!entry) continue;
     // Filter by category
     if (category && (entry.category || '').toLowerCase() !== category.toLowerCase()) continue;
+    const entryLang = entry.lang || entry.language || '';
+    const entryDesc = entry.desc || entry.description || '';
     // Filter by language
-    if (language && (entry.language || '').toLowerCase() !== language.toLowerCase()) continue;
+    if (language && entryLang.toLowerCase() !== language.toLowerCase()) continue;
     // Filter by min stars
     if (minStars && (entry.stars || 0) < minStars) continue;
     // Search in name, description, topics
     const topics = Array.isArray(entry.topics) ? entry.topics : [];
-    const searchable = ((entry.name || '') + ' ' + (entry.description || '') + ' ' + topics.join(' ') + ' ' + (entry.category || '')).toLowerCase();
+    const searchable = ((entry.name || '') + ' ' + entryDesc + ' ' + topics.join(' ') + ' ' + (entry.category || '')).toLowerCase();
     if (q && !searchable.includes(q)) continue;
     results.push(entry);
     if (results.length >= limit) break;
