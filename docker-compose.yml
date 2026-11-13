@@ -18,6 +18,8 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       - OLLAMA_URL=http://ollama:11434
+      - BACKEND_TYPE=${BACKEND_TYPE:-ollama}
+      - BACKEND_URL=${BACKEND_URL:-http://ollama:11434}
       - PORT=8080
       - HOST=0.0.0.0
       - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}

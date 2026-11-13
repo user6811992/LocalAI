@@ -38,7 +38,31 @@ If wshShell.Environment("Process")("JAVA_HOME") = "" Then wshShell.Environment("
 If wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "" Then wshShell.Environment("Process")("REA_JADX_MCP_JAR") = "C:\Tools\jadx-mcp\jadx-headless-mcp-0.7.1-all.jar"
 wshShell.Environment("Process")("PATH") = "C:\jadx\bin;" & wshShell.Environment("Process")("GHIDRA_INSTALL_DIR") & ";" & wshShell.Environment("Process")("JAVA_HOME") & "\bin;" & ollamaDir & ";" & "C:\Program Files\nodejs;" & wshShell.ExpandEnvironmentStrings("%APPDATA%") & "\npm;" & wshShell.Environment("Process")("PATH")
 
-' Start Ollama if not running
+' ---------- Backend selection (from backend.txt written by installer) ----------
+Dim backendType, backendUrl
+backendType = "ollama"
+backendUrl = "http://127.0.0.1:11434"
+Dim backendFile
+backendFile = base & "\backend.txt"
+If fso.FileExists(backendFile) Then
+  On Error Resume Next
+  Dim bf, bline
+  Set bf = fso.OpenTextFile(backendFile, 1)
+  Do Until bf.AtEndOfStream
+    bline = Trim(bf.ReadLine)
+    If LCase(Left(bline, 13)) = "backend_type=" Then backendType = Mid(bline, 14)
+    If LCase(Left(bline, 12)) = "backend_url=" Then backendUrl = Mid(bline, 13)
+  Loop
+  bf.Close
+  On Error GoTo 0
+End If
+wshShell.Environment("Process")("BACKEND_TYPE") = backendType
+wshShell.Environment("Process")("BACKEND_URL") = backendUrl
+wshShell.Environment("Process")("OLLAMA_URL") = backendUrl
+
+' Start Ollama if not running (only needed for the ollama backend)
+Dim startOllama
+startOllama = (LCase(backendType) = "ollama")
 Dim svcRunning
 svcRunning = False
 Dim wmi, col
@@ -46,7 +70,7 @@ Set wmi = GetObject("winmgmts:\\.\root\cimv2")
 Set col = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='ollama.exe'")
 If col.Count > 0 Then svcRunning = True
 
-If Not svcRunning Then
+If startOllama And Not svcRunning Then
   If fso.FileExists(ollamaDir & "\ollama.exe") Then
     wshShell.Run """" & ollamaDir & "\ollama.exe"" serve", 0, False
     WScript.Sleep 4000

@@ -154,6 +154,31 @@ if [ "$OLLAMA_OK" -eq 1 ]; then
   fi
 fi
 
+# ---------- backend selection ----------
+BACKEND_TYPE="ollama"
+BACKEND_URL="http://127.0.0.1:11434"
+if [ -t 0 ] || [ -r /dev/tty ]; then
+  echo ""
+  echo "Select AI backend:"
+  echo "  1) Ollama (default, recommended)"
+  echo "  2) llama.cpp"
+  echo "  3) LM Studio"
+  echo "  4) OpenAI-compatible"
+  if [ -t 0 ]; then read -r -p "Choice [1]: " bchoice; else read -r -p "Choice [1]: " bchoice < /dev/tty; fi
+  case "${bchoice:-1}" in
+    2) BACKEND_TYPE="llamacpp"; BACKEND_URL="http://127.0.0.1:8081" ;;
+    3) BACKEND_TYPE="lmstudio"; BACKEND_URL="http://127.0.0.1:1234" ;;
+    4) BACKEND_TYPE="openai"; BACKEND_URL="http://127.0.0.1:8000" ;;
+    *) BACKEND_TYPE="ollama"; BACKEND_URL="http://127.0.0.1:11434" ;;
+  esac
+fi
+# Allow override via env
+BACKEND_TYPE="${AEGISAI_BACKEND_TYPE:-$BACKEND_TYPE}"
+BACKEND_URL="${AEGISAI_BACKEND_URL:-$BACKEND_URL}"
+# Write backend.txt
+printf 'BACKEND_TYPE=%s\nBACKEND_URL=%s\n' "$BACKEND_TYPE" "$BACKEND_URL" > "$DEST/backend.txt"
+echo "Backend: $BACKEND_TYPE at $BACKEND_URL"
+
 # ---------- desktop shortcut ----------
 create_desktop_shortcut() {
   if [ "$OS" = "Linux" ]; then

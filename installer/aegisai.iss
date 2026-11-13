@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "AegisAI"
-#define MyAppVersion "2.1.92"
+#define MyAppVersion "2.1.93"
 #define MyAppPublisher "AegisAI"
 #define MyAppURL "https://github.com/user6811992/LocalAI"
 #define MyAppExeName "launcher.vbs"
@@ -108,6 +108,24 @@ Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""AegisAI"
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=AegisAI dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: IsTaskSelected('firewall')
 
 [Code]
+var
+  BackendPage: TInputOptionWizardPage;
+  BackendType: String;
+  BackendUrl: String;
+
+procedure InitializeWizard;
+begin
+  BackendPage := CreateInputOptionPage(wpSelectComponents,
+    'AI Backend', 'Choose the AI backend AegisAI will use.',
+    'Select the backend. Ollama is recommended for most users; other backends must be started separately.',
+    True, False);
+  BackendPage.Add('Ollama (default, recommended)');
+  BackendPage.Add('llama.cpp');
+  BackendPage.Add('LM Studio');
+  BackendPage.Add('OpenAI-compatible');
+  BackendPage.SelectedValueIndex := 0;
+end;
+
 function NodeRuntimeExists: Boolean;
 begin
   Result := DirExists(ExpandConstant('{app}\runtime\node'));
@@ -124,11 +142,22 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  backendFile: String;
+  bt, bu: String;
 begin
   if CurStep = ssPostInstall then
   begin
-    // Write pull-models.bat based on selected components
-    // (simplified: pull all recommended models if 'models' component selected)
+    case BackendPage.SelectedValueIndex of
+      1: begin bt := 'llamacpp'; bu := 'http://127.0.0.1:8081'; end;
+      2: begin bt := 'lmstudio'; bu := 'http://127.0.0.1:1234'; end;
+      3: begin bt := 'openai'; bu := 'http://127.0.0.1:8000'; end;
+    else begin bt := 'ollama'; bu := 'http://127.0.0.1:11434'; end;
+    end;
+    BackendType := bt;
+    BackendUrl := bu;
+    backendFile := ExpandConstant('{app}\backend.txt');
+    SaveStringToFile(backendFile, 'BACKEND_TYPE=' + bt + #13#10 + 'BACKEND_URL=' + bu + #13#10, False);
   end;
 end;
 

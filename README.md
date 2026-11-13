@@ -103,6 +103,13 @@ info to the Ollama shape the UI expects. Note: the UI's model dropdown is
 proxied to Ollama's `/api/tags`, so for OpenAI-compatible backends the list may
 be empty even though chat works — set the model name in the UI or via the backend.
 
+**Selecting a backend during installation:** the Windows (Inno/VBS/HTA), macOS,
+Linux, and Docker installers all prompt for the backend (Ollama, llama.cpp,
+LM Studio, or OpenAI-compatible) and write a `backend.txt` (or set
+`BACKEND_TYPE`/`BACKEND_URL` env vars) so the launcher and server start with
+the right backend. You can change it later by editing `backend.txt` in the app
+folder or setting `BACKEND_TYPE`/`BACKEND_URL` before starting the server.
+
 ### Intel Arc GPUs
 
 Intel Arc is best supported through **llama.cpp with the SYCL/oneAPI backend**:

@@ -257,6 +257,28 @@ If updateOnly Then
   On Error GoTo 0
 End If
 
+' ---------- backend selection ----------
+Dim backendType, backendUrl, backendAns
+backendType = "ollama"
+backendUrl = "http://127.0.0.1:11434"
+backendAns = MsgBox("Use Ollama as the AI backend (default, recommended)?" & vbCrLf & vbCrLf & _
+  "Yes = Ollama" & vbCrLf & _
+  "No = choose another backend (llama.cpp / LM Studio / OpenAI-compatible)", vbYesNo + vbQuestion, "Backend selection")
+If backendAns = vbNo Then
+  Dim bChoice, bUrl
+  bChoice = InputBox("Backend type:" & vbCrLf & "  ollama" & vbCrLf & "  llamacpp" & vbCrLf & "  lmstudio" & vbCrLf & "  openai", "Backend type", "llamacpp")
+  If bChoice <> "" Then backendType = LCase(Trim(bChoice))
+  bUrl = InputBox("Backend URL:", "Backend URL", "http://127.0.0.1:8081")
+  If bUrl <> "" Then backendUrl = Trim(bUrl)
+End If
+' Write backend.txt so the launcher configures BACKEND_TYPE/BACKEND_URL.
+Dim bf
+Set bf = fso.CreateTextFile(destBase & "\backend.txt", True)
+bf.WriteLine "BACKEND_TYPE=" & backendType
+bf.WriteLine "BACKEND_URL=" & backendUrl
+bf.Close
+LogMsg logPath, "Backend: " & backendType & " at " & backendUrl
+
 ' ---------- copy app files if destination differs from source ----------
 If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
   MsgBox "Copying application files to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
