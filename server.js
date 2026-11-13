@@ -771,7 +771,6 @@ async function httpGet(url, headers) {
       res.on('data', (c) => {
         if (tooBig) return;
         size += c.length;
-        if (size > MAX) { tooBig = true; try { req.destroy(); } catch (e) {} return; }
         chunks.push(c);
       });
       res.on('end', () => resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString('utf8') + (tooBig ? '\n... (truncated)' : '') }));
@@ -1550,7 +1549,8 @@ function ollamaRequest(path, bodyObj) {
 // ---------- Context compaction helpers ----------
 const _ctxCache = new Map();
 async function getModelContextLength(model) {
-  if (_ctxCache.has(model)) return _ctxCache.get(model);
+  const _cached = _ctxCache.get(model);
+  if (_cached && _cached.val > 0 && (Date.now() - _cached.ts) < 10 * 60 * 1000) return _cached.val;
   try {
     const r = await ollamaRequest('/api/show', { name: model });
     if (r.status === 200 && r.data && r.data.model_info) {
@@ -1558,7 +1558,7 @@ async function getModelContextLength(model) {
       for (const key of Object.keys(info)) {
         if (key.endsWith('.context_length')) {
           const val = info[key];
-          if (val > 0) _ctxCache.set(model, val);
+          if (val > 0) _ctxCache.set(model, { val: val, ts: Date.now() });
           return val || 0;
         }
       }
@@ -2168,6 +2168,14 @@ const server = http.createServer(async (req, res) => { try {
   // Per-endpoint timeouts (runProcess/ollamaRequest) handle long work; the
   // blanket socket timeout here never delivered its 408 (callback never fires
   // on IncomingMessage in Node 26) and only cut off long requests.
+  // Rate limit (applies to preflight too)
+  const ip = req.socket.remoteAddress || 'unknown';
+  if (rateLimit(ip)) {
+    res.statusCode = 429;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: 'Too many requests' }));
+    return;
+  }
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin || '';
@@ -2179,14 +2187,6 @@ const server = http.createServer(async (req, res) => { try {
       'Access-Control-Max-Age': '86400',
     });
     res.end();
-    return;
-  }
-  // Rate limit
-  const ip = req.socket.remoteAddress || 'unknown';
-  if (rateLimit(ip)) {
-    res.statusCode = 429;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ error: 'Too many requests' }));
     return;
   }
   // Cross-site request and DNS-rebinding guard. A cross-site HTML form can only send
@@ -2716,6 +2716,14 @@ const server = http.createServer(async (req, res) => { try {
       _scanCache = { ts: Date.now(), found };
       json(res, 200, { found });
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  if (req.url === '/api/tags' && req.method === 'GET') {
+    try {
+      const d = await backendListModels();
+      json(res, 200, d);
+    } catch (e) { json(res, (e && e.status) || 502, { error: e.message || String(e) }); }
     return;
   }
 

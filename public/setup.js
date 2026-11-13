@@ -199,7 +199,7 @@ function renderAuth() {
     <label>Auth token (leave blank to skip):
       <input type="text" id="tokenInput" placeholder="Enter a secret token" />
     </label>
-    <p style="font-size:11px;color:var(--muted);margin-top:8px;">The token will be saved and required on all future requests. You can change it later via the LOCALAI_TOKEN env var or auth.json.</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px;">Note: this stores the token in your browser only. To enforce auth on the server, set LOCALAI_TOKEN or create auth.json in the app folder before starting the server (required for LAN/Docker exposure). You can change it later via the LOCALAI_TOKEN env var or auth.json.</p>
   `;
   setButtons(true, async () => {
     const tok = document.getElementById('tokenInput').value.trim();
