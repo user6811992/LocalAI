@@ -2093,6 +2093,7 @@ function rateLimit(ip) {
 }
 
 const server = http.createServer(async (req, res) => {
+  req.setTimeout(300000, () => { if (!res.headersSent) { res.statusCode = 408; res.end('Request timeout'); } });
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin || '';
@@ -2943,7 +2944,7 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return { collections: { default: { docs: [], chunks: [] } }, activeCollection: 'default' }; }
   }
   function saveRag(store) {
-    try { fs.writeFileSync(RAG_FILE, JSON.stringify(store)); } catch (e) {}
+    try { const _tmp = RAG_FILE + '.tmp'; fs.writeFileSync(_tmp, JSON.stringify(store)); fs.renameSync(_tmp, RAG_FILE); } catch (e) {}
   }
   function getCollection(store, name) {
     name = name || store.activeCollection || 'default';
@@ -3222,7 +3223,7 @@ const server = http.createServer(async (req, res) => {
         return;
       } catch (e) { console.error('saveChats sqlite failed:', e.message); }
     }
-    try { fs.writeFileSync(CHATS_FILE, JSON.stringify(chats)); } catch (e) {}
+    try { const _tmp = CHATS_FILE + '.tmp'; fs.writeFileSync(_tmp, JSON.stringify(chats)); fs.renameSync(_tmp, CHATS_FILE); } catch (e) {}
   }
   function getChatById(id) {
     if (dbModule) { try { return dbModule.getChat(id); } catch (e) {} }
