@@ -244,7 +244,8 @@ test('clean room blocks dangerous tool names and keeps safe ones', () => {
   assert.equal(app.isCleanRoomBlocked('skill_run'), true);
   assert.equal(app.isCleanRoomBlocked('git_diff'), true);
   assert.equal(app.isCleanRoomBlocked('decompile_function'), true);
-  assert.equal(app.isCleanRoomBlocked('web_search'), false);
+  assert.equal(app.isCleanRoomBlocked('fetch_url'), true);
+  assert.equal(app.isCleanRoomBlocked('web_search'), true);
   assert.equal(app.isCleanRoomBlocked('memory_search'), false);
 });
 

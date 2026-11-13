@@ -112,6 +112,9 @@ async function backendChat(bodyObj, onChunk, signal) {
           fullContent += delta.content;
           if (onChunk) onChunk({ type: 'token', content: delta.content });
         }
+        if (delta.reasoning_content) {
+          if (onChunk) onChunk({ type: 'thinking', content: delta.reasoning_content });
+        }
         if (delta.tool_calls) {
           // Forward tool calls
           if (onChunk) onChunk({ type: 'tool_calls', tool_calls: delta.tool_calls });
@@ -204,6 +207,33 @@ function runProcess(file, args, opts) {
 // quotes, and option-like leading dashes.
 function isValidModelName(name) {
   return typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._\/:@-]{0,199}$/.test(name);
+}
+
+// SSRF guard: only http(s) URLs whose host is not a loopback/private/link-local
+// or otherwise reserved address. Best-effort on the hostname string (no DNS).
+function isSafeUrl(u) {
+  if (typeof u !== 'string' || !u) return false;
+  let parsed;
+  try { parsed = new URL(u); } catch (e) { return false; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  const host = (parsed.hostname || '').toLowerCase();
+  if (!host || host === 'localhost' || host === '::1' || host === '0.0.0.0') return false;
+  // IPv4 private/reserved ranges
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 10) return false;
+    if (a === 127) return false;
+    if (a === 0) return false;
+    if (a === 169 && b === 254) return false;   // link-local
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false; // CGNAT
+  }
+  // IPv6 private/link-local/loopback (bracketed hostname already stripped by URL)
+  if (host.startsWith('[')) return false;
+  if (/^(fc|fd|fe80|::1)/i.test(host)) return false;
+  return true;
 }
 
 // ---------- Anonymous Error Logging ----------
@@ -565,7 +595,7 @@ function mcpToolAsOllama(t, prefix, suffix) {
 const CLEAN_ROOM_EXACT = new Set([
   'read_file', 'write_file', 'replace_in_file', 'list_files', 'run_command', 'run_python',
   'skill_run', 'skill_save', 'skill_get', 'git_status', 'git_diff', 'read_pdf', 'analyze_image',
-  'speech_to_text',
+  'speech_to_text', 'fetch_url', 'web_search',
 ]);
 const CLEAN_ROOM_PATTERNS = ['inspect_', 'decompile', 'disassemble', 'get_pseudocode', 'get_disassembly', 'get_hexdump', 'list_strings', 'list_imports', 'list_exports', 'get_function', 'get_control_flow_graph', 'get_callers', 'get_callees', 'get_xrefs', 'get_comment', 'list_function_variables', 'rename_local_variable', 'set_local_variable', 'set_function_prototype', 'list_data_types', 'get_data_type', 'set_data_type', 'create_structure', 'set_structure_field', 'infer_structure', 'get_structure_field_xrefs', 'list_classes', 'get_class_info', 'analyze_program', 'get_analysis_status', 'list_tasks', 'get_task_status', 'cancel_task', 'open_program', 'close_program', 'import_file', 'export_program', 'read_', 'write_', 'file', 'binary', 'source'];
 function isCleanRoomBlocked(name) {
@@ -664,12 +694,19 @@ async function callMcpTool(name, args) {
 let projectRoot = path.join(__dirname, 'workspace');
 
 function safePath(rel) {
-  const root = path.resolve(projectRoot);
+  const root = fs.realpathSync(path.resolve(projectRoot));
   const resolved = path.resolve(root, rel || '.');
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+  // Resolve symlinks in any existing portion to prevent escape via links.
+  let realResolved = resolved;
+  try { realResolved = fs.realpathSync(resolved); }
+  catch (e) {
+    try { realResolved = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved)); }
+    catch (e2) { realResolved = resolved; }
+  }
+  if (realResolved !== root && !realResolved.startsWith(root + path.sep)) {
     throw new Error('Path escapes project root: ' + rel);
   }
-  return resolved;
+  return realResolved;
 }
 
 // Validate a user-supplied project root. When AEGISAI_PROJECT_ROOT_ALLOWLIST is
@@ -678,16 +715,18 @@ function safePath(rel) {
 function validateProjectRoot(root) {
   if (!root || typeof root !== 'string') throw Object.assign(new Error('Project root must be a non-empty string'), { status: 400 });
   const resolved = path.resolve(root.trim());
+  let realResolved = resolved;
+  try { realResolved = fs.realpathSync(resolved); } catch (e) { /* handled below */ }
   let stat = null;
   try { stat = fs.statSync(resolved); } catch (e) { /* handled below */ }
   if (!stat || !stat.isDirectory()) throw Object.assign(new Error('Project root does not exist or is not a directory: ' + root), { status: 400 });
   if (PROJECT_ROOT_ALLOWLIST.length) {
-    const allowed = PROJECT_ROOT_ALLOWLIST.some((base) => resolved === base || resolved.startsWith(base + path.sep));
+    const allowed = PROJECT_ROOT_ALLOWLIST.some((base) => realResolved === base || realResolved.startsWith(base + path.sep));
     if (!allowed) throw Object.assign(new Error('Project root is outside the allowed directories (AEGISAI_PROJECT_ROOT_ALLOWLIST)'), { status: 403 });
-  } else if (!resolved.startsWith(path.resolve(__dirname) + path.sep) && resolved !== path.resolve(__dirname)) {
-    console.warn('WARNING: project root is outside the app directory:', resolved);
+  } else if (!realResolved.startsWith(path.resolve(__dirname) + path.sep) && realResolved !== path.resolve(__dirname)) {
+    console.warn('WARNING: project root is outside the app directory:', realResolved);
   }
-  return resolved;
+  return realResolved;
 }
 
 const codingToolsDef = [
@@ -723,11 +762,19 @@ async function httpGet(url, headers) {
   const https = require('https');
   const http = require('http');
   const lib = url.startsWith('https') ? https : http;
+  const MAX = 2 * 1024 * 1024;
   return new Promise((resolve) => {
     const req = lib.get(url, { headers: headers || { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
       let chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString('utf8') }));
+      let size = 0;
+      let tooBig = false;
+      res.on('data', (c) => {
+        if (tooBig) return;
+        size += c.length;
+        if (size > MAX) { tooBig = true; try { req.destroy(); } catch (e) {} return; }
+        chunks.push(c);
+      });
+      res.on('end', () => resolve({ status: res.statusCode, data: Buffer.concat(chunks).toString('utf8') + (tooBig ? '\n... (truncated)' : '') }));
     });
     req.on('error', (e) => resolve({ status: 0, data: 'ERROR: ' + e.message }));
     req.setTimeout(20000, () => { req.destroy(); resolve({ status: 0, data: 'TIMEOUT' }); });
@@ -791,6 +838,7 @@ async function execCodingTool(name, args) {
     return 'Replaced one occurrence in ' + args.path;
   }
   if (name === 'fetch_url') {
+    if (!isSafeUrl(args.url)) return 'BLOCKED: URL is not allowed (only public http(s) URLs).';
     const http = require('http');
     const https = require('https');
     const max = args.max_bytes || 100000;
@@ -1184,6 +1232,8 @@ return skills.length ? skills.map((s) => s.name + ' � ' + s.description).join(
   if (name === 'analyze_image') {
     const fs = require('fs');
     const fp = safePath(args.path);
+    const st = fs.statSync(fp);
+    if (st.size > 20 * 1024 * 1024) return 'ERROR: image too large (' + st.size + ' bytes; max 20 MB).';
     const buf = fs.readFileSync(fp);
     const b64 = buf.toString('base64');
     const visionModel = args.model || 'moondream';
@@ -1751,13 +1801,17 @@ function getReaAgentVersion() {
   // try rea --version
   try {
     const { execFileSync } = require('child_process');
-    const v = execFileSync('rea', ['--version'], { encoding: 'utf8', timeout: 15000, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const reaCmd = process.platform === 'win32' ? 'cmd' : resolveReaBin();
+    const reaArgs = process.platform === 'win32' ? ['/c', 'rea', '--version'] : ['--version'];
+    const v = execFileSync(reaCmd, reaArgs, { encoding: 'utf8', timeout: 15000, env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     if (v) return v.split(/\s+/).pop();
   } catch (e) {}
   // fallback npm list
   try {
     const { execFileSync } = require('child_process');
-    const v = execFileSync('npm', ['list', '-g', 'rea-agents', '--depth=0', '--json'], { encoding: 'utf8', timeout: 20000, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const npmCmd = process.platform === 'win32' ? 'cmd' : 'npm';
+    const npmArgs = process.platform === 'win32' ? ['/c', 'npm', 'list', '-g', 'rea-agents', '--depth=0', '--json'] : ['list', '-g', 'rea-agents', '--depth=0', '--json'];
+    const v = execFileSync(npmCmd, npmArgs, { encoding: 'utf8', timeout: 20000, env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     if (v) { const j = JSON.parse(v); return (j.dependencies && j.dependencies['rea-agents'] && j.dependencies['rea-agents'].version) || null; }
   } catch (e) {}
   return null;
@@ -1767,7 +1821,9 @@ function getLatestReaAgentVersion() {
   const env = Object.assign({}, process.env, { PATH: (process.env.PATH || '') });
   try {
     const { execFileSync } = require('child_process');
-    const v = execFileSync('npm', ['view', 'rea-agents', 'version'], { encoding: 'utf8', timeout: 20000, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const npmCmd = process.platform === 'win32' ? 'cmd' : 'npm';
+    const npmArgs = process.platform === 'win32' ? ['/c', 'npm', 'view', 'rea-agents', 'version'] : ['view', 'rea-agents', 'version'];
+    const v = execFileSync(npmCmd, npmArgs, { encoding: 'utf8', timeout: 20000, env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     return v || null;
   } catch (e) { return null; }
 }
@@ -1852,9 +1908,8 @@ async function getComponents() {
     } catch (e) {
       ollamaStatus = 'unreachable: ' + (e.message || e);
     }
-    const _cv2 = await getCachedVersions();
-    const ollamaVer = _cv2.ollamaVer;
-    const ollamaLatest = _cv2.ollamaLatest;
+    const ollamaVer = _cv.ollamaVer;
+    const ollamaLatest = _cv.ollamaLatest;
     comps.push({
       id: 'ollama-backend',
       name: 'Ollama backend',
@@ -2072,18 +2127,25 @@ function proxyToOllama(req, res) {
 
 // ---------- Auth + rate limiting ----------
 const AUTH_TOKEN = (process.env.LOCALAI_TOKEN || '').trim();
+let _cachedToken = null;
+let _cachedTokenTime = 0;
 function getAuthToken() {
   if (AUTH_TOKEN) return AUTH_TOKEN;
+  const now = Date.now();
+  if (_cachedToken !== null && (now - _cachedTokenTime) < 30000) return _cachedToken;
+  let tok = '';
   try {
     const fs = require('fs');
     const path = require('path');
     const p = path.join(DATA_DIR, 'auth.json');
     if (fs.existsSync(p)) {
       const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-      return (j && j.token) ? String(j.token).trim() : '';
+      tok = (j && j.token) ? String(j.token).trim() : '';
     }
   } catch (e) {}
-  return '';
+  _cachedToken = tok;
+  _cachedTokenTime = now;
+  return tok;
 }
 const _rateLimits = new Map();
 function rateLimit(ip) {
@@ -2306,7 +2368,7 @@ const server = http.createServer(async (req, res) => { try {
       const mems = loadJsonFile(MEMORY_FILE);
       const idx = mems.findIndex((m) => m.id === id);
       if (idx === -1) { json(res, 404, { ok: false, message: 'Not found' }); return; }
-      if (text) mems[idx].text = text;
+      if (text) { mems[idx].text = text; mems[idx].embedding = await embedText(text); }
       if (tags) mems[idx].tags = tags;
       mems[idx].updated = new Date().toISOString();
       saveJsonFile(MEMORY_FILE, mems);
@@ -2735,7 +2797,7 @@ const server = http.createServer(async (req, res) => { try {
       // Back up user data before update
       const backedUp = [];
       for (const f of userDataFiles) {
-        const src = path.join(__dirname, f);
+        const src = path.join(DATA_DIR, f);
         if (fs.existsSync(src)) {
           try { fs.copyFileSync(src, path.join(backupDir, f)); backedUp.push(f); } catch (_) {}
         }
@@ -2872,7 +2934,7 @@ const server = http.createServer(async (req, res) => { try {
       const restored = [];
       for (const f of userDataFiles) {
         const backup = path.join(backupDir, f);
-        const target = path.join(__dirname, f);
+        const target = path.join(DATA_DIR, f);
         if (fs.existsSync(backup)) {
           try { fs.copyFileSync(backup, target); restored.push(f); } catch (_) {}
         }
@@ -3135,7 +3197,7 @@ const server = http.createServer(async (req, res) => { try {
         r = await runProcess(runner, [f], { timeout: 15000, maxBuffer: 1024 * 1024 });
       }
       try { fs.unlinkSync(f); } catch (_) {}
-      const result = { ok: r.ok, stdout: r.out.slice(0, 4000), stderr: '', code: r.code };
+      const result = { ok: r.ok, stdout: r.out.slice(0, 4000), stderr: (r.err || '').slice(0, 2000), code: r.code };
       json(res, 200, result);
     } catch (e) { json(res, (e && e.status) || 500, { ok: false, message: e.message || String(e) }); }
     return;
@@ -3755,8 +3817,9 @@ async function loadAreData() {
 function searchAreData(query, opts) {
   if (!areDataCache || !Array.isArray(areDataCache)) return [];
   opts = opts || {};
+  const limit = (opts.limit === undefined || opts.limit === null) ? 20 : opts.limit;
+  if (limit <= 0) return [];
   const q = (query || '').toLowerCase();
-  const limit = opts.limit || 20;
   const category = opts.category || '';
   const language = opts.language || '';
   const minStars = opts.minStars || 0;

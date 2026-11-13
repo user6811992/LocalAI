@@ -42,11 +42,16 @@ fi
 # Remove app files
 read -r -p "Remove application files too? [y/N]: " ans
 case "$ans" in [yY]|[yY][eE][sS])
-  rm -rf "$DEST/node_modules" 2>/dev/null || true
-  rm -rf "$DEST/.update-backup" 2>/dev/null || true
-  rm -rf "$DEST/data" 2>/dev/null || true
-  rm -rf "$DEST" 2>/dev/null || true
-  echo "Application files removed."
+  # Validate this is actually an AegisAI folder before deleting
+  if [ ! -f "$DEST/server.js" ] || [ ! -f "$DEST/package.json" ] || ! grep -qi "aegisai" "$DEST/package.json"; then
+    echo "This does not appear to be an AegisAI installation. Aborting file removal."
+  else
+    rm -rf "$DEST/node_modules" 2>/dev/null || true
+    rm -rf "$DEST/.update-backup" 2>/dev/null || true
+    rm -rf "$DEST/data" 2>/dev/null || true
+    rm -rf "$DEST" 2>/dev/null || true
+    echo "Application files removed."
+  fi
   ;;
 *)
   echo "Application files kept."

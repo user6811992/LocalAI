@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.87</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.88</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -234,7 +234,7 @@
       <label>SearXNG instance URL<br><input id="instSearxng" style="width:100%;" placeholder="https://searx.be" /></label>
       <label>SearXNG (Free-Web-Search) instance URL<br><input id="instSearxngFws" style="width:100%;" placeholder="https://search.sapti.me" /></label>
       <label>Firecrawl instance URL<br><input id="instFirecrawl" style="width:100%;" placeholder="http://localhost:3002" /></label>
-      <label>LangSearch API key<br><input id="instLangsearchKey" style="width:100%;" placeholder="sk-..." /></label>
+      <label>LangSearch API key<br><input id="instLangsearchKey" type="password" style="width:100%;" placeholder="sk-..." /></label>
       <button id="instancesSave" class="primary">Save</button>
       <div id="instancesStatus" class="status"></div>
     </div>
@@ -1082,7 +1082,7 @@
       const pref = models.find(m => m.includes('llama3.1')) || models[0];
       modelSel.value = pref;
       const toolsData = await (await fetch('/api/tools')).json();
-      status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 14 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');
+      status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 24 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');
       status.className = 'status';
     } catch (e) {
       status.textContent = 'Cannot reach Ollama: ' + e.message + '. Start Ollama (ollama serve) and click Refresh.';
