@@ -81,6 +81,46 @@ ollama pull llama3.2:3b
 ```
 Or use the **Models** button in the web UI.
 
+## Backends (multi-backend support)
+
+By default AegisAI talks to Ollama, but the server can also drive any
+OpenAI-compatible backend. Set the environment variables before starting:
+
+| `BACKEND_TYPE` | Backend | Notes |
+|---|---|---|
+| `ollama` (default) | Ollama | Native API |
+| `llamacpp` | llama.cpp server | OpenAI-compatible (`/v1/...`) |
+| `lmstudio` | LM Studio | OpenAI-compatible |
+| `openai` | Any OpenAI-compatible endpoint | Generic |
+
+```bash
+# Example: llama.cpp
+BACKEND_TYPE=llamacpp BACKEND_URL=http://127.0.0.1:8081 node server.js
+```
+
+The adapter normalizes model listing, chat (streaming + tool calls), and model
+info to the Ollama shape the UI expects. Note: the UI's model dropdown is
+proxied to Ollama's `/api/tags`, so for OpenAI-compatible backends the list may
+be empty even though chat works — set the model name in the UI or via the backend.
+
+### Intel Arc GPUs
+
+Intel Arc is best supported through **llama.cpp with the SYCL/oneAPI backend**:
+
+1. Build/run llama.cpp with SYCL enabled (`-DGGML_SYCL=ON`) and start `llama-server`.
+2. Point AegisAI at it:
+   ```bash
+   BACKEND_TYPE=llamacpp BACKEND_URL=http://127.0.0.1:8080 node server.js
+   ```
+   (use the port `llama-server` listens on).
+
+**LM Studio** also supports Intel Arc (via Vulkan/DirectML depending on the
+model) — use `BACKEND_TYPE=lmstudio`.
+
+**Ollama** has experimental/limited Intel Arc support on recent versions via
+oneAPI; if your Ollama build detects the Arc, the default `BACKEND_TYPE=ollama`
+works with no extra configuration.
+
 ## Docker (cross-platform)
 
 Run LocalAI with Docker (works on Windows, macOS, Linux):
