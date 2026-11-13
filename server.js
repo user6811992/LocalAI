@@ -1080,6 +1080,7 @@ async function execCodingTool(name, args) {
     return keys.length ? keys.join('\n') : '(no memories)';
   }
   if (name === 'run_python') {
+    const os = require('os');
     if ((process.env.AEGISAI_SANDBOX || '').toLowerCase() === 'docker') {
       const f = path.join(os.tmpdir(), 'localai-py-' + Date.now() + '.py');
       fs.writeFileSync(f, args.code || '');
@@ -1837,7 +1838,7 @@ async function getComponents() {
         models = d.models || [];
         ollamaStatus = 'connected';
       } else {
-        ollamaStatus = 'http ' + r.status;
+        ollamaStatus = 'unreachable';
       }
     } catch (e) {
       ollamaStatus = 'unreachable: ' + (e.message || e);
@@ -2778,7 +2779,8 @@ const server = http.createServer(async (req, res) => {
               r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
             }).on('error', reject);
           });
-          const zipUrl = (releaseInfo.assets && releaseInfo.assets[0] && releaseInfo.assets[0].browser_download_url) || null;
+          const zipAsset = (releaseInfo.assets || []).find((a) => (a.name || '').endsWith('.zip')) || (releaseInfo.assets || [])[0];
+          const zipUrl = (zipAsset && zipAsset.browser_download_url) || null;
           if (!zipUrl) { json(res, 400, { ok: false, message: 'No release zip found. Please re-install from https://github.com/user6811992/LocalAI/releases', output }); return; }
           output += 'Downloading ' + releaseInfo.tag_name + '...\n';
           const zipPath = path.join(os.tmpdir(), 'aegisai-update.zip');
@@ -3234,7 +3236,8 @@ const server = http.createServer(async (req, res) => {
     // JSON fallback: upsert into chats.json
     const chats = loadChats();
     const idx = chats.findIndex((c) => c.id === chat.id);
-    const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: chat.messages || [], updated: new Date().toISOString(), parent_id: chat.parent_id, branch_from: chat.branch_from };
+    const existing = idx >= 0 ? chats[idx] : null;
+    const entry = { id: chat.id || ('chat_' + Date.now()), title: chat.title || 'Untitled', messages: (Array.isArray(chat.messages) ? chat.messages : (existing ? existing.messages : [])), updated: new Date().toISOString(), parent_id: chat.parent_id || (existing ? existing.parent_id : null), branch_from: chat.branch_from || (existing ? existing.branch_from : null) };
     if (idx >= 0) chats[idx] = entry; else chats.unshift(entry);
     // No hard cap on chat history (was 50, which silently dropped older chats)
     saveChats(chats);

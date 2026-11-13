@@ -35,7 +35,9 @@ function setButtons(prev, next, nextLabel) {
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function api(path, opts) {
-  const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {}));
+  const o = Object.assign({}, opts || {});
+  if (o.body && typeof o.body === 'object') o.body = JSON.stringify(o.body);
+  const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, o));
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || d.message || ('HTTP ' + r.status));
   return d;

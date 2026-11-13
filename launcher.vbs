@@ -68,7 +68,10 @@ On Error GoTo 0
 If Not portOpen Then
   Dim nodeExe
   nodeExe = "node"
-  If fso.FileExists("C:\Program Files\nodejs\node.exe") Then nodeExe = """C:\Program Files\nodejs\node.exe"""
+  If fso.FileExists(base & "\runtime\node\node.exe") Then
+    nodeExe = """" & base & "\runtime\node\node.exe"""
+  ElseIf fso.FileExists("C:\Program Files\nodejs\node.exe") Then
+    nodeExe = """C:\Program Files\nodejs\node.exe"""
   ' Bind to the LAN only when the installer recorded LAN access; default is localhost.
   If fso.FileExists(base & "\lan-access.txt") Then
     wshShell.Environment("Process")("HOST") = "0.0.0.0"
