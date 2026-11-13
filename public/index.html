@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.91</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.1.92</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -1188,7 +1188,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: currentAbort ? currentAbort.signal : undefined,
-          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-20)) : messages.slice(-20)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked, cleanRoom: document.getElementById('cleanRoomMode').checked, options: requestOptions, keep_alive: keepAlive })
+          body: JSON.stringify({ model, messages: (systemPromptText ? [{ role: 'system', content: systemPromptText }].concat(messages.slice(-40)) : messages.slice(-40)), includeCoding: document.getElementById('codingMode').checked, includeRe: document.getElementById('reMode').checked, cleanRoom: document.getElementById('cleanRoomMode').checked, options: requestOptions, keep_alive: keepAlive })
         });
         if (!res.ok) {
           let t = '';

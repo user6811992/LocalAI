@@ -624,7 +624,7 @@ async function callMcpTool(name, args) {
   // Check cache first (only for read-only tools)
   const cacheKey = toolCacheKey(name, args);
   const cached = _toolCache.get(cacheKey);
-  if (isCacheableTool(name) && cached && (Date.now() - cached.ts) < 5 * 60 * 1000) {
+  if (isCacheableTool(name) && cached && (Date.now() - cached.ts) < 2 * 60 * 1000) {
     return cached.result + '\n[cached]';
   }
   // Route to awesome-re client if prefixed
@@ -1841,11 +1841,13 @@ async function getReaRepoVersions() {
   try {
     const https = require('https');
     const data = await new Promise((resolve, reject) => {
-      https.get('https://api.github.com/repos/morluto/rea/commits?per_page=1', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
+      const req = https.get('https://api.github.com/repos/morluto/rea/commits?per_page=1', { headers: { 'User-Agent': 'LocalAI' } }, (r) => {
         let buf = '';
         r.on('data', (c) => (buf += c));
         r.on('end', () => { try { resolve(JSON.parse(buf)); } catch (e) { reject(e); } });
-      }).on('error', reject);
+      });
+      req.on('error', reject);
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error('timeout')); });
     });
     if (Array.isArray(data) && data.length) {
       remote = (data[0].sha || '').slice(0, 7);
