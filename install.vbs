@@ -258,14 +258,13 @@ If updateOnly Then
 End If
 
 ' ---------- backend selection ----------
-Dim backendType, backendUrl, backendAns
+Dim backendType, backendUrl, backendAns, bChoice, bUrl
 backendType = "ollama"
 backendUrl = "http://127.0.0.1:11434"
 backendAns = MsgBox("Use Ollama as the AI backend (default, recommended)?" & vbCrLf & vbCrLf & _
   "Yes = Ollama" & vbCrLf & _
   "No = choose another backend (llama.cpp / LM Studio / OpenAI-compatible)", vbYesNo + vbQuestion, "Backend selection")
 If backendAns = vbNo Then
-  Dim bChoice, bUrl
   bChoice = InputBox("Backend type:" & vbCrLf & "  ollama" & vbCrLf & "  llamacpp" & vbCrLf & "  lmstudio" & vbCrLf & "  openai", "Backend type", "llamacpp")
   If bChoice <> "" Then backendType = LCase(Trim(bChoice))
   bUrl = InputBox("Backend URL:", "Backend URL", "http://127.0.0.1:8081")
