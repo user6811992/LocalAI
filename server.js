@@ -3484,7 +3484,7 @@ const server = http.createServer(async (req, res) => { try {
       const flagFile = path.join(DATA_DIR, 'setup-done.flag');
       if (fs2.existsSync(flagFile)) needsSetup = false;
     } catch (e) {}
-    json(res, 200, { needsSetup, ollamaUrl: OLLAMA });
+    json(res, 200, { needsSetup, ollamaUrl: OLLAMA, backend: BACKEND_TYPE, backendUrl: BACKEND_URL, isOpenAICompat: IS_OPENAI_COMPAT });
     return;
   }
   if (req.url === '/api/setup/complete' && req.method === 'POST') {

@@ -65,20 +65,33 @@ function renderWelcome() {
 }
 
 async function renderOllama() {
-  stepContent.innerHTML = '<h2>Ollama backend</h2><p>Checking if Ollama is running...</p><div class="spinner"></div>';
+  stepContent.innerHTML = '<h2>Backend</h2><p>Checking configured backend...</p><div class="spinner"></div>';
   setButtons(true, null);
-  let ok = false, ver = '';
+  let backend = 'ollama', backendUrl = '';
   try {
-    const d = await api('/api/version').catch(() => null);
-    const hr = await fetch('/api/version');
-    if (hr.ok) {
-      const j = await hr.json();
-      // /api/version returns AegisAI version; check Ollama via /api/ollama-info? Use /api/tags
-      const tr = await fetch('/api/tags');
-      if (tr.ok) { ok = true; ver = 'connected'; }
-    }
+    const v = await api('/api/version');
+    backend = v.backend || 'ollama';
+    backendUrl = v.backendUrl || '';
   } catch (e) {}
-  // Actually check Ollama directly via a tags call
+  setupData.backend = backend;
+  setupData.backendUrl = backendUrl;
+  if (backend !== 'ollama') {
+    // Non-Ollama backend: Ollama is not required.
+    setupData.ollamaOk = true;
+    stepContent.innerHTML = `
+      <h2>Backend</h2>
+      <p>AegisAI is configured to use a non-Ollama backend.</p>
+      <div class="check ok">
+        <span class="icon">✓</span>
+        <span class="label">Backend: ${esc(backend)} at ${esc(backendUrl)}</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);">Make sure the backend server is running and reachable before continuing. Models are managed by the backend itself.</p>
+    `;
+    setButtons(true, () => { currentStep = 2; renderStep(); }, 'Next');
+    return;
+  }
+  // Ollama backend: check if it's running
+  let ok = false, ver = '';
   try {
     const tr = await fetch('/api/tags');
     if (tr.ok) { const j = await tr.json(); ok = true; ver = (j.models || []).length + ' model(s) installed'; }
@@ -122,6 +135,16 @@ const RECOMMENDED_MODELS = [
 ];
 
 async function renderModels() {
+  const backend = setupData.backend || 'ollama';
+  if (backend !== 'ollama') {
+    stepContent.innerHTML = `
+      <h2>Models</h2>
+      <p>Models are managed by the ${esc(backend)} backend. Pull or load models using the backend's own tools.</p>
+      <div class="check ok"><span class="icon">✓</span><span class="label">Skipping Ollama model pull (backend: ${esc(backend)}).</span></div>
+    `;
+    setButtons(true, () => { currentStep = 3; renderStep(); }, 'Next');
+    return;
+  }
   let installed = [];
   try {
     const d = await api('/api/tags').catch(() => ({ models: [] }));
