@@ -531,6 +531,10 @@ If addFirewall Then
   Set authFile = fso.CreateTextFile(destBase & "\auth.json", True)
   authFile.WriteLine "{ ""token"": """ & lanToken & """ }"
   authFile.Close
+  ' Copy the token to the clipboard for convenience.
+  On Error Resume Next
+  sh.Run "cmd /c echo " & lanToken & " | clip", 0, True
+  On Error GoTo 0
   fwRc = sh.Run("netsh advfirewall firewall add rule name=""AegisAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
   If Err.Number <> 0 Or fwRc <> 0 Then
     MsgBox "Could not add firewall rule (may need Administrator)." & vbCrLf & _

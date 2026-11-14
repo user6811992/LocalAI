@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.9</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.10</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -670,6 +670,19 @@
   })();
 
   fetch('/api/version').then(r=>r.json()).then(d=>{ window.currentBackend = d.backend || 'ollama'; if(hostEl) hostEl.textContent = 'Backend: ' + (d.backend||'ollama') + ' at ' + (d.backendUrl||'127.0.0.1:11434'); }).catch(()=>{ window.currentBackend = 'ollama'; if(hostEl) hostEl.textContent = 'Backend: unknown'; });
+
+  // Auto-populate auth token from URL (e.g. ?token=... set by the launcher)
+  (function() {
+    try {
+      const u = new URL(window.location.href);
+      const t = u.searchParams.get('token');
+      if (t) {
+        localStorage.setItem('localai_token', t);
+        u.searchParams.delete('token');
+        window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+      }
+    } catch (e) {}
+  })();
 
   // Auth: inject token into all fetch calls
   const _origFetch = window.fetch;

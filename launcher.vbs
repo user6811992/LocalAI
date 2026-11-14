@@ -64,6 +64,35 @@ wshShell.Environment("Process")("BACKEND_TYPE") = backendType
 wshShell.Environment("Process")("BACKEND_URL") = backendUrl
 wshShell.Environment("Process")("OLLAMA_URL") = backendUrl
 
+' ---------- Auth token (from auth.json written by installer for LAN access) ----------
+Dim authToken
+authToken = ""
+Dim authFile
+authFile = base & "\auth.json"
+If fso.FileExists(authFile) Then
+  On Error Resume Next
+  Dim af, aline
+  Set af = fso.OpenTextFile(authFile, 1)
+  Do Until af.AtEndOfStream
+    aline = Trim(af.ReadLine)
+    If InStr(1, aline, """token""", vbTextCompare) > 0 Then
+      Dim tpos
+      tpos = InStr(aline, ":")
+      If tpos > 0 Then
+        authToken = Trim(Mid(aline, tpos + 1))
+        authToken = Replace(authToken, """", "")
+        authToken = Replace(authToken, ",", "")
+        authToken = Trim(authToken)
+      End If
+    End If
+  Loop
+  af.Close
+  On Error GoTo 0
+End If
+If authToken <> "" Then
+  wshShell.Environment("Process")("LOCALAI_TOKEN") = authToken
+End If
+
 ' Start Ollama if not running (only needed for the ollama backend)
 Dim startOllama
 startOllama = (LCase(backendType) = "ollama")
@@ -133,24 +162,29 @@ If Not portOpen Then
   WScript.Sleep 4000
 End If
 
+' Build the app URL, appending the auth token so the web UI auto-populates it.
+Dim appUrl
+appUrl = "http://127.0.0.1:8080"
+If authToken <> "" Then appUrl = appUrl & "?token=" & authToken
+
 ' Launch app window - try Edge, Chrome, then default browser
 Dim browserCmd
 browserCmd = ""
 If fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Microsoft\Edge\Application\msedge.exe") Then
-  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Microsoft\Edge\Application\msedge.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Microsoft\Edge\Application\msedge.exe"" --app=" & appUrl & " --window-size=1200,800"
 ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Microsoft\Edge\Application\msedge.exe") Then
-  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Microsoft\Edge\Application\msedge.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Microsoft\Edge\Application\msedge.exe"" --app=" & appUrl & " --window-size=1200,800"
 ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Google\Chrome\Application\chrome.exe") Then
-  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Google\Chrome\Application\chrome.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles%") & "\Google\Chrome\Application\chrome.exe"" --app=" & appUrl & " --window-size=1200,800"
 ElseIf fso.FileExists(wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Google\Chrome\Application\chrome.exe") Then
-  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Google\Chrome\Application\chrome.exe"" --app=http://127.0.0.1:8080 --window-size=1200,800"
+  browserCmd = """" & wshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\Google\Chrome\Application\chrome.exe"" --app=" & appUrl & " --window-size=1200,800"
 End If
 
 If browserCmd <> "" Then
   wshShell.Run browserCmd, 1, False
 Else
   ' Fall back to default browser
-  wshShell.Run "http://127.0.0.1:8080", 1, False
+  wshShell.Run appUrl, 1, False
 End If
 
 On Error GoTo 0

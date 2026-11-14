@@ -293,6 +293,7 @@ function doInstall() {
       authFile.WriteLine('{ "token": "' + lanToken + '" }');
       authFile.Close();
       log('LAN auth token: ' + lanToken);
+      try { sh.Run('cmd /c echo ' + lanToken + ' | clip', 0, True); } catch (e) {}
     } else {
       advance('Skipping firewall rule.');
     }
