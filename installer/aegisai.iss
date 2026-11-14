@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "AegisAI"
-#define MyAppVersion "2.2.18"
+#define MyAppVersion "2.2.19"
 #define MyAppPublisher "AegisAI"
 #define MyAppURL "https://github.com/user6811992/LocalAI"
 #define MyAppExeName "launcher.vbs"
