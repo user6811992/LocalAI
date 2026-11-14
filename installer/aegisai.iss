@@ -155,6 +155,20 @@ begin
   Result := Exec('cmd.exe', '/c where ollama >nul 2>&1', '', SW_HIDE, ewWaitUntilTerminated, Rc) and (Rc = 0);
 end;
 
+procedure EnsureOllamaRunning;
+var
+  Rc, I: Integer;
+begin
+  for I := 1 to 10 do
+  begin
+    if Exec('cmd.exe', '/c curl -s http://127.0.0.1:11434/api/version >nul 2>&1', '', SW_HIDE, ewWaitUntilTerminated, Rc) and (Rc = 0) then
+      Exit;
+    if I = 1 then
+      Exec('ollama', 'serve', '', SW_HIDE, ewNoWait, Rc);
+    Sleep(1000);
+  end;
+end;
+
 procedure PullSelectedModels;
 var
   CompNames: array of String;
@@ -171,6 +185,8 @@ begin
   CompNames[4] := 'models\mistral_7b';       ModelNames[4] := 'mistral:7b';
   CompNames[5] := 'models\nomic_embed';      ModelNames[5] := 'nomic-embed-text';
   CompNames[6] := 'models\moondream';        ModelNames[6] := 'moondream';
+  if OllamaAvailable then
+    EnsureOllamaRunning;
   for I := 0 to 6 do
   begin
     if IsComponentSelected(CompNames[I]) then
