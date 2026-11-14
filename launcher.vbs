@@ -43,9 +43,10 @@ pathExtra = pathExtra & ollamaDir & ";" & "C:\Program Files\nodejs;" & wshShell.
 wshShell.Environment("Process")("PATH") = pathExtra & wshShell.Environment("Process")("PATH")
 
 ' ---------- Backend selection (from backend.txt written by installer) ----------
-Dim backendType, backendUrl
+Dim backendType, backendUrl, backendModel
 backendType = "ollama"
 backendUrl = "http://127.0.0.1:11434"
+backendModel = ""
 Dim backendFile
 backendFile = base & "\backend.txt"
 If fso.FileExists(backendFile) Then
@@ -56,6 +57,7 @@ If fso.FileExists(backendFile) Then
     bline = Trim(bf.ReadLine)
     If LCase(Left(bline, 13)) = "backend_type=" Then backendType = Mid(bline, 14)
     If LCase(Left(bline, 12)) = "backend_url=" Then backendUrl = Mid(bline, 13)
+    If LCase(Left(bline, 14)) = "backend_model=" Then backendModel = Mid(bline, 15)
   Loop
   bf.Close
   On Error GoTo 0
@@ -63,6 +65,7 @@ End If
 wshShell.Environment("Process")("BACKEND_TYPE") = backendType
 wshShell.Environment("Process")("BACKEND_URL") = backendUrl
 wshShell.Environment("Process")("OLLAMA_URL") = backendUrl
+If backendModel <> "" Then wshShell.Environment("Process")("BACKEND_MODEL") = backendModel
 
 ' ---------- Auth token (from auth.json written by installer for LAN access) ----------
 ' Single source of truth: auth.json. We only read the token here to pass it
@@ -135,6 +138,83 @@ If startOllama And Not svcRunning Then
       Set http2 = Nothing
       If ollamaReady Then Exit For
     Next
+  End If
+End If
+
+' ---------- Auto-start non-Ollama backends ----------
+Dim backendRunning
+backendRunning = False
+
+If LCase(backendType) = "llamacpp" Then
+  ' Discover llama-server binary
+  Dim llamaDir
+  llamaDir = ""
+  If fso.FileExists("C:\Program Files\llama.cpp\llama-server.exe") Then llamaDir = "C:\Program Files\llama.cpp"
+  If llamaDir = "" And fso.FileExists(wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\llama.cpp\llama-server.exe") Then llamaDir = wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\llama.cpp"
+  If llamaDir = "" Then
+    ' Try PATH
+    Dim lexec, lout
+    Set lexec = wshShell.Exec("cmd /c where llama-server 2>nul")
+    lout = lexec.StdOut.ReadAll()
+    If Len(Trim(lout)) > 0 Then llamaDir = fso.GetParentFolderName(Trim(Split(lout, vbCrLf)(0)))
+  End If
+  ' Check if backend port is already open
+  Dim backendPort
+  backendPort = "8081"
+  Dim urlParts
+  urlParts = Split(backendUrl, ":")
+  If UBound(urlParts) >= 2 Then backendPort = urlParts(UBound(urlParts))
+  backendPort = Replace(backendPort, "/", "")
+  Dim bhttp
+  Set bhttp = CreateObject("MSXML2.XMLHTTP")
+  On Error Resume Next
+  bhttp.Open "GET", backendUrl & "/health", False
+  bhttp.Send
+  If Err.Number = 0 And bhttp.Status = 200 Then backendRunning = True
+  Err.Clear
+  On Error GoTo 0
+  Set bhttp = Nothing
+  If Not backendRunning And llamaDir <> "" And backendModel <> "" Then
+    If fso.FileExists(llamaDir & "\llama-server.exe") And fso.FileExists(backendModel) Then
+      wshShell.Run """" & llamaDir & "\llama-server.exe"" -m """ & backendModel & """ --port " & backendPort, 0, False
+      ' Wait up to 15s for llama-server to be ready
+      Dim llamaReady, llamaWait
+      llamaReady = False
+      For llamaWait = 1 To 15
+        WScript.Sleep 1000
+        Set bhttp = CreateObject("MSXML2.XMLHTTP")
+        On Error Resume Next
+        bhttp.Open "GET", backendUrl & "/health", False
+        bhttp.Send
+        If Err.Number = 0 And bhttp.Status = 200 Then llamaReady = True
+        Err.Clear
+        On Error GoTo 0
+        Set bhttp = Nothing
+        If llamaReady Then Exit For
+      Next
+    End If
+  End If
+End If
+
+If LCase(backendType) = "lmstudio" Then
+  ' Try to start LM Studio server via lms CLI
+  Dim lmsPath
+  lmsPath = ""
+  Set lexec = wshShell.Exec("cmd /c where lms 2>nul")
+  lout = lexec.StdOut.ReadAll()
+  If Len(Trim(lout)) > 0 Then lmsPath = Trim(Split(lout, vbCrLf)(0))
+  ' Check if backend is already running
+  Set bhttp = CreateObject("MSXML2.XMLHTTP")
+  On Error Resume Next
+  bhttp.Open "GET", backendUrl & "/v1/models", False
+  bhttp.Send
+  If Err.Number = 0 And bhttp.Status = 200 Then backendRunning = True
+  Err.Clear
+  On Error GoTo 0
+  Set bhttp = Nothing
+  If Not backendRunning And lmsPath <> "" Then
+    wshShell.Run """" & lmsPath & """ server start", 0, False
+    WScript.Sleep 5000
   End If
 End If
 

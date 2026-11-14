@@ -177,7 +177,8 @@ function updateSizeTotal() {
 function renderOptions() {
   $('stepContent').innerHTML = '<h1>Options</h1><div class="subtitle">Configure access, backend, and shortcuts.</div>' +
     '<div class="panel"><h3>Backend</h3><div class="row"><label>AI backend:</label><select id="optBackend" style="flex:1;"><option value="ollama|http://127.0.0.1:11434">Ollama (default)</option><option value="llamacpp|http://127.0.0.1:8081">llama.cpp</option><option value="lmstudio|http://127.0.0.1:1234">LM Studio</option><option value="openai|http://127.0.0.1:8000">OpenAI-compatible</option></select></div>' +
-    '<p style="font-size:11px;color:var(--muted);margin:4px 0;">Choose the AI backend. For non-Ollama backends, start the backend server first.</p></div>' +
+    '<div class="row"><label>Model path (llama.cpp only):</label><input type="text" id="optModelPath" style="flex:1;" placeholder="C:\\path\\to\\model.gguf" /></div>' +
+    '<p style="font-size:11px;color:var(--muted);margin:4px 0;">Choose the AI backend. For llama.cpp, optionally set a model path for auto-start.</p></div>' +
     '<div class="panel"><h3>LAN Access</h3><div class="checkbox-row"><input type="checkbox" id="optFirewall" /> Allow other devices on your network to access AegisAI (adds a firewall rule for port 8080)</div>' +
     '<p style="font-size:11px;color:var(--muted);margin:4px 0;">Only enable on trusted networks. AegisAI binds to localhost by default.</p></div>' +
     '<div class="panel"><h3>Shortcuts</h3><div class="checkbox-row"><input type="checkbox" id="optShortcut" checked /> Create desktop shortcut</div>' +
@@ -273,9 +274,11 @@ function doInstall() {
     var backendVal = $('optBackend').value.split('|');
     var backendType = backendVal[0];
     var backendUrl = backendVal[1];
+    var modelPath = $('optModelPath').value.trim();
     var bf = fso.CreateTextFile(destBase + "\\backend.txt", True);
     bf.WriteLine("BACKEND_TYPE=" + backendType);
     bf.WriteLine("BACKEND_URL=" + backendUrl);
+    if (modelPath) bf.WriteLine("BACKEND_MODEL=" + modelPath);
     bf.Close();
     log('Backend: ' + backendType + ' at ' + backendUrl);
 

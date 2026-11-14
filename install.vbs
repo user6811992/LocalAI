@@ -272,11 +272,19 @@ If backendAns = vbNo Then
   bUrl = InputBox("Backend URL:", "Backend URL", "http://127.0.0.1:8081")
   If bUrl <> "" Then backendUrl = Trim(bUrl)
 End If
-' Write backend.txt so the launcher configures BACKEND_TYPE/BACKEND_URL.
+' If llama.cpp, ask for the model path
+Dim backendModel
+backendModel = ""
+If LCase(backendType) = "llamacpp" Then
+  backendModel = InputBox("Path to your .gguf model file (for llama.cpp auto-start):", "Model path", "")
+  If backendModel <> "" Then backendModel = Trim(backendModel)
+End If
+' Write backend.txt so the launcher configures BACKEND_TYPE/BACKEND_URL/BACKEND_MODEL.
 Dim bf
 Set bf = fso.CreateTextFile(destBase & "\backend.txt", True)
 bf.WriteLine "BACKEND_TYPE=" & backendType
 bf.WriteLine "BACKEND_URL=" & backendUrl
+If backendModel <> "" Then bf.WriteLine "BACKEND_MODEL=" & backendModel
 bf.Close
 LogMsg logPath, "Backend: " & backendType & " at " & backendUrl
 

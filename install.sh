@@ -158,6 +158,7 @@ fi
 # ---------- backend selection ----------
 BACKEND_TYPE="ollama"
 BACKEND_URL="http://127.0.0.1:11434"
+BACKEND_MODEL=""
 if [ -t 0 ] || [ -r /dev/tty ]; then
   echo ""
   echo "Select AI backend:"
@@ -173,11 +174,17 @@ if [ -t 0 ] || [ -r /dev/tty ]; then
     *) BACKEND_TYPE="ollama"; BACKEND_URL="http://127.0.0.1:11434" ;;
   esac
 fi
+# If llama.cpp, ask for model path
+if [ "$BACKEND_TYPE" = "llamacpp" ]; then
+  if [ -t 0 ]; then read -r -p "Path to .gguf model file (optional): " BACKEND_MODEL; else read -r -p "Path to .gguf model file (optional): " BACKEND_MODEL < /dev/tty; fi
+  BACKEND_MODEL="${BACKEND_MODEL:-}"
+fi
 # Allow override via env
 BACKEND_TYPE="${AEGISAI_BACKEND_TYPE:-$BACKEND_TYPE}"
 BACKEND_URL="${AEGISAI_BACKEND_URL:-$BACKEND_URL}"
 # Write backend.txt
 printf 'BACKEND_TYPE=%s\nBACKEND_URL=%s\n' "$BACKEND_TYPE" "$BACKEND_URL" > "$DEST/backend.txt"
+if [ -n "$BACKEND_MODEL" ]; then printf 'BACKEND_MODEL=%s\n' "$BACKEND_MODEL" >> "$DEST/backend.txt"; fi
 echo "Backend: $BACKEND_TYPE at $BACKEND_URL"
 
 
