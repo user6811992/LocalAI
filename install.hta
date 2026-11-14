@@ -292,8 +292,17 @@ function doInstall() {
       var authFile = fso.CreateTextFile(destBase + "\\auth.json", True);
       authFile.WriteLine('{ "token": "' + lanToken + '" }');
       authFile.Close();
+      // Also write the token to a plain text file so it can always be found/recovered.
+      var tokenFile = fso.CreateTextFile(destBase + "\\\\auth-token.txt", True);
+      tokenFile.WriteLine(lanToken);
+      tokenFile.Close();
       log('LAN auth token: ' + lanToken);
+      // Copy token to clipboard
       try { sh.Run('cmd /c echo ' + lanToken + ' | clip', 0, True); } catch (e) {}
+      try {
+        var htmlObj = new ActiveXObject('htmlfile');
+        htmlObj.ParentWindow.ClipboardData.SetData('text', lanToken);
+      } catch (e) {}
     } else {
       advance('Skipping firewall rule.');
     }

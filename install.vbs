@@ -408,7 +408,7 @@ modelPrompt = "Pull all recommended AI models now?" & vbCrLf & vbCrLf & _
 For mi = 0 To UBound(modelList)
   modelPrompt = modelPrompt & "  " & (mi + 1) & ". " & modelList(mi) & "  (" & modelSize(mi) & ")" & vbCrLf
 Next
-modelPrompt = modelPrompt & vbCrLf & "Total: ~62 GB. Models are pulled in the recommended order." & vbCrLf & _:<|end|><|start|>edit to=assistant<|channel|>analysis<|channel|>Edited C:/Users/Poonjab/AppData/Local/Temp/opencode/LocalAI-review/install.vbs (1 replacement)
+modelPrompt = modelPrompt & vbCrLf & "Total: ~59 GB. Models are pulled in the recommended order." & vbCrLf & _
               "This may take a while." & vbCrLf & vbCrLf & "Pull now?"
 
 pullModels = False
@@ -531,9 +531,19 @@ If addFirewall Then
   Set authFile = fso.CreateTextFile(destBase & "\auth.json", True)
   authFile.WriteLine "{ ""token"": """ & lanToken & """ }"
   authFile.Close
-  ' Copy the token to the clipboard for convenience.
+  ' Also write the token to a plain text file so it can always be found/recovered.
+  Dim tokenFile
+  Set tokenFile = fso.CreateTextFile(destBase & "\auth-token.txt", True)
+  tokenFile.WriteLine lanToken
+  tokenFile.Close
+  ' Copy the token to the clipboard for convenience (try clip.exe, then htmlfile).
   On Error Resume Next
   sh.Run "cmd /c echo " & lanToken & " | clip", 0, True
+  If Err.Number <> 0 Then
+    Dim htmlObj
+    Set htmlObj = CreateObject("htmlfile")
+    htmlObj.ParentWindow.ClipboardData.SetData "text", lanToken
+  End If
   On Error GoTo 0
   fwRc = sh.Run("netsh advfirewall firewall add rule name=""AegisAI"" dir=in action=allow protocol=tcp localport=8080", 0, True)
   If Err.Number <> 0 Or fwRc <> 0 Then
@@ -544,7 +554,9 @@ If addFirewall Then
     LogMsg logPath, "Firewall rule failed (rc=" & fwRc & ")."
   Else
     MsgBox "Firewall rule added. Other devices can reach http://<your-pc-ip>:8080" & vbCrLf & vbCrLf & _
-           "Auth token (enter in the web UI):" & vbCrLf & lanToken, vbInformation, "AegisAI Installer"
+           "Auth token (enter in the web UI):" & vbCrLf & lanToken & vbCrLf & vbCrLf & _
+           "The token was copied to your clipboard and saved to:" & vbCrLf & destBase & "\auth-token.txt" & vbCrLf & vbCrLf & _
+           "If the clipboard copy failed, open auth-token.txt and copy the token manually.", vbInformation, "AegisAI Installer"
     LogMsg logPath, "Firewall rule added."
   End If
   On Error GoTo 0

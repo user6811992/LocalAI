@@ -288,6 +288,25 @@ The installer (`install.vbs`) and launcher are not code-signed, so SmartScreen m
 
 Code signing is not included in this project; if you need it, sign the `.vbs` files with your own certificate (`signtool`).
 
+### Microsoft Defender false positive (trojan detection)
+
+Some antivirus engines (including Microsoft Defender) may flag the unsigned
+installer or `launcher.vbs` as a trojan (e.g. `Bearfoos.A!ml`). This is a
+**false positive** — the installer is built from the public source in this
+repository and contains no malicious code. The detection is heuristic/ML-based
+and triggers on unsigned executables that spawn child processes.
+
+- **Option 1:** Click "Allow on device" / "Restore" in Defender, or add an
+  exclusion for the install folder.
+- **Option 2:** Install from source instead:
+  ```bash
+  git clone https://github.com/user6811992/LocalAI.git
+  cd LocalAI
+  npm install
+  node server.js
+  ```
+  This avoids the installer entirely.
+
 ### Ollama / Node not found
 The installer checks for `node` and `ollama` on PATH. If missing, install them:
 - Node.js: https://nodejs.org
