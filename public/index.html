@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.2</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.3</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -279,10 +279,17 @@
   <div class="modal">
     <button class="close-btn" id="modelsClose">&times;</button>
     <h2>Models</h2>
+    <div id="modelsBackendInfo" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <div style="display:flex;gap:8px;">
-        <input id="pullModelName" style="flex:1;" placeholder="e.g. llama3.2:3b or hf.co/..." />
-        <button id="pullModelBtn" class="primary">Pull</button>
+      <div id="modelsOllamaSection" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:8px;">
+          <input id="pullModelName" style="flex:1;" placeholder="e.g. llama3.2:3b or hf.co/..." />
+          <button id="pullModelBtn" class="primary">Pull</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input id="loadModelPath" style="flex:1;" placeholder="Path to a .gguf file (llama.cpp only)" />
+          <button id="loadModelBtn" class="primary">Load</button>
+        </div>
       </div>
       <div id="pullModelStatus" class="status"></div>
       <div style="font-size:12px;color:var(--muted);">
@@ -2300,6 +2307,26 @@
   // Models modal
   const quickModels = ['llama3.2:3b', 'llama3.2:1b', 'qwen2.5:14b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'mistral:7b', 'phi3:mini', 'gemma2:9b', 'deepseek-coder:6.7b', 'deepseek-coder-v2:16b', 'deepseek-r1:14b', 'nomic-embed-text', 'moondream'];
   function openModels() {
+    const backend = window.currentBackend || 'ollama';
+    const info = document.getElementById('modelsBackendInfo');
+    const ollamaSection = document.getElementById('modelsOllamaSection');
+    if (info) {
+      if (backend === 'ollama') {
+        info.textContent = 'Backend: Ollama. Pull or import models below.';
+        if (ollamaSection) ollamaSection.style.display = '';
+      } else if (backend === 'llamacpp') {
+        info.innerHTML = 'Backend: llama.cpp. Models are loaded from a GGUF path (use "Load" below) or passed via --model to the server. ' +
+          '<a href="https://github.com/ggerganov/llama.cpp" target="_blank" style="color:var(--accent);">llama.cpp docs</a>';
+        if (ollamaSection) ollamaSection.style.display = '';
+      } else if (backend === 'lmstudio') {
+        info.innerHTML = 'Backend: LM Studio. Download and load models in the LM Studio app; they appear here once loaded. ' +
+          '<a href="https://lmstudio.ai" target="_blank" style="color:var(--accent);">LM Studio</a>';
+        if (ollamaSection) ollamaSection.style.display = 'none';
+      } else {
+        info.textContent = 'Backend: ' + backend + '. Models are managed by the backend.';
+        if (ollamaSection) ollamaSection.style.display = 'none';
+      }
+    }
     document.getElementById('modelsBackdrop').classList.add('open');
     loadInstalledModels();
     renderQuickPulls();
@@ -2328,7 +2355,9 @@
   }
   function renderQuickPulls() {
     const container = document.getElementById('quickPulls');
+    if (!container) return;
     container.innerHTML = '';
+    if ((window.currentBackend || 'ollama') !== 'ollama') { container.textContent = '(managed by backend)'; return; }
     quickModels.forEach(m => {
       const wrap = document.createElement('span');
       wrap.style.display = 'inline-flex';
@@ -2355,6 +2384,24 @@
     });
   }
   document.getElementById('modelsBtn').addEventListener('click', openModels);
+  const loadModelBtn = document.getElementById('loadModelBtn');
+  if (loadModelBtn) {
+    loadModelBtn.addEventListener('click', async () => {
+      const path = (document.getElementById('loadModelPath').value || '').trim();
+      if (!path) { document.getElementById('pullModelStatus').textContent = 'Enter a .gguf path.'; document.getElementById('pullModelStatus').className = 'status err'; return; }
+      const st = document.getElementById('pullModelStatus');
+      st.textContent = 'Loading...';
+      st.className = 'status';
+      loadModelBtn.disabled = true;
+      try {
+        const r = await fetch('/api/load-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+        const d = await r.json();
+        if (d.ok) { st.textContent = d.message || 'Loaded.'; st.className = 'status ok'; await loadInstalledModels(); await loadModels(); }
+        else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
+      } catch (e) { st.textContent = 'Error: ' + e.message; st.className = 'status err'; }
+      finally { loadModelBtn.disabled = false; }
+    });
+  }
   document.getElementById('modelsClose').addEventListener('click', () => {
     document.getElementById('modelsBackdrop').classList.remove('open');
   });

@@ -2673,6 +2673,34 @@ const server = http.createServer(async (req, res) => { try {
         return;
       }
       if (!name || !name.trim()) { json(res, 400, { ok: false, message: 'Model name required' }); return; }
+
+  // Load a model from a path (llama.cpp /models/load). Other backends manage models themselves.
+  if (req.url === '/api/load-model' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { path: modelPath } = JSON.parse(body || '{}');
+      if (!modelPath || !modelPath.trim()) { json(res, 400, { ok: false, message: 'model path required' }); return; }
+      if (BACKEND_TYPE !== 'llamacpp') {
+        json(res, 400, { ok: false, message: 'Loading a model from a path is only supported for the llama.cpp backend. Use your ' + BACKEND_TYPE + ' backend tools to load models.' });
+        return;
+      }
+      try {
+        const r = await fetch(BACKEND_URL.replace(/\/$/, '') + '/models/load', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: modelPath.trim() }),
+        });
+        const text = await r.text();
+        let d = {};
+        try { d = JSON.parse(text); } catch (e) { d = { message: text }; }
+        if (!r.ok) { json(res, r.status, { ok: false, message: d.error || d.message || ('HTTP ' + r.status) }); return; }
+        json(res, 200, { ok: true, message: d.message || ('Loaded ' + modelPath) });
+      } catch (e) {
+        json(res, 502, { ok: false, message: 'Backend unreachable: ' + (e.message || e) });
+      }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
       const modelName = name.trim();
       if (!isValidModelName(modelName)) { json(res, 400, { ok: false, message: 'Invalid model name' }); return; }
       const r = await runProcess(resolveOllamaBin(), ['pull', modelName], { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 });
