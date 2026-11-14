@@ -1121,7 +1121,7 @@
         throw new Error('Backend not reachable. Start it and click Refresh.');
       }
       const r = await fetch('/api/tags');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) { let t = ''; try { const d = await r.json(); t = d.error || d.message || ''; } catch (e) {} throw new Error('HTTP ' + r.status + (t ? ': ' + t : '')); }
       const data = await r.json();
       const models = (data.models || []).map(m => m.name);
       modelSel.dataset.allModels = models.join('\\n');
@@ -2458,7 +2458,8 @@
       loadModelBtn.disabled = true;
       try {
         const r = await fetch('/api/load-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
-        const d = await r.json();
+        let d = {};
+        try { d = await r.json(); } catch (e) { d = { ok: false, message: 'HTTP ' + r.status }; }
         if (d.ok) { st.textContent = d.message || 'Loaded.'; st.className = 'status ok'; await loadInstalledModels(); await loadModels(); }
         else { st.textContent = 'Failed: ' + (d.message || 'unknown'); st.className = 'status err'; }
       } catch (e) { st.textContent = 'Error: ' + e.message; st.className = 'status err'; }
@@ -2644,7 +2645,8 @@
               importBtn.textContent = 'Importing...';
               try {
                 const r = await fetch('/api/import-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: it.path, name }) });
-                const d = await r.json();
+                let d = {};
+                try { d = await r.json(); } catch (e) { d = { ok: false, message: 'HTTP ' + r.status }; }
                 if (d.ok) { alert('Successfully imported as: ' + (d.name || name)); await loadInstalledModels(); await loadModels(); }
                 else { alert('Import failed: ' + (d.message || 'unknown error')); }
               } catch (e) { alert('Error: ' + e.message); }
@@ -2674,7 +2676,8 @@
     st.className = 'status';
     try {
       const r = await fetch('/api/pull-model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-      const d = await r.json();
+      let d = {};
+      try { d = await r.json(); } catch (e) { d = { ok: false, message: 'HTTP ' + r.status }; }
       if (d.ok) { st.textContent = 'Pulled ' + name + ': ' + (d.message || 'done').slice(0, 200); st.className = 'status'; }
       else { st.textContent = 'Failed: ' + (d.message || 'unknown error'); st.className = 'status err'; }
       await loadInstalledModels();

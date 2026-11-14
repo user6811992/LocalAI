@@ -2196,8 +2196,8 @@ function proxyToOllama(req, res) {
           setTimeout(attempt, 500 * retries);
           return;
         }
-        if (!res.headersSent) { res.statusCode = 502; }
-        try { res.end('Ollama proxy error: ' + e.message + '. Is Ollama running? Start with: ollama serve'); } catch (_) {}
+        if (!res.headersSent) { res.statusCode = 502; res.setHeader('Content-Type', 'application/json; charset=utf-8'); }
+        try { res.end(JSON.stringify({ error: 'Backend proxy error: ' + e.message + '. Is the backend running? Start it first.' })); } catch (_) {}
       });
       if (bodyBuf.length > 0) proxyReq.write(bodyBuf);
       proxyReq.end();
@@ -2757,6 +2757,17 @@ const server = http.createServer(async (req, res) => { try {
         return;
       }
       if (!name || !name.trim()) { json(res, 400, { ok: false, message: 'Model name required' }); return; }
+      const modelName = name.trim();
+      if (!isValidModelName(modelName)) { json(res, 400, { ok: false, message: 'Invalid model name' }); return; }
+      const r = await runProcess(resolveOllamaBin(), ['pull', modelName], { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 });
+      const result = r.ok
+        ? { ok: true, message: (r.out || 'done').trim().slice(0, 500) }
+        : { ok: false, message: (r.out || r.err || ('exit code ' + r.code)).slice(0, 500) };
+      invalidateVersionCache();
+      json(res, 200, result);
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
 
   // Load a model from a path (llama.cpp /models/load). Other backends manage models themselves.
   if (req.url === '/api/load-model' && req.method === 'POST') {
@@ -2782,17 +2793,6 @@ const server = http.createServer(async (req, res) => { try {
       } catch (e) {
         json(res, 502, { ok: false, message: 'Backend unreachable: ' + (e.message || e) });
       }
-    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
-    return;
-  }
-      const modelName = name.trim();
-      if (!isValidModelName(modelName)) { json(res, 400, { ok: false, message: 'Invalid model name' }); return; }
-      const r = await runProcess(resolveOllamaBin(), ['pull', modelName], { timeout: 1800000, maxBuffer: 10 * 1024 * 1024 });
-      const result = r.ok
-        ? { ok: true, message: (r.out || 'done').trim().slice(0, 500) }
-        : { ok: false, message: (r.out || r.err || ('exit code ' + r.code)).slice(0, 500) };
-      invalidateVersionCache();
-      json(res, 200, result);
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
