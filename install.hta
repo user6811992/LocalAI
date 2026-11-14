@@ -258,7 +258,7 @@ function doInstall() {
       setButtons('<button onclick="currentStep=4;renderStep();">Retry</button>');
       return;
     }
-    var _t = new Date().getTime(); while (new Date().getTime() - _t < 500) {}
+    // (removed busy-wait; file copy above is synchronous)
 
     // Step 2: npm install
     advance('Installing npm dependencies...');

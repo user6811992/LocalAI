@@ -24,6 +24,7 @@ mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' \
   --exclude='repos' --exclude='tools' --exclude='workspace' \
   --exclude='.update-backup' --exclude='data' \
+  --exclude='.github' --exclude='installer' --exclude='docs' \
   "$ROOT/" "$APPDIR/usr/lib/aegisai/"
 
 # 3. Bundle a portable Node.js runtime (linux-x64)

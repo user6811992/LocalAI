@@ -12,6 +12,14 @@ $pkg = Get-Content package.json -Raw | ConvertFrom-Json
 $ver = $pkg.version
 Write-Host "Building AegisAI installer v$ver"
 
+# Patch AppVersion in aegisai.iss so it stays in sync with package.json
+$issPath = Join-Path $root "installer\aegisai.iss"
+if (Test-Path $issPath) {
+  $iss = Get-Content $issPath -Raw
+  $iss = $iss -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$ver`""
+  Set-Content $issPath $iss -NoNewline
+}
+
 # 2. Optionally bundle Node.js runtime
 if ($BundleNode) {
   $nodeDir = Join-Path $root 'installer\node-runtime'

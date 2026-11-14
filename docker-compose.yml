@@ -22,6 +22,8 @@ services:
       - BACKEND_URL=${BACKEND_URL:-http://ollama:11434}
       - PORT=8080
       - HOST=0.0.0.0
+      # Set LOCALAI_TOKEN in your .env (or shell) before exposing port 8080
+      # beyond localhost; an empty value disables auth (only safe for local use).
       - LOCALAI_TOKEN=${LOCALAI_TOKEN:-}
       - AEGISAI_DATA_DIR=/app/data
     volumes:

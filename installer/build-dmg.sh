@@ -24,6 +24,7 @@ mkdir -p "$APP_DIR/Contents/Resources/app"
 rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' \
   --exclude='repos' --exclude='tools' --exclude='workspace' \
   --exclude='.update-backup' --exclude='data' \
+  --exclude='.github' --exclude='installer' --exclude='docs' \
   "$ROOT/" "$APP_DIR/Contents/Resources/app/"
 
 # 3. Bundle a portable universal Node.js runtime (x64 + arm64)

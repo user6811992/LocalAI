@@ -127,7 +127,7 @@ Else
 End If
 
 ' Show scan results
-MsgBox scanReport, vbInformation, "Drive scan"
+' Scan results are kept in scanReport for troubleshooting (no modal dialog).
 
 ' Welcome
 MsgBox "Welcome to the LocalAI installer." & vbCrLf & vbCrLf & _
@@ -216,6 +216,8 @@ If fso.FileExists(srcBase & "\package.json") Then
   Dim vMatch
   Set vMatch = New RegExp
   vMatch.Pattern = """version""\s*:\s*""([^""]+)"""
+  vMatch.Global = True
+  vMatch.IgnoreCase = True
   Dim vMatches
   Set vMatches = vMatch.Execute(vContent)
   If vMatches.Count > 0 Then srcVersion = vMatches(0).SubMatches(0)
