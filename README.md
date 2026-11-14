@@ -139,6 +139,10 @@ model) — use `BACKEND_TYPE=lmstudio`.
 oneAPI; if your Ollama build detects the Arc, the default `BACKEND_TYPE=ollama`
 works with no extra configuration.
 
+- **FastFlowLM** (AMD NPU/Ryzen AI) and **llm-scaler** (Intel Arc Pro B60) are
+  OpenAI-compatible servers for specialized hardware. Use `BACKEND_TYPE=openai`
+  (or `llamacpp`) with the appropriate `BACKEND_URL`.
+
 ## Docker (cross-platform)
 
 Run LocalAI with Docker (works on Windows, macOS, Linux):
