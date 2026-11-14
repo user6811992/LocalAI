@@ -102,6 +102,15 @@ http.Send
 If Err.Number = 0 And http.Status = 200 Then portOpen = True
 On Error GoTo 0
 
+' Ensure dependencies are installed
+If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
+  Dim npmExe
+  npmExe = "npm"
+  If fso.FileExists("C:\Program Files\nodejs\npm.cmd") Then npmExe = """C:\Program Files\nodejs\npm.cmd"""
+  wshShell.Run "cmd /c cd /d """ & base & """ && " & npmExe & " install", 1, True
+  WScript.Sleep 2000
+End If
+
 If Not portOpen Then
   Dim nodeExe
   nodeExe = "node"
