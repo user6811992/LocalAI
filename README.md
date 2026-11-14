@@ -33,7 +33,13 @@ Tested with:
 
 ### Prerequisites
 - [Node.js](https://nodejs.org) 18+
-- [Ollama](https://ollama.com/download) installed and running
+- **One** AI backend:
+  - [Ollama](https://ollama.com/download) (default, recommended) — installed and running, **or**
+  - [llama.cpp](https://github.com/ggerganov/llama.cpp) server, **or**
+  - [LM Studio](https://lmstudio.ai), **or**
+  - any OpenAI-compatible endpoint
+
+Ollama is only required if you use the default `ollama` backend. Other backends are selected during installation (or via `BACKEND_TYPE`/`BACKEND_URL` env vars) and do not need Ollama.
 
 ### Install (Windows — Inno Setup installer, recommended)
 Download `AegisAI-Setup-<version>.exe` from the [Releases](https://github.com/user6811992/LocalAI/releases) page and run it. The installer:
