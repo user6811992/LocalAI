@@ -82,7 +82,6 @@ Dim portOpen
 portOpen = False
 Dim http
 Set http = CreateObject("MSXML2.XMLHTTP")
-http.setTimeouts 2000, 2000, 2000, 2000
 On Error Resume Next
 http.Open "GET", "http://127.0.0.1:8080/", False
 http.Send
@@ -96,6 +95,7 @@ If Not portOpen Then
     nodeExe = """" & base & "\runtime\node\node.exe"""
   ElseIf fso.FileExists("C:\Program Files\nodejs\node.exe") Then
     nodeExe = """C:\Program Files\nodejs\node.exe"""
+  End If
   ' Bind to the LAN only when the installer recorded LAN access; default is localhost.
   If fso.FileExists(base & "\lan-access.txt") Then
     wshShell.Environment("Process")("HOST") = "0.0.0.0"
