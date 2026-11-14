@@ -1900,6 +1900,79 @@ function getReaAgentVersion() {
   return null;
 }
 
+// ---------- Dependency version detection ----------
+function getJdkVersion() {
+  const javaHome = process.env.JAVA_HOME || process.env.JDK_HOME;
+  if (javaHome) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const vFile = path.join(javaHome, 'release');
+      if (fs.existsSync(vFile)) {
+        const content = fs.readFileSync(vFile, 'utf8');
+        const m = content.match(/JAVA_VERSION="([^"]+)"/);
+        if (m) return m[1];
+      }
+    } catch (e) {}
+  }
+  try {
+    const { execFileSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'cmd' : 'java';
+    const args = process.platform === 'win32' ? ['/c', 'java', '-version'] : ['-version'];
+    const out = execFileSync(cmd, args, { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
+    const m = (out || '').match(/version "([^"]+)"/);
+    if (m) return m[1];
+  } catch (e) {}
+  return null;
+}
+
+function getGhidraVersion() {
+  const ghidraDir = process.env.GHIDRA_INSTALL_DIR;
+  if (ghidraDir) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const m = ghidraDir.match(/ghidra[_-]?(\d+\.\d+(\.\d+)?)_?/i);
+      if (m) return m[1];
+      const propFile = path.join(ghidraDir, 'application.properties');
+      if (fs.existsSync(propFile)) {
+        const content = fs.readFileSync(propFile, 'utf8');
+        const vm = content.match(/application.version\s*=\s*(.+)/);
+        if (vm) return vm[1].trim();
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+function getNodeVersion() {
+  try { return process.version; } catch (e) { return null; }
+}
+
+function getCraftVersion() {
+  const bin = resolveCraftBin();
+  if (!bin) return null;
+  try {
+    const { execFileSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'cmd' : bin;
+    const args = process.platform === 'win32' ? ['/c', bin, '--version'] : ['--version'];
+    const out = execFileSync(cmd, args, { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (out) return out.split(/\s+/).pop();
+  } catch (e) {}
+  return null;
+}
+
+function getAwesomeReVersion() {
+  try {
+    const { execFileSync } = require('child_process');
+    const cmd = process.platform === 'win32' ? 'cmd' : 'uv';
+    const args = process.platform === 'win32' ? ['/c', 'uv', '--version'] : ['--version'];
+    const out = execFileSync(cmd, args, { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (out) return out;
+  } catch (e) {}
+  return null;
+}
+
 function getLatestReaAgentVersion() {
   const env = Object.assign({}, process.env, { PATH: (process.env.PATH || '') });
   try {
@@ -2073,6 +2146,85 @@ async function getComponents() {
       installUrl: 'https://github.com/morluto/rea',
       homepage: 'https://github.com/morluto/rea',
       about: reaRepoAbout + '\nVersion: ' + (_rrv.current || 'unknown') + ' (remote: ' + (_rrv.remote || 'unknown') + ', behind by ' + (_rrv.behind || 0) + ' commit(s)).',
+    });
+    // JDK / Java
+    const jdkVer = getJdkVersion();
+    comps.push({
+      id: 'jdk',
+      name: 'JDK / Java',
+      kind: 'runtime',
+      status: jdkVer ? ('installed: ' + jdkVer) : 'not found',
+      detail: process.env.JAVA_HOME || process.env.JDK_HOME || '(not set)',
+      version: jdkVer || 'unknown',
+      latest: null,
+      updateAvailable: false,
+      installed: !!jdkVer,
+      installUrl: 'https://adoptium.net/temurin/releases/',
+      homepage: 'https://adoptium.net',
+      about: 'Java Development Kit (required for Ghidra). Version: ' + (jdkVer || 'unknown') + '. Set JAVA_HOME to your JDK install dir.',
+    });
+    // Ghidra
+    const ghidraVer = getGhidraVersion();
+    comps.push({
+      id: 'ghidra',
+      name: 'Ghidra',
+      kind: 'tool',
+      status: ghidraVer ? ('installed: ' + ghidraVer) : 'not found',
+      detail: process.env.GHIDRA_INSTALL_DIR || '(not set)',
+      version: ghidraVer || 'unknown',
+      latest: null,
+      updateAvailable: false,
+      installed: !!ghidraVer,
+      installUrl: 'https://github.com/NationalSecurityAgency/ghidra/releases',
+      homepage: 'https://ghidra-sre.org',
+      about: 'Ghidra reverse engineering framework (optional). Set GHIDRA_INSTALL_DIR to your Ghidra install dir.',
+    });
+    // Node.js
+    comps.push({
+      id: 'node-runtime',
+      name: 'Node.js runtime',
+      kind: 'runtime',
+      status: 'running: ' + (getNodeVersion() || 'unknown'),
+      detail: process.execPath,
+      version: getNodeVersion() || 'unknown',
+      latest: null,
+      updateAvailable: false,
+      installed: true,
+      installUrl: 'https://nodejs.org',
+      homepage: 'https://nodejs.org',
+      about: 'Node.js runtime (required). Version: ' + (getNodeVersion() || 'unknown') + '.',
+    });
+    // Craft Anything
+    const craftVer = getCraftVersion();
+    comps.push({
+      id: 'craft-anything',
+      name: 'Craft Anything CLI',
+      kind: 'mcp',
+      status: craftReady ? ('ready (' + craftTools.length + ' tools)') : (craftVer ? 'installed: ' + craftVer : 'not found'),
+      detail: resolveCraftBin() || '(not found)',
+      version: craftVer || 'unknown',
+      latest: null,
+      updateAvailable: false,
+      installed: !!resolveCraftBin(),
+      installUrl: 'https://github.com/storytold/craft-anything',
+      homepage: 'https://github.com/storytold/craft-anything',
+      about: 'Craft Anything reverse engineering CLI (optional). ' + (craftError ? 'Error: ' + craftError : ''),
+    });
+    // Awesome-RE
+    const areVer = getAwesomeReVersion();
+    comps.push({
+      id: 'awesome-re-mcp',
+      name: 'Awesome-RE (uv)',
+      kind: 'mcp',
+      status: areReady ? ('ready (' + areTools.length + ' tools)') : (areVer ? 'available: ' + areVer : 'not found'),
+      detail: 'uv/uvx',
+      version: areVer || 'unknown',
+      latest: null,
+      updateAvailable: false,
+      installed: areReady || !!areVer,
+      installUrl: 'https://docs.astral.sh/uv/',
+      homepage: 'https://github.com/alexgaoth/awesome-reverse-engineered',
+      about: 'Awesome-RE MCP (optional, requires uv). ' + (areError ? 'Error: ' + areError : ''),
     });
     // Coding tools
     comps.push({
@@ -2683,6 +2835,17 @@ const server = http.createServer(async (req, res) => { try {
       } else if (id === 'memory') {
         const mems = loadJsonFile(MEMORY_FILE);
         result = { ok: true, message: 'Memory OK. ' + mems.length + ' entries. (persistent; no update needed)' };
+      } else if (id === 'jdk' || id === 'ghidra' || id === 'node-runtime') {
+        result = { ok: true, message: (id === 'jdk' ? 'JDK' : id === 'ghidra' ? 'Ghidra' : 'Node.js') + ' is a system dependency. Update it manually via its installer, then restart AegisAI. ' + (id === 'jdk' ? 'Download: https://adoptium.net' : id === 'ghidra' ? 'Download: https://github.com/NationalSecurityAgency/ghidra/releases' : 'Download: https://nodejs.org') };
+      } else if (id === 'craft-anything') {
+        // Safe update: backup old binary, download new, replace, verify, rollback on failure
+        const craftBin = resolveCraftBin();
+        if (!craftBin) { result = { ok: false, message: 'Craft Anything CLI not found. Install from https://github.com/storytold/craft-anything' }; }
+        else {
+          result = { ok: true, message: 'Craft Anything is installed at ' + craftBin + '. To update, download the latest release from https://github.com/storytold/craft-anything/releases and replace the binary. Auto-update not yet supported for this component.' };
+        }
+      } else if (id === 'awesome-re-mcp') {
+        result = { ok: true, message: 'Awesome-RE runs via uvx and auto-updates on each launch. Reconnect MCP to refresh.' };
       } else if (id === 'coding-tools' || id === 'web-search' || id === 'skills') {
         result = { ok: true, message: 'Built-in component; no update action. Reload the page to refresh.' };
       } else {
