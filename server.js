@@ -10,12 +10,64 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 // Prevent a single request error from crashing the whole server
 // (moved to error logging section below)
-const BACKEND_TYPE = (process.env.BACKEND_TYPE || 'ollama').toLowerCase();
-const BACKEND_URL = process.env.BACKEND_URL || process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-const OLLAMA = BACKEND_URL;
+// Mutable so backend auto-detection can override when BACKEND_TYPE is unset.
+let BACKEND_TYPE = (process.env.BACKEND_TYPE || '').toLowerCase();
+let BACKEND_URL = process.env.BACKEND_URL || process.env.OLLAMA_URL || '';
+let OLLAMA = BACKEND_URL || 'http://127.0.0.1:11434';
 const PUBLIC = path.join(__dirname, 'public');
-const OLLAMA_URL = new URL(OLLAMA);
-const IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+
+// Auto-detect backend if not explicitly configured. Probes common backend ports.
+async function detectBackend() {
+  if (BACKEND_EXPLICIT) {
+    if (!BACKEND_TYPE) BACKEND_TYPE = 'ollama';
+    if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
+    OLLAMA = BACKEND_URL;
+    try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+    console.log('Backend (explicit):', BACKEND_TYPE, 'at', BACKEND_URL);
+    return;
+  }
+  const probes = [
+    { type: 'ollama', url: 'http://127.0.0.1:11434', path: '/api/version' },
+    { type: 'lmstudio', url: 'http://127.0.0.1:1234', path: '/v1/models' },
+    { type: 'llamacpp', url: 'http://127.0.0.1:8080', path: '/v1/models' },
+    { type: 'llamacpp', url: 'http://127.0.0.1:8081', path: '/v1/models' },
+    { type: 'openai', url: 'http://127.0.0.1:8000', path: '/v1/models' },
+  ];
+  for (const p of probes) {
+    try {
+      const r = await fetch(p.url + p.path, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) {
+        BACKEND_TYPE = p.type;
+        BACKEND_URL = p.url;
+        OLLAMA = p.url;
+        try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
+        IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+        console.log('Auto-detected backend:', p.type, 'at', p.url);
+        return;
+      }
+    } catch (e) {}
+  }
+  // Default to Ollama if nothing detected
+  if (!BACKEND_TYPE) {
+    BACKEND_TYPE = 'ollama';
+    BACKEND_URL = BACKEND_URL || 'http://127.0.0.1:11434';
+    OLLAMA = BACKEND_URL;
+    try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+    console.log('No backend detected; defaulting to Ollama at', BACKEND_URL);
+  }
+}
+
+// Track whether the backend was explicitly configured.
+const BACKEND_EXPLICIT = !!process.env.BACKEND_TYPE || !!process.env.BACKEND_URL || !!process.env.OLLAMA_URL;
+
+// Defaults for module-level use (overridden by detectBackend at startup).
+if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
+if (!BACKEND_TYPE) BACKEND_TYPE = '';   // empty => auto-detect
+OLLAMA = BACKEND_URL;
+let OLLAMA_URL = new URL(OLLAMA);
+let IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
 
 // ---------- Multi-backend adapter ----------
 // Normalizes OpenAI-compatible backends (llama.cpp, LM Studio) to Ollama format
@@ -3725,29 +3777,32 @@ const server = http.createServer(async (req, res) => { try {
 });
 
 if (require.main === module) {
-  if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
-    if (process.env.AEGISAI_DOCKER === '1') {
-      console.warn('WARNING: No auth token set (Docker mode). Container binds to all interfaces; restrict via the host port mapping or set LOCALAI_TOKEN for LAN exposure.');
-    } else {
-      console.error('FATAL: Refusing to start on non-loopback HOST (' + HOST + ') without an auth token. Set LOCALAI_TOKEN or create auth.json, or bind to 127.0.0.1.');
-      process.exit(1);
+  (async () => {
+    await detectBackend();
+    if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+      if (process.env.AEGISAI_DOCKER === '1') {
+        console.warn('WARNING: No auth token set (Docker mode). Container binds to all interfaces; restrict via the host port mapping or set LOCALAI_TOKEN for LAN exposure.');
+      } else {
+        console.error('FATAL: Refusing to start on non-loopback HOST (' + HOST + ') without an auth token. Set LOCALAI_TOKEN or create auth.json, or bind to 127.0.0.1.');
+        process.exit(1);
+      }
     }
-  }
-  server.requestTimeout = 0;
-  server.headersTimeout = 60000;
-  server.listen(PORT, HOST, () => {
-    console.log(`AegisAI web UI: http://${HOST}:${PORT}`);
-    console.log(`Ollama backend: ${OLLAMA}`);
-    if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1' && process.env.AEGISAI_DOCKER !== '1') {
-      console.warn('WARNING: No auth token set and the server is reachable from the network. Set LOCALAI_TOKEN or auth.json.');
-    }
-  });
+    server.requestTimeout = 0;
+    server.headersTimeout = 60000;
+    server.listen(PORT, HOST, () => {
+      console.log(`AegisAI web UI: http://${HOST}:${PORT}`);
+      console.log(`Backend: ${BACKEND_TYPE} at ${BACKEND_URL}`);
+      if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1' && process.env.AEGISAI_DOCKER !== '1') {
+        console.warn('WARNING: No auth token set and the server is reachable from the network. Set LOCALAI_TOKEN or auth.json.');
+      }
+    });
 
-  // Init MCP after server start
-  initMcp();
-  initAwesomeReMcp();
-  initGhidrAssistMcp();
-  initCraftMcp();
+    // Init MCP after server start
+    initMcp();
+    initAwesomeReMcp();
+    initGhidrAssistMcp();
+    initCraftMcp();
+  })().catch((e) => { console.error('Startup error:', e && e.message || e); process.exit(1); });
 }
 
 // ---------- Default skill: search before RE ----------

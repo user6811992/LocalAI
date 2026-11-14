@@ -104,6 +104,11 @@ OpenAI-compatible backend. Set the environment variables before starting:
 BACKEND_TYPE=llamacpp BACKEND_URL=http://127.0.0.1:8081 node server.js
 ```
 
+**Auto-detection:** if `BACKEND_TYPE` is not set, AegisAI probes common backend
+ports at startup (Ollama 11434, LM Studio 1234, llama.cpp 8080/8081, OpenAI 8000)
+and auto-selects the first reachable one. Set `BACKEND_TYPE` explicitly to
+disable auto-detection.
+
 The adapter normalizes model listing, chat (streaming + tool calls), and model
 info to the Ollama shape the UI expects. Note: the UI's model dropdown is
 proxied to Ollama's `/api/tags`, so for OpenAI-compatible backends the list may
