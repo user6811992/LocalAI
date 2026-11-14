@@ -65,32 +65,46 @@ wshShell.Environment("Process")("BACKEND_URL") = backendUrl
 wshShell.Environment("Process")("OLLAMA_URL") = backendUrl
 
 ' ---------- Auth token (from auth.json written by installer for LAN access) ----------
+' Single source of truth: auth.json. We only read the token here to pass it
+' via the URL so the web UI can auto-populate localStorage. We do NOT set
+' LOCALAI_TOKEN, so the server reads auth.json directly (avoids mismatches).
 Dim authToken
 authToken = ""
 Dim authFile
 authFile = base & "\auth.json"
-If fso.FileExists(authFile) Then
+' Fallback: auth-token.txt (plain text, written by the installer)
+Dim tokenTxtFile
+tokenTxtFile = base & "\auth-token.txt"
+If (authToken = "") And fso.FileExists(tokenTxtFile) Then
   On Error Resume Next
-  Dim af, aline
-  Set af = fso.OpenTextFile(authFile, 1)
-  Do Until af.AtEndOfStream
-    aline = Trim(af.ReadLine)
-    If InStr(1, aline, """token""", vbTextCompare) > 0 Then
-      Dim tpos
-      tpos = InStr(aline, ":")
-      If tpos > 0 Then
-        authToken = Trim(Mid(aline, tpos + 1))
-        authToken = Replace(authToken, """", "")
-        authToken = Replace(authToken, ",", "")
-        authToken = Trim(authToken)
-      End If
-    End If
-  Loop
-  af.Close
+  Dim tf
+  Set tf = fso.OpenTextFile(tokenTxtFile, 1)
+  authToken = Trim(tf.ReadLine)
+  tf.Close
   On Error GoTo 0
 End If
-If authToken <> "" Then
-  wshShell.Environment("Process")("LOCALAI_TOKEN") = authToken
+If fso.FileExists(authFile) Then
+  On Error Resume Next
+  Dim af, content
+  Set af = fso.OpenTextFile(authFile, 1)
+  content = af.ReadAll
+  af.Close
+  ' Extract the value of the "token" field (JSON: { "token": "..." })
+  Dim keyPos, colonPos, firstQuote, secondQuote
+  keyPos = InStr(1, content, Chr(34) & "token" & Chr(34), vbTextCompare)
+  If keyPos > 0 Then
+    colonPos = InStr(keyPos, content, ":")
+    If colonPos > 0 Then
+      firstQuote = InStr(colonPos, content, Chr(34))
+      If firstQuote > 0 Then
+        secondQuote = InStr(firstQuote + 1, content, Chr(34))
+        If secondQuote > firstQuote Then
+          authToken = Mid(content, firstQuote + 1, secondQuote - firstQuote - 1)
+        End If
+      End If
+    End If
+  End If
+  On Error GoTo 0
 End If
 
 ' Start Ollama if not running (only needed for the ollama backend)
