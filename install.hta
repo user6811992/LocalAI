@@ -122,7 +122,9 @@ function renderPrereq() {
   if (!ollamaOk) html += '<p style="font-size:12px;color:var(--muted);">Download from <a href="https://ollama.com/download" style="color:var(--accent);">ollama.com/download</a>. Install, then click Retry.</p>';
   html += '</div>';
   $('stepContent').innerHTML = html;
-  var canProceed = nodeOk && ollamaOk;
+  // Ollama is only required for the default (ollama) backend; non-Ollama backends
+  // are configured later and don't need Ollama installed.
+  var canProceed = nodeOk;
   var btnHtml = '';
   if (!canProceed) btnHtml += '<button onclick="renderPrereq()">Retry</button>';
   btnHtml += ' <button class="primary" onclick="if(' + canProceed + '){currentStep=1;renderStep();}" ' + (canProceed ? '' : 'disabled') + '>Next</button>';
@@ -318,7 +320,8 @@ function doInstall() {
       var el = $('m_' + i);
       if (el && el.checked) toPull.push(modelList[i]);
     }
-    if (toPull.length > 0 && exeExists('ollama')) {
+    var backendType = $('optBackend').value.split('|')[0];
+    if (backendType === 'ollama' && toPull.length > 0 && exeExists('ollama')) {
       advance('Pulling ' + toPull.length + ' model(s)...');
       // Start Ollama if not running
       var wmiO = GetObject("winmgmts:\\\\.\\root\\cimv2");

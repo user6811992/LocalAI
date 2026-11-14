@@ -73,7 +73,21 @@ If col.Count > 0 Then svcRunning = True
 If startOllama And Not svcRunning Then
   If fso.FileExists(ollamaDir & "\ollama.exe") Then
     wshShell.Run """" & ollamaDir & "\ollama.exe"" serve", 0, False
-    WScript.Sleep 4000
+    ' Wait up to 10s for Ollama to become ready (don't hang forever)
+    Dim ollamaReady, ollamaWait
+    ollamaReady = False
+    For ollamaWait = 1 To 10
+      WScript.Sleep 1000
+      Dim http2
+      Set http2 = CreateObject("MSXML2.XMLHTTP")
+      On Error Resume Next
+      http2.Open "GET", "http://127.0.0.1:11434/api/version", False
+      http2.Send
+      If Err.Number = 0 And http2.Status = 200 Then ollamaReady = True
+      On Error GoTo 0
+      Set http2 = Nothing
+      If ollamaReady Then Exit For
+    Next
   End If
 End If
 

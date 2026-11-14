@@ -142,18 +142,6 @@ if [ -f "$DEST/package.json" ]; then
   fi
 fi
 
-# ---------- recommended models ----------
-MODELS=("llama3.2:3b" "llama3.2:1b" "qwen2.5:14b" "qwen2.5-coder:14b" "mistral:7b" "phi3:mini" "gemma2:9b" "deepseek-coder:6.7b" "nomic-embed-text" "moondream")
-if [ "$OLLAMA_OK" -eq 1 ]; then
-  if ask "Pull all recommended AI models now? (~38 GB, may take a while)"; then
-    for m in "${MODELS[@]}"; do
-      echo "Pulling $m..."
-      ollama pull "$m" || echo "Failed to pull $m (continuing)"
-    done
-    echo "Model pull complete."
-  fi
-fi
-
 # ---------- backend selection ----------
 BACKEND_TYPE="ollama"
 BACKEND_URL="http://127.0.0.1:11434"
@@ -178,6 +166,19 @@ BACKEND_URL="${AEGISAI_BACKEND_URL:-$BACKEND_URL}"
 # Write backend.txt
 printf 'BACKEND_TYPE=%s\nBACKEND_URL=%s\n' "$BACKEND_TYPE" "$BACKEND_URL" > "$DEST/backend.txt"
 echo "Backend: $BACKEND_TYPE at $BACKEND_URL"
+
+
+# ---------- recommended models ----------
+MODELS=("llama3.2:3b" "llama3.2:1b" "qwen2.5:14b" "qwen2.5-coder:14b" "mistral:7b" "phi3:mini" "gemma2:9b" "deepseek-coder:6.7b" "nomic-embed-text" "moondream")
+if [ "$BACKEND_TYPE" = "ollama" ] && [ "$OLLAMA_OK" -eq 1 ]; then
+  if ask "Pull all recommended AI models now? (~38 GB, may take a while)"; then
+    for m in "${MODELS[@]}"; do
+      echo "Pulling $m..."
+      ollama pull "$m" || echo "Failed to pull $m (continuing)"
+    done
+    echo "Model pull complete."
+  fi
+fi
 
 # ---------- desktop shortcut ----------
 create_desktop_shortcut() {

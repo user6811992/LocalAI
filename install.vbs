@@ -358,21 +358,35 @@ End If
 ' ---------- prerequisites ----------
 Dim nodeOk, ollamaOk
 nodeOk = ExeExists("node")
-ollamaOk = ExeExists("ollama")
-If Not ollamaOk Then
-  If fso.FileExists(sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Ollama\ollama.exe") Then ollamaOk = True
+Dim needOllama
+needOllama = (LCase(backendType) = "ollama")
+If needOllama Then
+  ollamaOk = ExeExists("ollama")
+  If Not ollamaOk Then
+    If fso.FileExists(sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\Ollama\ollama.exe") Then ollamaOk = True
+  End If
+Else
+  ollamaOk = True
 End If
 
 Dim prereqMsg
-prereqMsg = "Prerequisites:" & vbCrLf & _
-            "  Node.js: " & IIf(nodeOk, "found", "MISSING") & vbCrLf & _
-            "  Ollama: " & IIf(ollamaOk, "found", "MISSING")
-If Not nodeOk Or Not ollamaOk Then
-  prereqMsg = prereqMsg & vbCrLf & vbCrLf & "Install missing prerequisites first:" & vbCrLf & _
-              "  Node.js: https://nodejs.org" & vbCrLf & _
-              "  Ollama:  https://ollama.com/download"
-  MsgBox prereqMsg, vbExclamation, "AegisAI Installer"
-  ' Continue; user may install later
+If needOllama Then
+  prereqMsg = "Prerequisites:" & vbCrLf & _
+              "  Node.js: " & IIf(nodeOk, "found", "MISSING") & vbCrLf & _
+              "  Ollama: " & IIf(ollamaOk, "found", "MISSING")
+  If Not nodeOk Or Not ollamaOk Then
+    prereqMsg = prereqMsg & vbCrLf & vbCrLf & "Install missing prerequisites first:" & vbCrLf & _
+                "  Node.js: https://nodejs.org" & vbCrLf & _
+                "  Ollama:  https://ollama.com/download"
+    MsgBox prereqMsg, vbExclamation, "AegisAI Installer"
+  End If
+Else
+  prereqMsg = "Prerequisites:" & vbCrLf & _
+              "  Node.js: " & IIf(nodeOk, "found", "MISSING") & vbCrLf & _
+              "  Backend: " & backendType & " at " & backendUrl & " (Ollama not required)"
+  If Not nodeOk Then
+    MsgBox prereqMsg & vbCrLf & vbCrLf & "Install Node.js from https://nodejs.org first.", vbExclamation, "AegisAI Installer"
+  End If
 End If
 
 ' ---------- pull models in proper order ----------
@@ -387,8 +401,10 @@ Next
 modelPrompt = modelPrompt & vbCrLf & "Total: ~59 GB. Models are pulled in the recommended order." & vbCrLf & _
               "This may take a while." & vbCrLf & vbCrLf & "Pull now?"
 
-pullModels = (MsgBox(modelPrompt, vbYesNo + vbQuestion, "Model pull") = vbYes)
-
+pullModels = False
+If needOllama And Not updateOnly Then
+  pullModels = (MsgBox(modelPrompt, vbYesNo + vbQuestion, "Model pull") = vbYes)
+End If
 If updateOnly Then pullModels = False
 If pullModels Then
   If Not ollamaOk Then
