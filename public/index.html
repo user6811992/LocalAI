@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.7</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.8</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -2564,7 +2564,8 @@
           const size = it.size ? ' (' + (it.size / 1e9).toFixed(1) + ' GB)' : '';
           const label = document.createElement('span');
           label.style.flex = '1';
-          label.textContent = (it.type === 'gguf' ? '[file] ' : '[dir] ') + it.label + size + ' - ' + it.path;
+          const typeTag = it.type === 'gguf' ? '[file] ' : (it.type === 'ollama-model' ? '[ollama] ' : (it.type === 'ollama-store' || it.type === 'lmstudio-store' ? '[store] ' : '[dir] '));
+          label.textContent = typeTag + it.label + size + ' - ' + it.path;
           div.appendChild(label);
           if (it.type === 'gguf' && (window.currentBackend || 'ollama') === 'ollama') {
             const importBtn = document.createElement('button');

@@ -2771,8 +2771,61 @@ const server = http.createServer(async (req, res) => { try {
       const fsp = require('fs').promises;
       const path = require('path');
       const found = [];
-      const ollamaModels = path.join(process.env.USERPROFILE || '', '.ollama', 'models');
-      try { const st = await fsp.stat(ollamaModels); if (st.isDirectory()) found.push({ type: 'ollama-store', path: ollamaModels, label: 'Ollama model store' }); } catch (e) {}
+      const home = process.env.USERPROFILE || process.env.HOME || '';
+      // Ollama model store
+      const ollamaModels = path.join(home, '.ollama', 'models');
+      try {
+        const st = await fsp.stat(ollamaModels);
+        if (st.isDirectory()) {
+          found.push({ type: 'ollama-store', path: ollamaModels, label: 'Ollama model store' });
+          // Enumerate installed Ollama models via manifests
+          const manifestsDir = path.join(ollamaModels, 'manifests');
+          try {
+            const walkManifests = async (dir, prefix) => {
+              let entries;
+              try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch (e) { return; }
+              for (const e of entries) {
+                const full = path.join(dir, e.name);
+                if (e.isDirectory()) { await walkManifests(full, prefix + e.name + '/'); }
+                else {
+                  // manifest file name is the tag; parent dirs form namespace/model
+                  const parts = full.replace(manifestsDir + path.sep, '').split(path.sep);
+                  const tag = parts.pop();
+                  const model = parts.join('/');
+                  if (model && tag) {
+                    found.push({ type: 'ollama-model', path: full, label: model + ':' + tag, size: 0 });
+                  }
+                }
+              }
+            };
+            await walkManifests(manifestsDir, '');
+          } catch (e) {}
+        }
+      } catch (e) {}
+      // LM Studio model store
+      const lmStudioModels = path.join(home, '.cache', 'lm-studio', 'models');
+      try {
+        const st = await fsp.stat(lmStudioModels);
+        if (st.isDirectory()) {
+          found.push({ type: 'lmstudio-store', path: lmStudioModels, label: 'LM Studio model store' });
+          // Walk for GGUF files (LM Studio stores them in subdirs)
+          const walkLm = async (dir, depth) => {
+            if (depth > 6) return;
+            let entries;
+            try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch (e) { return; }
+            for (const e of entries) {
+              if (e.name === 'node_modules' || e.name === '.git') continue;
+              const full = path.join(dir, e.name);
+              if (e.isDirectory()) { await walkLm(full, depth + 1); }
+              else if (e.isFile() && e.name.toLowerCase().endsWith('.gguf')) {
+                try { const st2 = await fsp.stat(full); found.push({ type: 'gguf', path: full, label: e.name, size: st2.size }); } catch (_) {}
+              }
+              await new Promise((r) => setImmediate(r));
+            }
+          };
+          await walkLm(lmStudioModels, 0);
+        }
+      } catch (e) {}
       const skip = new Set(['Windows', 'Program Files', 'Program Files (x86)', 'ProgramData', '$Recycle.Bin', 'System Volume Information', 'node_modules', '.git']);
       // Async, yielding walk so the event loop stays responsive.
       async function walk(dir, depth) {
