@@ -3783,12 +3783,12 @@ const server = http.createServer(async (req, res) => { try {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
       }
-      // Use forward slashes in Modelfile (Ollama prefers them)
-      // Ollama 0.40.x cannot parse absolute Windows paths in FROM (drive-letter colon).
-      // Use a relative path and run ollama in the GGUF's own folder.
+      // Ollama resolves FROM paths relative to the Modelfile's directory.
+      // Writing the Modelfile into the GGUF's own folder (not tmpdir) ensures
+      // the relative './filename.gguf' path resolves correctly.
       const modelDir = path.dirname(resolvedModelPath);
       const modelBaseName = path.basename(resolvedModelPath);
-      const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
+      const tmpModelfile = path.join(modelDir, '.Modelfile_' + Date.now());
       // Write Modelfile with relative FROM directive
       fs.writeFileSync(tmpModelfile, 'FROM ./' + modelBaseName + '\n', 'utf8');
       console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
