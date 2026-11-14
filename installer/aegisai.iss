@@ -50,7 +50,6 @@ Name: "models\qwen25coder_14b"; Description: "qwen2.5-coder:14b (~9.0 GB)"; Type
 Name: "models\mistral_7b"; Description: "mistral:7b (~4.1 GB)"; Types: full
 Name: "models\nomic_embed"; Description: "nomic-embed-text (~0.3 GB)"; Types: full
 Name: "models\moondream"; Description: "moondream (~1.7 GB)"; Types: full
-Name: "rea"; Description: "Clone REA source repo (reverse engineering)"; Types: full
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -80,7 +79,10 @@ Source: "..\tray.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
 ; Bundled Node.js (if present in installer\node-runtime)
 Source: "node-runtime\*"; DestDir: "{app}\runtime\node"; Flags: ignoreversion recursesubdirs; Components: node; Check: NodeRuntimeExists
-; Bundled Ollama (if present)
+; Bundled Ollama (only included when present at build time)
+#if FileExists(SourcePath + "ollama-runtime/ollama.exe")
+Source: "ollama-runtime\*"; DestDir: "{app}\runtime\ollama"; Flags: ignoreversion recursesubdirs;
+#endif
 
 [Dirs]
 Name: "{app}\workspace"; Flags: uninsneveruninstall
@@ -95,7 +97,7 @@ Name: "{userstartup}\{#MyAppName}"; Filename: "wscript.exe"; Parameters: """{app
 [Run]
 ; Run npm install
 Filename: "cmd.exe"; Parameters: "/c cd /d ""{app}"" && npm install"; StatusMsg: "Installing npm dependencies..."; Flags: runhidden waituntilterminated; Check: not IsBundledNode
-Filename: "cmd.exe"; Parameters: "/c cd /d ""{app}"" && ""{app}\runtime\node\node.exe"" ""{app}\runtime\node\npm\bin\npm-cli.js"" install"; StatusMsg: "Installing npm dependencies (bundled Node)..."; Flags: runhidden waituntilterminated; Check: IsBundledNode
+Filename: "cmd.exe"; Parameters: "/c cd /d ""{app}"" && ""{app}\runtime\node\node.exe"" ""{app}\runtime\node\node_modules\npm\bin\npm-cli.js"" install"; StatusMsg: "Installing npm dependencies (bundled Node)..."; Flags: runhidden waituntilterminated; Check: IsBundledNode
 ; Start Ollama if bundled
 Filename: "{app}\runtime\ollama\ollama.exe"; Parameters: "serve"; StatusMsg: "Starting Ollama..."; Flags: nowait; Check: OllamaRuntimeExists
 ; Launch app
@@ -141,10 +143,56 @@ begin
   Result := NodeRuntimeExists;
 end;
 
+function GenerateToken: String;
+begin
+  Result := GetSHA256OfString(GetDateTimeString('yyyymmddhhnnss', #0, #0) + IntToStr(GetTickCount) + GetComputerNameString + GetUserNameString);
+end;
+
+function OllamaAvailable: Boolean;
+var
+  Rc: Integer;
+begin
+  Result := Exec('cmd.exe', '/c where ollama >nul 2>&1', '', SW_HIDE, ewWaitUntilTerminated, Rc) and (Rc = 0);
+end;
+
+procedure PullSelectedModels;
+var
+  CompNames: array of String;
+  ModelNames: array of String;
+  I: Integer;
+  Rc: Integer;
+begin
+  SetArrayLength(CompNames, 7);
+  SetArrayLength(ModelNames, 7);
+  CompNames[0] := 'models\llama32_3b';       ModelNames[0] := 'llama3.2:3b';
+  CompNames[1] := 'models\llama32_1b';       ModelNames[1] := 'llama3.2:1b';
+  CompNames[2] := 'models\qwen25_14b';       ModelNames[2] := 'qwen2.5:14b';
+  CompNames[3] := 'models\qwen25coder_14b';  ModelNames[3] := 'qwen2.5-coder:14b';
+  CompNames[4] := 'models\mistral_7b';       ModelNames[4] := 'mistral:7b';
+  CompNames[5] := 'models\nomic_embed';      ModelNames[5] := 'nomic-embed-text';
+  CompNames[6] := 'models\moondream';        ModelNames[6] := 'moondream';
+  for I := 0 to 6 do
+  begin
+    if IsComponentSelected(CompNames[I]) then
+    begin
+      if OllamaAvailable then
+      begin
+        if Exec('ollama', 'pull ' + ModelNames[I], '', SW_HIDE, ewWaitUntilTerminated, Rc) and (Rc = 0) then
+          Log('Pulled model ' + ModelNames[I])
+        else
+          Log('Failed to pull model ' + ModelNames[I] + ' (rc=' + IntToStr(Rc) + ')');
+      end
+      else
+        Log('Ollama not found; skipping model ' + ModelNames[I]);
+    end;
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   backendFile: String;
   bt, bu: String;
+  LanToken: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -158,6 +206,21 @@ begin
     BackendUrl := bu;
     backendFile := ExpandConstant('{app}\backend.txt');
     SaveStringToFile(backendFile, 'BACKEND_TYPE=' + bt + #13#10 + 'BACKEND_URL=' + bu + #13#10, False);
+
+    // LAN access: the launcher binds 0.0.0.0 only when lan-access.txt exists,
+    // and the server refuses a non-loopback bind without an auth token.
+    if IsTaskSelected('firewall') then
+    begin
+      LanToken := GenerateToken;
+      SaveStringToFile(ExpandConstant('{app}\lan-access.txt'), 'LAN access enabled by installer.' + #13#10, False);
+      SaveStringToFile(ExpandConstant('{app}\auth.json'), '{ "token": "' + LanToken + '" }' + #13#10, False);
+      Log('LAN auth token: ' + LanToken);
+      MsgBox('LAN access enabled.' + #13#10 + #13#10 +
+             'Auth token (enter it in the web UI):' + #13#10 + LanToken,
+             mbInformation, MB_OK);
+    end;
+
+    PullSelectedModels;
   end;
 end;
 

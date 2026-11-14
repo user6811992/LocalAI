@@ -32,6 +32,8 @@ On Error GoTo 0
 
 ' ---------- remove the firewall rule added for LAN access ----------
 On Error Resume Next
+' install.vbs / aegisai.iss create the rule as "AegisAI"; older builds used "LocalAI".
+sh.Run "netsh advfirewall firewall delete rule name=""AegisAI""", 0, True
 sh.Run "netsh advfirewall firewall delete rule name=""LocalAI""", 0, True
 On Error GoTo 0
 
