@@ -3783,17 +3783,19 @@ const server = http.createServer(async (req, res) => { try {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
       }
-      // Ollama resolves FROM paths relative to the Modelfile's directory.
-      // Writing the Modelfile into the GGUF's own folder (not tmpdir) ensures
-      // the relative './filename.gguf' path resolves correctly.
+      // Ollama resolves FROM paths relative to the Modelfile's directory, which
+      // causes "invalid model name" when the Modelfile is in tmpdir but the GGUF
+      // is elsewhere. Use the absolute path with forward slashes (Go handles
+      // forward slashes on Windows) so Ollama can stat the file directly.
       const modelDir = path.dirname(resolvedModelPath);
       const modelBaseName = path.basename(resolvedModelPath);
-      const tmpModelfile = path.join(modelDir, '.Modelfile_' + Date.now());
-      // Write Modelfile with relative FROM directive
-      fs.writeFileSync(tmpModelfile, 'FROM ./' + modelBaseName + '\n', 'utf8');
+      const tmpModelfile = path.join(os.tmpdir(), 'Modelfile_' + Date.now());
+      const fromPath = resolvedModelPath.replace(/\\\\/g, '/');
+      // Write Modelfile with absolute forward-slash FROM directive
+      fs.writeFileSync(tmpModelfile, 'FROM ' + fromPath + '\n', 'utf8');
       console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
       console.log('Import: file size:', stat.size, 'path:', modelPath);
-      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 300000, maxBuffer: 10 * 1024 * 1024, cwd: modelDir });
+      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 300000, maxBuffer: 10 * 1024 * 1024 });
       try { fs.unlinkSync(tmpModelfile); } catch (_) {}
       // Strip ANSI escape codes and spinner glyphs from output
       const rawOut = (r.out || r.err) || 'done';
