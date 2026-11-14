@@ -7,7 +7,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 ## Features
 
 - **Chat UI** — clean, responsive web interface with thinking-block display, Markdown rendering, and code highlighting
-- **Model management** — pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list
+- **Model management** — pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
 - **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
