@@ -367,6 +367,17 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[symgraph / GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP)** — Ghidra MCP extension (MIT)
 - **[storytold / Craft Anything](https://github.com/storytold/craft-anything)** — RE engine (MIT/Apache-2.0). ArtCraft name/logos are trademarks of the ArtCraft Team.
 
+### Vendored frontend libraries
+
+The web UI bundles a small set of third-party JavaScript/CSS libraries under
+`public/vendor/` so the app works fully offline. Their licenses are retained in
+the files themselves and listed here:
+
+- **[marked](https://marked.js.org)** v12.0.2 — Markdown parser (MIT). Copyright (c) 2011-2024, Christopher Jeffrey.
+- **[DOMPurify](https://github.com/cure53/DOMPurify)** v3.4.17 — HTML sanitizer (Apache 2.0 / MPL 2.0). Copyright (c) Cure53 and other contributors.
+- **[highlight.js](https://highlightjs.org)** — Syntax highlighter (BSD 3-Clause). Copyright (c) 2006-2024, Ivan Sagalaev and other contributors.
+- **GitHub Dark theme** — highlight.js theme (MIT). Copyright (c) github.com / @Hirse.
+
 No third-party logos, trademarks, or branding assets are included in this repository. All references are by name only for factual attribution.
 
 ## Contributing
