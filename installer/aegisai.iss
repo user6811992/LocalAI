@@ -76,8 +76,10 @@ Source: "..\uninstall.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\uninstall.sh"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tray.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
-; Bundled Node.js (if present in installer\node-runtime)
+; Bundled Node.js (only included when present at build time)
+#if FileExists(SourcePath + "node-runtime/node.exe")
 Source: "node-runtime\*"; DestDir: "{app}\runtime\node"; Flags: ignoreversion recursesubdirs; Components: node; Check: NodeRuntimeExists
+#endif
 ; Bundled Ollama (only included when present at build time)
 #if FileExists(SourcePath + "ollama-runtime/ollama.exe")
 Source: "ollama-runtime\*"; DestDir: "{app}\runtime\ollama"; Flags: ignoreversion recursesubdirs;
@@ -106,7 +108,7 @@ Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "{cm
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""AegisAI"""; Flags: runhidden; RunOnceId: "RemoveFirewall"
 
 [Run]
-Filename: "netsh"; Parameters: "advfirewall firewall add rule name=AegisAI dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: IsTaskSelected('firewall')
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=AegisAI dir=in action=allow protocol=tcp localport=8080"; Flags: runhidden; Check: WizardIsTaskSelected('firewall')
 
 [Code]
 var
@@ -144,7 +146,7 @@ end;
 
 function GenerateToken: String;
 begin
-  Result := GetSHA256OfString(GetDateTimeString('yyyymmddhhnnss', #0, #0) + IntToStr(GetTickCount) + GetComputerNameString + GetUserNameString);
+  Result := GetSHA256OfString(GetDateTimeString('yyyymmddhhnnss', #0, #0) + GetComputerNameString + GetUserNameString);
 end;
 
 function OllamaAvailable: Boolean;
@@ -188,7 +190,7 @@ begin
     EnsureOllamaRunning;
   for I := 0 to 6 do
   begin
-    if IsComponentSelected(CompNames[I]) then
+    if WizardIsComponentSelected(CompNames[I]) then
     begin
       if OllamaAvailable then
       begin
@@ -224,7 +226,7 @@ begin
 
     // LAN access: the launcher binds 0.0.0.0 only when lan-access.txt exists,
     // and the server refuses a non-loopback bind without an auth token.
-    if IsTaskSelected('firewall') then
+    if WizardIsTaskSelected('firewall') then
     begin
       LanToken := GenerateToken;
       SaveStringToFile(ExpandConstant('{app}\lan-access.txt'), 'LAN access enabled by installer.' + #13#10, False);
