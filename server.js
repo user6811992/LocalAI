@@ -137,7 +137,8 @@ async function backendChat(bodyObj, onChunk, signal) {
     const data = await r.json();
     const choice = (data.choices && data.choices[0]) || {};
     const msg = choice.message || {};
-    const result = { message: { role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls }, done: true };
+    const usage = data.usage || {};
+    const result = { message: { role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls }, done: true, eval_count: usage.completion_tokens || 0, prompt_eval_count: usage.prompt_tokens || 0 };
     if (onChunk) onChunk({ type: 'token', content: msg.content || '' });
     return { status: 200, data: result };
   }
@@ -146,6 +147,8 @@ async function backendChat(bodyObj, onChunk, signal) {
   const decoder = new TextDecoder();
   let fullContent = '';
   let buf = '';
+  let promptTokens = 0;
+  let completionTokens = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -171,11 +174,15 @@ async function backendChat(bodyObj, onChunk, signal) {
           // Forward tool calls
           if (onChunk) onChunk({ type: 'tool_calls', tool_calls: delta.tool_calls });
         }
+        if (obj.usage) {
+          promptTokens = obj.usage.prompt_tokens || promptTokens;
+          completionTokens = obj.usage.completion_tokens || completionTokens;
+        }
       } catch (_) {}
     }
   }
   if (onChunk) onChunk({ type: 'done' });
-  return { status: 200, data: { message: { role: 'assistant', content: fullContent }, done: true } };
+  return { status: 200, data: { message: { role: 'assistant', content: fullContent }, done: true, eval_count: completionTokens, prompt_eval_count: promptTokens } };
 }
 
 // Model pull (Ollama only; OpenAI backends don't support pull)
@@ -2341,6 +2348,16 @@ function proxyToOllama(req, res) {
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         proxyRes.pipe(res);
       });
+      proxyReq.setTimeout(120000, () => {
+        proxyReq.destroy();
+        if (!res.headersSent) {
+          res.statusCode = 504;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Backend proxy timeout (120s). The backend may be unresponsive.' }));
+        } else {
+          try { res.end(); } catch (e) {}
+        }
+      });
       proxyReq.on('error', (e) => {
         const isRetryable = req.method === 'GET' || req.method === 'HEAD';
         if (isRetryable && retries < 2 && (e.code === 'ECONNREFUSED' || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT')) {
@@ -3906,6 +3923,49 @@ const server = http.createServer(async (req, res) => { try {
   }
 
   // ---------- Import GGUF model into Ollama ----------
+  // Download a model file from a URL (for non-Ollama backends)
+  if (req.url === '/api/download-model' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { url, filename } = JSON.parse(body || '{}');
+      if (!url || !url.trim()) { json(res, 400, { ok: false, message: 'url required' }); return; }
+      if (!isSafeUrl(url.trim())) { json(res, 400, { ok: false, message: 'URL is not allowed (only public http(s) URLs).' }); return; }
+      const https = require('https');
+      const http = require('http');
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const modelsDir = path.join(__dirname, 'models');
+      if (!fs.existsSync(modelsDir)) fs.mkdirSync(modelsDir, { recursive: true });
+      const safeFilename = (filename || 'model.gguf').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const destPath = path.join(modelsDir, safeFilename);
+      // Follow redirects and download
+      const download = (downloadUrl, redirects) => new Promise((resolve, reject) => {
+        if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+        const lib = downloadUrl.startsWith('https') ? https : http;
+        const file = fs.createWriteStream(destPath);
+        lib.get(downloadUrl, { headers: { 'User-Agent': 'AegisAI' } }, (r) => {
+          if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) {
+            const loc = r.headers.location;
+            r.resume();
+            if (!loc) { reject(new Error('Redirect with no location')); return; }
+            file.close();
+            fs.unlinkSync(destPath);
+            resolve(download(loc, redirects + 1));
+            return;
+          }
+          if (r.statusCode !== 200) { file.close(); fs.unlinkSync(destPath); reject(new Error('HTTP ' + r.statusCode)); return; }
+          r.pipe(file);
+          file.on('finish', () => { file.close(); resolve(destPath); });
+          file.on('error', (e) => { fs.unlinkSync(destPath); reject(e); });
+        }).on('error', (e) => { try { fs.unlinkSync(destPath); } catch (_) {} reject(e); });
+      });
+      const savedPath = await download(url.trim(), 0);
+      json(res, 200, { ok: true, message: 'Downloaded ' + safeFilename, path: savedPath });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/import-model' && req.method === 'POST') {
     try {
       const body = await readBody(req);
@@ -4092,6 +4152,31 @@ const server = http.createServer(async (req, res) => { try {
     }
     return;
   }
+  // Explicit /api/chat handler for OpenAI-compatible backends
+  if (req.url === '/api/chat' && req.method === 'POST' && IS_OPENAI_COMPAT) {
+    try {
+      const body = await readBody(req);
+      const bodyObj = JSON.parse(body || '{}');
+      // Stream Ollama-format JSON lines
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      const result = await backendChat(bodyObj, (chunk) => {
+        if (chunk.type === 'token') {
+          res.write(JSON.stringify({ message: { content: chunk.content }, done: false }) + '\\n');
+        }
+        if (chunk.type === 'thinking') {
+          res.write(JSON.stringify({ message: { thinking: chunk.content }, done: false }) + '\\n');
+        }
+      }, null);
+      const msg = (result && result.data && result.data.message) || {};
+      res.write(JSON.stringify({ message: { content: msg.content || '', thinking: msg.thinking || '' }, done: true, eval_count: (result && result.data && result.data.eval_count) || 0, prompt_eval_count: (result && result.data && result.data.prompt_eval_count) || 0 }) + '\\n');
+      res.end();
+    } catch (e) {
+      if (!res.headersSent) json(res, 500, { error: e.message || String(e) });
+      else { try { res.end(); } catch (_) {} }
+    }
+    return;
+  }
+
   if (req.url.startsWith('/api/') || req.url.startsWith('/v1/')) {
     proxyToOllama(req, res);
   } else {
