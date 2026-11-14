@@ -658,6 +658,23 @@ function isCleanRoomBlocked(name) {
 
 // Tool result cache (5-minute TTL)
 const _toolCache = new Map();
+
+// Pending tool-confirmations: id -> { resolve, timer }
+const _pendingConfirms = new Map();
+function requestConfirmation(id, name, args, signal, onEvent) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      _pendingConfirms.delete(id);
+      resolve(false);
+    }, 60000);
+    _pendingConfirms.set(id, { resolve: (approved) => { clearTimeout(timer); _pendingConfirms.delete(id); resolve(approved); }, timer });
+    if (onEvent) onEvent({ type: 'confirm', id, name, args });
+    if (signal) {
+      const onAbort = () => { clearTimeout(timer); _pendingConfirms.delete(id); resolve(false); };
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+}
 const TOOL_CACHE_MAX = 500;
 function toolCacheKey(name, args) { return name + ':' + JSON.stringify(args || {}); }
 function toolCacheSet(key, value) {
@@ -1644,6 +1661,7 @@ async function runAgent(model, messages, maxIter, opts) {
   const includeRe = opts.includeRe !== false;
   const includeCoding = opts.includeCoding !== false;
   const cleanRoom = opts.cleanRoom === true;
+  const confirmTools = opts.confirmTools === true;
   const onEvent = opts.onEvent || null;
   maxIter = maxIter || 8;
   const tools = [];
@@ -1781,6 +1799,20 @@ async function runAgent(model, messages, maxIter, opts) {
       log.push({ name, args });
       if (onEvent) onEvent({ type: 'tool', name, args });
       let result;
+      // Tool confirmation gate
+      if (confirmTools) {
+        const confirmId = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        const approved = await requestConfirmation(confirmId, name, args, opts.signal, onEvent);
+        if (!approved) {
+          result = 'DENIED: user did not approve this tool call.';
+          const resultStr = (typeof result === 'string' ? result : JSON.stringify(result));
+          msgs.push({ role: 'tool', content: resultStr });
+          const logEntry = log[log.length - 1];
+          logEntry.resultPreview = resultStr.slice(0, 300);
+          if (onEvent) onEvent({ type: 'tool_result', name, preview: resultStr.slice(0, 300) });
+          continue;
+        }
+      }
       try {
         if (cleanRoom && isCleanRoomBlocked(name)) result = 'BLOCKED: this tool is disabled in clean room mode.';
         else if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
@@ -3776,6 +3808,17 @@ const server = http.createServer(async (req, res) => { try {
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); return; }
   }
 
+  if (req.url === '/api/confirm' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id, approved } = JSON.parse(body || '{}');
+      const pending = _pendingConfirms.get(id);
+      if (pending) { pending.resolve(!!approved); json(res, 200, { ok: true }); }
+      else { json(res, 404, { ok: false, message: 'no pending confirmation with that id' }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/agent' && req.method === 'POST') {
     // SSE streaming
     res.writeHead(200, {
@@ -3793,12 +3836,13 @@ const server = http.createServer(async (req, res) => { try {
     res.on('close', () => { if (!res.writableFinished) { aborted = true; ac.abort(); } });
     try {
       const body = await readBody(req);
-      const { model, messages, includeRe, includeCoding, cleanRoom, options, keep_alive } = JSON.parse(body || '{}');
+      const { model, messages, includeRe, includeCoding, cleanRoom, confirmTools, options, keep_alive } = JSON.parse(body || '{}');
       const settings = loadSettings();
       const result = await runAgent(model, messages || [], undefined, {
         includeRe: includeRe !== false,
         includeCoding: includeCoding !== false,
         cleanRoom: cleanRoom === true,
+        confirmTools: confirmTools === true,
         options: options || undefined,
         keep_alive: keep_alive,
         toolBudget: settings.toolBudget,
