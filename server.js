@@ -2893,6 +2893,24 @@ const server = http.createServer(async (req, res) => { try {
     return;
   }
 
+  // Model capabilities (tool support, vision, etc.) via /api/show
+  if (req.url === '/api/model-caps' && req.method === 'GET') {
+    try {
+      const d = await backendListModels();
+      const models = d.models || [];
+      const caps = await Promise.all(models.map(async (m) => {
+        try {
+          const info = await backendShowModel(m.name);
+          return { name: m.name, capabilities: (info && info.capabilities) || [] };
+        } catch (e) {
+          return { name: m.name, capabilities: [] };
+        }
+      }));
+      json(res, 200, { models: caps });
+    } catch (e) { json(res, (e && e.status) || 502, { error: e.message || String(e) }); }
+    return;
+  }
+
   if (req.url === '/api/version' && req.method === 'GET') {
     try {
       const fs = require('fs');

@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.19</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.20</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -1071,12 +1071,52 @@
     return div;
   }
 
+  // Model capabilities cache: model name -> array of capability strings
+  window.modelCaps = window.modelCaps || {};
+  function modelSupportsTools(name) {
+    const caps = (window.modelCaps || {})[name];
+    if (Array.isArray(caps)) return caps.includes('tools');
+    // Fallback heuristic for backends without capability info
+    return true;
+  }
+  async function loadModelCaps() {
+    try {
+      const r = await fetch('/api/model-caps');
+      if (!r.ok) return;
+      const d = await r.json();
+      (d.models || []).forEach(m => { window.modelCaps[m.name] = m.capabilities || []; });
+    } catch (e) {}
+  }
+  function filterModelDropdown() {
+    const needTools = document.getElementById('codingMode').checked || document.getElementById('reMode').checked;
+    const current = modelSel.value;
+    // Rebuild options from the full list (stored on modelSel.dataset)
+    const all = (modelSel.dataset.allModels || '').split('\\n').filter(Boolean);
+    modelSel.innerHTML = '';
+    let shown = 0;
+    all.forEach(m => {
+      if (needTools && !modelSupportsTools(m)) return;
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m + (needTools ? '' : '');
+      modelSel.appendChild(opt);
+      shown++;
+    });
+    if (shown === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = '(no tool-capable models)';
+      modelSel.appendChild(opt);
+    } else if (all.includes(current) && modelSel.querySelector('option[value="' + CSS.escape(current) + '"]')) {
+      modelSel.value = current;
+    } else {
+      modelSel.value = modelSel.options[0] ? modelSel.options[0].value : '';
+    }
+  }
   async function loadModels() {
     try {
       // Quick health check first
       try {
         const hr = await fetch('/api/version');
-        if (!hr.ok) throw new Error('Ollama not reachable (HTTP ' + hr.status + ')');
+        if (!hr.ok) throw new Error('Backend not reachable (HTTP ' + hr.status + ')');
       } catch (he) {
         throw new Error('Backend not reachable. Start it and click Refresh.');
       }
@@ -1084,28 +1124,23 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const data = await r.json();
       const models = (data.models || []).map(m => m.name);
+      modelSel.dataset.allModels = models.join('\\n');
+      await loadModelCaps();
       modelSel.innerHTML = '';
       if (models.length === 0) {
         const opt = document.createElement('option');
         opt.textContent = '(no models)';
         modelSel.appendChild(opt);
-        status.textContent = 'No models installed. Pull one with: ollama pull llama3.2:3b  (or use the Models button). If you just pulled, restart Ollama and click Refresh.';
+        status.textContent = 'No models installed. Pull one with: ollama pull llama3.2:3b  (or use the Models button).';
         status.className = 'status err';
         return;
       }
-      models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        modelSel.appendChild(opt);
-      });
-      // prefer llama3.1
-      const pref = models.find(m => m.includes('llama3.1')) || models[0];
-      modelSel.value = pref;
+      filterModelDropdown();
       const toolsData = await (await fetch('/api/tools')).json();
       status.textContent = 'Ready. ' + models.length + ' model(s). RE tools: ' + toolsData.tools.length + ' + 24 coding/memory/skill tools. Memories: ' + (await (await fetch('/api/memory')).json()).count + '. Project: ' + (document.getElementById('projectRoot').value || '(default)');
       status.className = 'status';
     } catch (e) {
-      status.textContent = 'Cannot reach Ollama: ' + e.message + '. Start Ollama (ollama serve) and click Refresh.';
+      status.textContent = 'Cannot reach backend: ' + e.message + '. Start the backend and click Refresh.';
       status.className = 'status err';
     }
   }
@@ -2358,6 +2393,7 @@
       const el = document.getElementById('installedModels');
       el.innerHTML = '';
       if (models.length === 0) { el.textContent = '(none)'; return; }
+      await loadModelCaps();
       models.forEach(m => {
         const span = document.createElement('span');
         span.style.marginRight = '8px';
@@ -2368,6 +2404,14 @@
         a.textContent = m.name;
         a.style.color = 'var(--accent)';
         span.appendChild(a);
+        const caps = (window.modelCaps || {})[m.name] || [];
+        if (caps.includes('tools')) {
+          const badge = document.createElement('span');
+          badge.textContent = ' [tools]';
+          badge.style.fontSize = '10px';
+          badge.style.color = '#22c55e';
+          span.appendChild(badge);
+        }
         el.appendChild(span);
       });
     } catch (e) { document.getElementById('installedModels').textContent = 'error: ' + e.message; }
@@ -3624,6 +3668,11 @@
   }
 
   loadModels();
+  // Re-filter model dropdown when tool-mode checkboxes change
+  ['codingMode', 'reMode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => { if (typeof filterModelDropdown === 'function') filterModelDropdown(); });
+  });
   loadProject();
   loadSearchEngines();
   // Register service worker for offline support
