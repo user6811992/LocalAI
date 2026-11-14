@@ -160,7 +160,7 @@ function renderModels() {
     html += '<div class="model-item"><input type="checkbox" id="m_' + i + '" ' + (selectedModels[modelList[i]] ? 'checked' : '') + ' onclick="toggleModel(' + i + ')" /><span>' + esc(modelList[i]) + '</span><span class="size">' + modelSize[i] + '</span></div>';
   }
   html += '</div></div>';
-  html += '<p style="font-size:11px;color:var(--muted);">Models require ~38 GB total. Ensure you have enough disk space.</p>';
+  html += '<p style="font-size:11px;color:var(--muted);">Models require ~62 GB total. Ensure you have enough disk space.</p>';
   $('stepContent').innerHTML = html;
   updateSizeTotal();
   setButtons('<button onclick="currentStep=1;renderStep();">Back</button> <button class="primary" onclick="currentStep=3;renderStep();">Next</button>');
@@ -264,13 +264,16 @@ function doInstall() {
     advance('Installing npm dependencies...');
     var npmRc = sh.Run('cmd /c cd /d "' + destBase + '" && npm install', 0, True);
     if (npmRc !== 0) log('WARNING: npm install returned code ' + npmRc);
+    if (!fso.FolderExists(destBase + '\\\\node_modules\\\\@modelcontextprotocol\\\\sdk')) {
+      log('WARNING: @modelcontextprotocol/sdk missing after npm install. RE tools will not work until you run npm install manually.');
+    }
 
     // Step 2b: Backend config
     advance('Writing backend configuration...');
     var backendVal = $('optBackend').value.split('|');
     var backendType = backendVal[0];
     var backendUrl = backendVal[1];
-    var bf = fso.CreateTextFile(destBase + "\\\\backend.txt", True);
+    var bf = fso.CreateTextFile(destBase + "\\backend.txt", True);
     bf.WriteLine("BACKEND_TYPE=" + backendType);
     bf.WriteLine("BACKEND_URL=" + backendUrl);
     bf.Close();
@@ -324,7 +327,7 @@ function doInstall() {
       var el = $('m_' + i);
       if (el && el.checked) toPull.push(modelList[i]);
     }
-    var backendType = $('optBackend').value.split('|')[0];
+    backendType = $('optBackend').value.split('|')[0];
     if (backendType === 'ollama' && toPull.length > 0 && exeExists('ollama')) {
       advance('Pulling ' + toPull.length + ' model(s)...');
       // Start Ollama if not running
@@ -336,7 +339,7 @@ function doInstall() {
       }
       for (var j = 0; j < toPull.length; j++) {
         log('Pulling ' + toPull[j] + ' (' + (j+1) + '/' + toPull.length + ')...');
-        var rc = sh.Run('cmd /c ""' + resolveOllama() + '"" pull ' + toPull[j], 1, True);
+        var rc = sh.Run('cmd /c ""' + resolveOllama() + '"" pull ' + toPull[j], 0, True);
         if (rc !== 0) log('  WARNING: pull returned code ' + rc);
       }
     } else {

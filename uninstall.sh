@@ -19,7 +19,7 @@ sleep 2
 BACKUP_DIR="$HOME/AegisAI-backup-$(date +%Y%m%d)"
 if [ -d "$DEST" ]; then
   mkdir -p "$BACKUP_DIR"
-  for f in search-config.json memory.json skills.json chats.json rag-store.json auth.json; do
+  for f in search-config.json memory.json skills.json chats.json rag-store.json auth.json settings.json setup-done.flag aegisai.db; do
     if [ -f "$DEST/$f" ]; then cp "$DEST/$f" "$BACKUP_DIR/$f" 2>/dev/null || true; fi
   done
   if [ -d "$DEST/workspace" ]; then cp -r "$DEST/workspace" "$BACKUP_DIR/workspace" 2>/dev/null || true; fi

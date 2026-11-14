@@ -5,6 +5,7 @@ if (-not $base) { $base = Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $base) { $base = "C:\Users\$env:USERNAME\Documents\LocalAI" }
 
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 $icon = New-Object System.Windows.Forms.NotifyIcon
 $icon.Icon = [System.Drawing.SystemIcons]::Application
 $icon.Text = "Local AI"
@@ -17,7 +18,7 @@ $exitItem = $menu.Items.Add("Exit tray icon")
 $exitItem.Add_Click({ $icon.Visible = $false; $icon.Dispose(); exit })
 $icon.ContextMenuStrip = $menu
 
-# Auto-start at login: place a shortcut in Startup folder
-# (handled by install.ps1)
+# Auto-start at login: place a shortcut in the Startup folder
+# (handled by install.vbs / install.hta / the Inno Setup installer)
 
 while ($true) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 }

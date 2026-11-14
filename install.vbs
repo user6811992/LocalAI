@@ -320,7 +320,7 @@ If fso.FileExists(destBase & "\package.json") Then
   Dim npmAttempt
   For npmAttempt = 1 To 3
     LogMsg logPath, "npm install attempt " & npmAttempt & "/3"
-    npmRc = sh.Run("cmd /c cd /d """ & destBase & """ && npm install", 1, True)
+    npmRc = sh.Run("cmd /c cd /d """ & destBase & """ && npm install", 0, True)
     If Err.Number = 0 And npmRc = 0 Then Exit For
     If npmAttempt < 3 Then
       MsgBox "npm install attempt " & npmAttempt & " failed (code " & npmRc & "). Retrying...", vbExclamation, "AegisAI Installer"
@@ -406,7 +406,7 @@ modelPrompt = "Pull all recommended AI models now?" & vbCrLf & vbCrLf & _
 For mi = 0 To UBound(modelList)
   modelPrompt = modelPrompt & "  " & (mi + 1) & ". " & modelList(mi) & "  (" & modelSize(mi) & ")" & vbCrLf
 Next
-modelPrompt = modelPrompt & vbCrLf & "Total: ~59 GB. Models are pulled in the recommended order." & vbCrLf & _
+modelPrompt = modelPrompt & vbCrLf & "Total: ~62 GB. Models are pulled in the recommended order." & vbCrLf & _:<|end|><|start|>edit to=assistant<|channel|>analysis<|channel|>Edited C:/Users/Poonjab/AppData/Local/Temp/opencode/LocalAI-review/install.vbs (1 replacement)
               "This may take a while." & vbCrLf & vbCrLf & "Pull now?"
 
 pullModels = False
@@ -432,12 +432,14 @@ If pullModels Then
     End If
     Dim i, m, rc, failedModels
     failedModels = ""
+    MsgBox "Pulling " & (UBound(modelList) + 1) & " recommended models now." & vbCrLf & vbCrLf & _
+           "This may take a while (several GB per model). See install.log for progress.", _
+           vbInformation, "Pulling models"
     For i = 0 To UBound(modelList)
       m = modelList(i)
-      MsgBox "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ":" & vbCrLf & m & "  (" & modelSize(i) & ")" & vbCrLf & vbCrLf & _
-             "Please wait. This may take several minutes.", vbInformation, "Pulling models"
+      LogMsg logPath, "Pulling model " & (i + 1) & " of " & (UBound(modelList) + 1) & ": " & m
       On Error Resume Next
-      rc = sh.Run("cmd /c """ & ResolveOllama() & """ pull " & m, 1, True)
+      rc = sh.Run("cmd /c """ & ResolveOllama() & """ pull " & m, 0, True)
       If Err.Number <> 0 Then
         MsgBox "Error pulling " & m & ": " & Err.Description, vbExclamation, "AegisAI Installer"
         failedModels = failedModels & m & vbCrLf

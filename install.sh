@@ -92,12 +92,24 @@ if [ "$DEST" != "$SCRIPT_DIR" ]; then
   echo "Copying application files..."
   # copy everything except node_modules and .git
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' "$SCRIPT_DIR/" "$DEST/" || {
+    rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' --exclude='repos' --exclude='tools' --exclude='workspace' --exclude='.update-backup' --exclude='data' "$SCRIPT_DIR/" "$DEST/" || {
       echo "rsync failed, falling back to cp..."
-      cp -r "$SCRIPT_DIR"/* "$DEST/" 2>/dev/null || true
+      for item in "$SCRIPT_DIR"/*; do
+        [ -e "$item" ] || continue
+        base=$(basename "$item")
+        case "$base" in node_modules|.git|repos|tools|workspace|.update-backup|data) continue ;; esac
+        case "$base" in *.log) continue ;; esac
+        cp -r "$item" "$DEST/" 2>/dev/null || true
+      done
     }
   else
-    cp -r "$SCRIPT_DIR"/* "$DEST/" 2>/dev/null || true
+    for item in "$SCRIPT_DIR"/*; do
+      [ -e "$item" ] || continue
+      base=$(basename "$item")
+      case "$base" in node_modules|.git|repos|tools|workspace|.update-backup|data) continue ;; esac
+      case "$base" in *.log) continue ;; esac
+      cp -r "$item" "$DEST/" 2>/dev/null || true
+    done
   fi
   # Verify copy
   if [ ! -f "$DEST/server.js" ] || [ ! -f "$DEST/package.json" ]; then
@@ -121,7 +133,8 @@ if [ "$NODE_OK" -eq 0 ]; then
 fi
 if [ "$OLLAMA_OK" -eq 0 ]; then
   echo ""
-  echo "Ollama is required. Install from https://ollama.com/download then re-run."
+  echo "Ollama not found. It is required only for the default (Ollama) backend."
+  echo "Install from https://ollama.com/download then re-run, or choose another backend."
   if [ "$OS" = "Darwin" ]; then echo "  macOS: brew install ollama"; fi
   if [ "$OS" = "Linux" ]; then echo "  Linux: curl -fsSL https://ollama.com/install.sh | sh"; fi
 fi
@@ -169,9 +182,9 @@ echo "Backend: $BACKEND_TYPE at $BACKEND_URL"
 
 
 # ---------- recommended models ----------
-MODELS=("llama3.2:3b" "llama3.2:1b" "qwen2.5:14b" "qwen2.5-coder:14b" "mistral:7b" "phi3:mini" "gemma2:9b" "deepseek-coder:6.7b" "nomic-embed-text" "moondream")
+MODELS=("llama3.2:3b" "llama3.2:1b" "qwen2.5:14b" "qwen2.5-coder:14b" "qwen2.5-coder:7b" "mistral:7b" "phi3:mini" "gemma2:9b" "deepseek-coder:6.7b" "deepseek-coder-v2:16b" "deepseek-r1:14b" "nomic-embed-text" "moondream")
 if [ "$BACKEND_TYPE" = "ollama" ] && [ "$OLLAMA_OK" -eq 1 ]; then
-  if ask "Pull all recommended AI models now? (~38 GB, may take a while)"; then
+  if ask "Pull all recommended AI models now? (~62 GB, may take a while)"; then
     for m in "${MODELS[@]}"; do
       echo "Pulling $m..."
       ollama pull "$m" || echo "Failed to pull $m (continuing)"

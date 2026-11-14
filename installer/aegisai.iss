@@ -42,7 +42,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 [Components]
 Name: "app"; Description: "AegisAI application"; Types: full minimal custom; Flags: fixed
 Name: "node"; Description: "Bundled Node.js runtime (recommended)"; Types: full minimal custom
-Name: "models"; Description: "Download recommended AI models (~38 GB)"; Types: full
+Name: "models"; Description: "Download recommended AI models (~27 GB)"; Types: full
 Name: "models\llama32_3b"; Description: "llama3.2:3b (~2.0 GB)"; Types: full
 Name: "models\llama32_1b"; Description: "llama3.2:1b (~1.3 GB)"; Types: full
 Name: "models\qwen25_14b"; Description: "qwen2.5:14b (~9.0 GB)"; Types: full
@@ -66,7 +66,6 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SECURITY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
-Source: "..\tests\*"; DestDir: "{app}\tests"; Flags: ignoreversion recursesubdirs
 Source: "..\lib\*"; DestDir: "{app}\lib"; Flags: ignoreversion recursesubdirs
 ; Installers (kept for compatibility)
 Source: "..\install.vbs"; DestDir: "{app}"; Flags: ignoreversion

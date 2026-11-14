@@ -40,7 +40,7 @@ Download `AegisAI-Setup-<version>.exe` from the [Releases](https://github.com/us
 - Checks for Node.js and Ollama (offers to download if missing)
 - Optionally bundles a portable Node.js runtime (zero prerequisites)
 - Copies the application, runs `npm install`
-- Lets you pick which AI models to download (optional, ~38 GB total)
+- Lets you pick which AI models to download (optional, ~27 GB total for the default set)
 - Creates desktop and Start Menu shortcuts
 - Optionally enables LAN access and auto-start
 

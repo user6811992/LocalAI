@@ -25,10 +25,8 @@ For Each pNode In colProc
     WScript.Sleep 2000
   End If
 Next
-' Also kill by taskkill as backup
-On Error Resume Next
-sh.Run "taskkill /F /IM node.exe /FI ""WINDOWTITLE eq AegisAI*"" 2>nul", 0, True
-On Error GoTo 0
+' (taskkill with a WINDOWTITLE filter never matches node.exe windows; the WMI
+'  termination above is sufficient.)
 
 ' ---------- remove the firewall rule added for LAN access ----------
 On Error Resume Next
@@ -41,8 +39,8 @@ On Error GoTo 0
 Dim backupDir, udFiles, udf
 backupDir = sh.SpecialFolders("Desktop") & "\AegisAI-backup-" & Year(Now) & Month(Now) & Day(Now)
 If confirm = vbYes Then
-  fso.CreateFolder backupDir
-  udFiles = Array("search-config.json", "memory.json", "skills.json", "chats.json", "rag-store.json", "auth.json")
+  If Not fso.FolderExists(backupDir) Then fso.CreateFolder backupDir
+  udFiles = Array("search-config.json", "memory.json", "skills.json", "chats.json", "rag-store.json", "auth.json", "settings.json", "setup-done.flag", "aegisai.db")
   Dim exported
   exported = ""
   For Each udf In udFiles
