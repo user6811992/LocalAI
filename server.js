@@ -3783,24 +3783,48 @@ const server = http.createServer(async (req, res) => { try {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
       }
-      // Strategy: copy the GGUF to a temp directory with a simple name and a
-      // co-located Modelfile using a relative FROM. This avoids all of Ollama's
-      // path-resolution quirks on Windows (absolute paths, mount points, etc.).
+      // Strategy: use the Ollama API /api/create directly with the file path.
+      // This avoids the CLI's Modelfile parsing and path-resolution quirks.
+      // Fallback: CLI with a co-located Modelfile in a temp dir.
       const modelDir = path.dirname(resolvedModelPath);
       const modelBaseName = path.basename(resolvedModelPath);
-      const workDir = path.join(os.tmpdir(), 'aegis-import-' + Date.now());
-      fs.mkdirSync(workDir, { recursive: true });
-      const workGguf = path.join(workDir, 'model.gguf');
-      // Try hard link first (instant, same volume); fall back to copy.
-      try { fs.linkSync(resolvedModelPath, workGguf); }
-      catch (e) { fs.copyFileSync(resolvedModelPath, workGguf); }
-      const tmpModelfile = path.join(workDir, 'Modelfile');
-      fs.writeFileSync(tmpModelfile, 'FROM ./model.gguf\n', 'utf8');
-      console.log('Import: Modelfile content:', fs.readFileSync(tmpModelfile, 'utf8'));
-      console.log('Import: file size:', stat.size, 'path:', modelPath);
-      const r = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 600000, maxBuffer: 10 * 1024 * 1024, cwd: workDir });
-      // Clean up temp work dir
-      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
+      let r = null;
+      // Try 1: Ollama API /api/create with absolute forward-slash path
+      try {
+        const fromPath = resolvedModelPath.replace(/\\/g, '/');
+        const apiRes = await fetch(OLLAMA + '/api/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: safeName, from: fromPath, stream: false }),
+        });
+        const apiText = await apiRes.text();
+        console.log('Import API response:', apiRes.status, apiText.slice(0, 500));
+        if (apiRes.ok) {
+          r = { ok: true, out: apiText || 'done', err: null, code: 0 };
+        } else {
+          r = { ok: false, out: apiText, err: apiText, code: apiRes.status };
+        }
+      } catch (e) {
+        console.log('Import API error:', e.message);
+        r = null;
+      }
+      // Try 2: CLI with co-located Modelfile (if API failed)
+      if (!r || !r.ok) {
+        console.log('Import: API failed, trying CLI with co-located Modelfile...');
+        const workDir = path.join(os.tmpdir(), 'aegis-import-' + Date.now());
+        fs.mkdirSync(workDir, { recursive: true });
+        const workGguf = path.join(workDir, 'model.gguf');
+        try { fs.linkSync(resolvedModelPath, workGguf); }
+        catch (e) { fs.copyFileSync(resolvedModelPath, workGguf); }
+        const tmpModelfile = path.join(workDir, 'Modelfile');
+        fs.writeFileSync(tmpModelfile, 'FROM ./model.gguf\n', 'utf8');
+        const cliR = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 600000, maxBuffer: 10 * 1024 * 1024, cwd: workDir });
+        try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
+        if (cliR.ok) r = cliR;
+        else if (!r) r = cliR;
+        else r.err = (r.err || '') + ' | CLI: ' + (cliR.err || cliR.out || '');
+      }
+      if (!r) r = { ok: false, out: '', err: 'both API and CLI failed', code: 1 };
       // Strip ANSI escape codes and spinner glyphs from output
       const rawOut = (r.out || r.err) || 'done';
       const cleanOut = rawOut
