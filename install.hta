@@ -231,12 +231,16 @@ function doInstall() {
         var item;
         var eFiles = new Enumerator(srcFolder.Files);
         for (; !eFiles.atEnd(); eFiles.moveNext()) {
-          fso.CopyFile(eFiles.item().Path, destBase + '\\' + eFiles.item().Name, True);
+          var fName = eFiles.item().Name;
+          if (fName.toLowerCase().slice(-4) !== '.log') {
+            fso.CopyFile(eFiles.item().Path, destBase + '\\' + fName, True);
+          }
         }
         var eSubs = new Enumerator(srcFolder.SubFolders);
         for (; !eSubs.atEnd(); eSubs.moveNext()) {
           var sfName = eSubs.item().Name;
-          if (sfName.toLowerCase() !== 'node_modules' && sfName.toLowerCase() !== '.git' && sfName.toLowerCase() !== 'repos' && sfName.toLowerCase() !== 'tools') {
+          var sfLow = sfName.toLowerCase();
+          if (sfLow !== 'node_modules' && sfLow !== '.git' && sfLow !== 'repos' && sfLow !== 'tools' && sfLow !== 'data' && sfLow !== 'workspace' && sfLow !== '.update-backup') {
             fso.CopyFolder(eSubs.item().Path, destBase + '\\' + sfName, True);
           }
         }

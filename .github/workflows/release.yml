@@ -64,7 +64,7 @@ jobs:
       - name: Build source zip
         run: |
           rm -rf /tmp/AegisAI-zip && mkdir -p /tmp/AegisAI-zip/AegisAI
-          rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' --exclude='repos' --exclude='tools' --exclude='workspace' --exclude='.update-backup' --exclude='data' . /tmp/AegisAI-zip/AegisAI/
+          rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' --exclude='repos' --exclude='tools' --exclude='workspace' --exclude='.update-backup' --exclude='data' --exclude='installer/output' --exclude='installer/AegisAI.AppDir' --exclude='installer/AegisAI.app' . /tmp/AegisAI-zip/AegisAI/
           cd /tmp/AegisAI-zip && zip -r "$GITHUB_WORKSPACE/installer/output/AegisAI-${{ github.ref_name }}.zip" AegisAI
       - name: Upload source zip
         uses: softprops/action-gh-release@v2

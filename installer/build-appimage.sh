@@ -26,12 +26,20 @@ rsync -a --exclude='node_modules' --exclude='.git' --exclude='*.log' \
   --exclude='.update-backup' --exclude='data' \
   "$ROOT/" "$APPDIR/usr/lib/aegisai/"
 
-# 3. Bundle Node.js if available
-if command -v node >/dev/null 2>&1; then
-  NODE_BIN=$(command -v node)
-  cp "$NODE_BIN" "$APPDIR/usr/bin/node"
-  chmod +x "$APPDIR/usr/bin/node"
-  echo "Bundled Node.js from $NODE_BIN"
+# 3. Bundle a portable Node.js runtime (linux-x64)
+NODE_VER="v20.18.0"
+NODE_BIN="$APPDIR/usr/bin/node"
+if [ ! -x "$NODE_BIN" ]; then
+  echo "Downloading portable Node.js ${NODE_VER}..."
+  TMP_NODE="$(mktemp -d)"
+  curl -fsSL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-x64.tar.gz" -o "$TMP_NODE/node.tar.gz"
+  tar -xzf "$TMP_NODE/node.tar.gz" -C "$TMP_NODE" --strip-components=1
+  cp "$TMP_NODE/bin/node" "$NODE_BIN"
+  chmod +x "$NODE_BIN"
+  mkdir -p "$APPDIR/usr/lib/node_modules"
+  cp -a "$TMP_NODE/lib/node_modules/." "$APPDIR/usr/lib/node_modules/"
+  rm -rf "$TMP_NODE"
+  echo "Bundled Node.js ${NODE_VER}"
 fi
 
 # 4. Create the AppRun launcher
@@ -41,6 +49,15 @@ HERE="$(dirname "$(readlink -f "${0}")")"
 export PATH="$HERE/usr/bin:$PATH"
 APP_ROOT="$HERE/usr/lib/aegisai"
 cd "$APP_ROOT"
+# Backend selection (from backend.txt in the app root)
+if [ -f "$APP_ROOT/backend.txt" ]; then
+  while IFS='=' read -r key value; do
+    case "$key" in
+      BACKEND_TYPE) export BACKEND_TYPE="$value" ;;
+      BACKEND_URL) export BACKEND_URL="$value" ;;
+    esac
+  done < "$APP_ROOT/backend.txt"
+fi
 # Start Ollama if not running
 if ! (curl -s http://127.0.0.1:11434/api/version >/dev/null 2>&1); then
   if command -v ollama >/dev/null 2>&1; then
@@ -87,7 +104,13 @@ fi
 
 # 7. Run npm install in the bundled app
 cd "$APPDIR/usr/lib/aegisai"
-npm install --production 2>&1 | tail -5
+if [ -x "$APPDIR/usr/bin/node" ]; then
+  "$APPDIR/usr/bin/node" "$APPDIR/usr/lib/node_modules/npm/bin/npm-cli.js" install --production 2>&1 | tail -5
+else
+  npm install --production 2>&1 | tail -5
+fi
+# Default backend config (edit this file to use a non-Ollama backend)
+printf 'BACKEND_TYPE=ollama\nBACKEND_URL=http://127.0.0.1:11434\n' > "$APPDIR/usr/lib/aegisai/backend.txt"
 cd "$ROOT"
 
 # 8. Build the AppImage

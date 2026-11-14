@@ -36,3 +36,10 @@ settings.json
 setup-done.flag
 aegisai.db
 .update-backup/
+
+# Installer build artifacts
+installer/output/
+installer/AegisAI.AppDir/
+installer/AegisAI.app/
+installer/node-runtime/
+installer/ollama-runtime/

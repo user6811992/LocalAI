@@ -279,18 +279,26 @@ bf.Close
 LogMsg logPath, "Backend: " & backendType & " at " & backendUrl
 
 ' ---------- copy app files if destination differs from source ----------
-If LCase(destBase) <> LCase(srcBase) Or updateOnly Then
+If LCase(destBase) = LCase(srcBase) Then
+  LogMsg logPath, "Source and destination are the same; skipping file copy."
+Else
   MsgBox "Copying application files to:" & vbCrLf & destBase & vbCrLf & vbCrLf & _
          "Please wait...", vbInformation, "AegisAI Installer"
   On Error Resume Next
-  ' Copy individual items to avoid overwriting issues
+  ' Copy individual items to avoid overwriting issues. Skip dependency, VCS,
+  ' and user-data folders so they are not duplicated into the install.
   Dim item
   For Each item In fso.GetFolder(srcBase).Files
-    fso.CopyFile item.Path, destBase & "\" & item.Name, True
+    If LCase(Right(item.Name, 4)) <> ".log" Then
+      fso.CopyFile item.Path, destBase & "\" & item.Name, True
+    End If
   Next
-  Dim subFolder
+  Dim subFolder, subName
   For Each subFolder In fso.GetFolder(srcBase).SubFolders
-    If LCase(subFolder.Name) <> "node_modules" Then
+    subName = LCase(subFolder.Name)
+    If subName <> "node_modules" And subName <> ".git" And subName <> "repos" And _
+       subName <> "tools" And subName <> "data" And subName <> "workspace" And _
+       subName <> ".update-backup" Then
       fso.CopyFolder subFolder.Path, destBase & "\" & subFolder.Name, True
     End If
   Next
