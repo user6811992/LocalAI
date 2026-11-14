@@ -3783,48 +3783,74 @@ const server = http.createServer(async (req, res) => { try {
         json(res, 400, { ok: false, message: 'Invalid model name. Use lowercase letters, numbers, dots, hyphens, underscores.' });
         return;
       }
-      // Strategy: use the Ollama API /api/create directly with the file path.
-      // This avoids the CLI's Modelfile parsing and path-resolution quirks.
-      // Fallback: CLI with a co-located Modelfile in a temp dir.
+      // Strategy: try multiple approaches to work around Ollama's path resolution
+      // quirks on Windows. Each approach uses a different path format.
       const modelDir = path.dirname(resolvedModelPath);
       const modelBaseName = path.basename(resolvedModelPath);
       let r = null;
-      // Try 1: Ollama API /api/create with absolute forward-slash path
+      const attempts = [];
+
+      // Attempt 1: Ollama API /api/create with absolute forward-slash path
       try {
-        const fromPath = resolvedModelPath.replace(/\\/g, '/');
+        const fromPath = resolvedModelPath.replace(/\\\\/g, '/');
         const apiRes = await fetch(OLLAMA + '/api/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: safeName, from: fromPath, stream: false }),
         });
         const apiText = await apiRes.text();
-        console.log('Import API response:', apiRes.status, apiText.slice(0, 500));
-        if (apiRes.ok) {
-          r = { ok: true, out: apiText || 'done', err: null, code: 0 };
-        } else {
-          r = { ok: false, out: apiText, err: apiText, code: apiRes.status };
-        }
-      } catch (e) {
-        console.log('Import API error:', e.message);
-        r = null;
-      }
-      // Try 2: CLI with co-located Modelfile (if API failed)
+        console.log('Import attempt 1 (API fwd-slash):', apiRes.status, apiText.slice(0, 200));
+        if (apiRes.ok) { r = { ok: true, out: apiText || 'done', err: null, code: 0 }; }
+        else { attempts.push('API-fwd: ' + apiRes.status + ' ' + apiText.slice(0, 100)); }
+      } catch (e) { attempts.push('API-fwd: ' + e.message); }
+
+      // Attempt 2: Ollama API /api/create with absolute backslash path
       if (!r || !r.ok) {
-        console.log('Import: API failed, trying CLI with co-located Modelfile...');
+        try {
+          const fromPath = resolvedModelPath;
+          const apiRes = await fetch(OLLAMA + '/api/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: safeName, from: fromPath, stream: false }),
+          });
+          const apiText = await apiRes.text();
+          console.log('Import attempt 2 (API backslash):', apiRes.status, apiText.slice(0, 200));
+          if (apiRes.ok) { r = { ok: true, out: apiText || 'done', err: null, code: 0 }; }
+          else { attempts.push('API-back: ' + apiRes.status + ' ' + apiText.slice(0, 100)); }
+        } catch (e) { attempts.push('API-back: ' + e.message); }
+      }
+
+      // Attempt 3: CLI with Modelfile in same dir as GGUF (relative FROM)
+      if (!r || !r.ok) {
+        console.log('Import: trying CLI with co-located Modelfile...');
+        const tmpModelfile = path.join(modelDir, '.Modelfile_' + Date.now());
+        fs.writeFileSync(tmpModelfile, 'FROM ./' + modelBaseName + '\\n', 'utf8');
+        const cliR = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 600000, maxBuffer: 10 * 1024 * 1024, cwd: modelDir });
+        try { fs.unlinkSync(tmpModelfile); } catch (e) {}
+        console.log('Import attempt 3 (CLI co-located):', cliR.ok, (cliR.out || cliR.err || '').slice(0, 200));
+        if (cliR.ok) r = cliR;
+        else attempts.push('CLI-colocated: ' + (cliR.err || cliR.out || '').slice(0, 100));
+      }
+
+      // Attempt 4: CLI with temp dir + hard link + relative FROM
+      if (!r || !r.ok) {
+        console.log('Import: trying CLI with temp dir + hard link...');
         const workDir = path.join(os.tmpdir(), 'aegis-import-' + Date.now());
         fs.mkdirSync(workDir, { recursive: true });
         const workGguf = path.join(workDir, 'model.gguf');
         try { fs.linkSync(resolvedModelPath, workGguf); }
-        catch (e) { fs.copyFileSync(resolvedModelPath, workGguf); }
+        catch (e) { try { fs.copyFileSync(resolvedModelPath, workGguf); } catch (e2) {} }
         const tmpModelfile = path.join(workDir, 'Modelfile');
         fs.writeFileSync(tmpModelfile, 'FROM ./model.gguf\n', 'utf8');
         const cliR = await runProcess(resolveOllamaBin(), ['create', safeName, '-f', tmpModelfile], { timeout: 600000, maxBuffer: 10 * 1024 * 1024, cwd: workDir });
         try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
+        console.log('Import attempt 4 (CLI tempdir):', cliR.ok, (cliR.out || cliR.err || '').slice(0, 200));
         if (cliR.ok) r = cliR;
-        else if (!r) r = cliR;
-        else r.err = (r.err || '') + ' | CLI: ' + (cliR.err || cliR.out || '');
+        else attempts.push('CLI-tempdir: ' + (cliR.err || cliR.out || '').slice(0, 100));
       }
-      if (!r) r = { ok: false, out: '', err: 'both API and CLI failed', code: 1 };
+
+      if (!r) r = { ok: false, out: '', err: 'all attempts failed: ' + attempts.join(' | '), code: 1 };
+      else if (!r.ok) r.err = (r.err || r.out || '') + ' (attempts: ' + attempts.join(' | ') + ')';
       // Strip ANSI escape codes and spinner glyphs from output
       const rawOut = (r.out || r.err) || 'done';
       const cleanOut = rawOut
