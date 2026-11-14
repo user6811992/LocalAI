@@ -138,16 +138,44 @@ If startOllama And Not svcRunning Then
   End If
 End If
 
-' Start web UI if port closed
+' Start web UI if port closed (retry up to 3 times with timeout)
 Dim portOpen
 portOpen = False
-Dim http
-Set http = CreateObject("MSXML2.XMLHTTP")
+Dim http, httpOk
+httpOk = False
 On Error Resume Next
-http.Open "GET", "http://127.0.0.1:8080/", False
-http.Send
-If Err.Number = 0 And http.Status = 200 Then portOpen = True
+' Try MSXML2.ServerXMLHTTP first (supports setTimeouts), fall back to XMLHTTP
+Dim useServerXml
+useServerXml = False
+On Error Resume Next
+Dim testHttp
+Set testHttp = CreateObject("MSXML2.ServerXMLHTTP")
+If Err.Number = 0 Then useServerXml = True
+Set testHttp = Nothing
+Err.Clear
 On Error GoTo 0
+
+Dim retryCount
+For retryCount = 1 To 3
+  On Error Resume Next
+  If useServerXml Then
+    Set http = CreateObject("MSXML2.ServerXMLHTTP")
+    http.setTimeouts 5000, 5000, 5000, 5000
+  Else
+    Set http = CreateObject("MSXML2.XMLHTTP")
+  End If
+  http.Open "GET", "http://127.0.0.1:8080/", False
+  http.Send
+  If Err.Number = 0 And http.Status = 200 Then
+    portOpen = True
+    httpOk = True
+  End If
+  Err.Clear
+  On Error GoTo 0
+  Set http = Nothing
+  If portOpen Then Exit For
+  WScript.Sleep 1000
+Next
 
 ' Ensure dependencies are installed
 If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
@@ -173,7 +201,26 @@ If Not portOpen Then
     wshShell.Environment("Process")("HOST") = "127.0.0.1"
   End If
   wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js", 0, False
-  WScript.Sleep 4000
+  ' Wait up to 20s for the server to become ready
+  Dim serverReady, serverWait
+  serverReady = False
+  For serverWait = 1 To 20
+    WScript.Sleep 1000
+    On Error Resume Next
+    If useServerXml Then
+      Set http = CreateObject("MSXML2.ServerXMLHTTP")
+      http.setTimeouts 3000, 3000, 3000, 3000
+    Else
+      Set http = CreateObject("MSXML2.XMLHTTP")
+    End If
+    http.Open "GET", "http://127.0.0.1:8080/", False
+    http.Send
+    If Err.Number = 0 And http.Status = 200 Then serverReady = True
+    Err.Clear
+    On Error GoTo 0
+    Set http = Nothing
+    If serverReady Then Exit For
+  Next
 End If
 
 ' Build the app URL, appending the auth token so the web UI auto-populates it.
