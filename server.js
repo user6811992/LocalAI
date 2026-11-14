@@ -2668,6 +2668,10 @@ const server = http.createServer(async (req, res) => { try {
     try {
       const body = await readBody(req);
       const { name } = JSON.parse(body || '{}');
+      if (BACKEND_TYPE !== 'ollama') {
+        json(res, 400, { ok: false, message: 'Model pulling is only supported for the Ollama backend. Use your ' + BACKEND_TYPE + ' backend tools to load models.' });
+        return;
+      }
       if (!name || !name.trim()) { json(res, 400, { ok: false, message: 'Model name required' }); return; }
       const modelName = name.trim();
       if (!isValidModelName(modelName)) { json(res, 400, { ok: false, message: 'Invalid model name' }); return; }
@@ -3561,6 +3565,11 @@ const server = http.createServer(async (req, res) => { try {
       const body = await readBody(req);
       const { path: modelPath, name } = JSON.parse(body || '{}');
       if (!modelPath || !name) { json(res, 400, { ok: false, message: 'path and name required' }); return; }
+      // Model import (GGUF -> Ollama) only applies to the Ollama backend.
+      if (BACKEND_TYPE !== 'ollama') {
+        json(res, 400, { ok: false, message: 'Model import is only supported for the Ollama backend. Import models using your ' + BACKEND_TYPE + ' backend tools instead.' });
+        return;
+      }
       // Make sure Ollama is up before trying to import.
       try {
         const hr = await fetch(OLLAMA + '/api/version');
