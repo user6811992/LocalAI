@@ -37,12 +37,12 @@ Tested with:
 
 ### Install (Windows — Inno Setup installer, recommended)
 Download `AegisAI-Setup-<version>.exe` from the [Releases](https://github.com/user6811992/LocalAI/releases) page and run it. The installer:
-- Checks for Node.js and Ollama (offers to download if missing)
-- Optionally bundles a portable Node.js runtime (zero prerequisites)
-- Copies the application, runs `npm install`
-- Lets you pick which AI models to download (optional, ~27 GB total for the default set)
+- Bundles a portable Node.js runtime (zero prerequisites) or uses your installed Node.js
+- Copies the application and runs `npm install`
+- Lets you pick which AI models to download (optional, ~27 GB for the default set; Ollama is started automatically if needed)
 - Creates desktop and Start Menu shortcuts
-- Optionally enables LAN access and auto-start
+- Optionally enables LAN access (generates an auth token) and auto-start
+- Writes `backend.txt` so you can switch to llama.cpp / LM Studio / OpenAI-compatible backends
 
 ### Install (Windows — script installer, legacy)
 ```bash
@@ -58,11 +58,11 @@ cd LocalAI
 npm install
 ```
 
-### Install (macOS — .dmg, coming soon)
-Download `AegisAI-<version>.dmg` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, open it, and drag AegisAI to Applications. Build locally with `bash installer/build-dmg.sh` (requires `create-dmg`: `brew install create-dmg`).
+### Install (macOS — .dmg)
+Download `AegisAI-<version>.dmg` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, open it, and drag AegisAI to Applications. The bundle includes a universal (Intel + Apple Silicon) Node.js runtime. Build locally with `bash installer/build-dmg.sh` (requires `create-dmg`: `brew install create-dmg`).
 
-### Install (Linux — AppImage, coming soon)
-Download `AegisAI-<version>-x86_64.AppImage` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, make it executable (`chmod +x`), and run it. Build locally with `bash installer/build-appimage.sh` (requires `appimagetool`).
+### Install (Linux — AppImage)
+Download `AegisAI-<version>-x86_64.AppImage` from the [Releases](https://github.com/user6811992/LocalAI/releases) page, make it executable (`chmod +x`), and run it. The bundle includes a portable Node.js runtime. Build locally with `bash installer/build-appimage.sh` (requires `appimagetool`).
 
 ### Run
 ```bash
@@ -103,12 +103,12 @@ info to the Ollama shape the UI expects. Note: the UI's model dropdown is
 proxied to Ollama's `/api/tags`, so for OpenAI-compatible backends the list may
 be empty even though chat works — set the model name in the UI or via the backend.
 
-**Selecting a backend during installation:** the Windows (Inno/VBS/HTA), macOS,
-Linux, and Docker installers all prompt for the backend (Ollama, llama.cpp,
-LM Studio, or OpenAI-compatible) and write a `backend.txt` (or set
-`BACKEND_TYPE`/`BACKEND_URL` env vars) so the launcher and server start with
-the right backend. You can change it later by editing `backend.txt` in the app
-folder or setting `BACKEND_TYPE`/`BACKEND_URL` before starting the server.
+**Selecting a backend during installation:** the Windows (Inno/VBS/HTA) and
+`install.sh` installers prompt for the backend (Ollama, llama.cpp, LM Studio, or
+OpenAI-compatible) and write a `backend.txt`. The macOS/Linux bundles and Docker
+default to Ollama but read `backend.txt` (or `BACKEND_TYPE`/`BACKEND_URL` env
+vars) if present, so you can switch backends by editing `backend.txt` in the app
+folder or setting the env vars before starting the server.
 
 ### Intel Arc GPUs
 
