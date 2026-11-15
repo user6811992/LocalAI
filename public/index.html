@@ -140,15 +140,14 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.41</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.42</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
-    <select id="model" title="Model" style="max-width:200px;"></select>
-    <select id="systemPrompt" title="System prompt template">
+    <select id="model" title="Model" style="max-width:180px;"></select>
+    <select id="systemPrompt" title="System prompt template" style="max-width:140px;">
       <option value="">Default</option>
     </select>
-    <button id="savePromptBtn" title="Save current system prompt" style="padding:4px 8px;font-size:12px;">Save prompt</button>
-    <select id="searchEngine" title="Search engine"></select>
+    <select id="searchEngine" title="Search engine" style="max-width:120px;"></select>
     <span style="color:var(--border);">|</span>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
       <input type="checkbox" id="codingMode" /> Code
@@ -156,38 +155,48 @@
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
       <input type="checkbox" id="reMode" /> RE
     </label>
-    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);" title="Clean room mode: don't read original code/files, only visible behavior">
-      <input type="checkbox" id="cleanRoomMode" /> Clean room
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);" title="Clean room mode">
+      <input type="checkbox" id="cleanRoomMode" /> Clean
     </label>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
       <input type="checkbox" id="confirmTools" /> Confirm
     </label>
     <span style="color:var(--border);">|</span>
-    <button id="modelsBtn" style="padding:4px 8px;font-size:12px;">Models</button>
-    <button id="componentsBtn" style="padding:4px 8px;font-size:12px;">Components</button>
-    <button id="instancesBtn" onclick="openInstances()" style="padding:4px 8px;font-size:12px;">Instances</button>
-    <button id="ragBtn" style="padding:4px 8px;font-size:12px;">Docs</button>
-    <button id="codeBtn" style="padding:4px 8px;font-size:12px;">Code</button>
-    <button id="reWorkspaceBtn" style="padding:4px 8px;font-size:12px;">RE</button>
-  <button id="browseReBtn" style="padding:4px 8px;font-size:12px;">Browse RE</button>
-    <button id="memoryBtn" style="padding:4px 8px;font-size:12px;">Memory</button>
-    <button id="skillsBtn" style="padding:4px 8px;font-size:12px;">Skills</button>
+    <button id="toolsMenuBtn" style="padding:4px 8px;font-size:12px;" title="Tools & panels">Tools ▾</button>
     <button id="chatsBtn" style="padding:4px 8px;font-size:12px;">Chats</button>
-    <button id="statsBtn" style="padding:4px 8px;font-size:12px;">Stats</button>
-    <button id="settingsBtn" style="padding:4px 8px;font-size:12px;">Settings</button>
-    <select id="langSelect" title="Language" style="font-size:12px;padding:4px 6px;">
-      <option value="en">EN</option>
-      <option value="es">ES</option>
-    </select>
-    <button id="compareBtn" style="padding:4px 8px;font-size:12px;">Compare</button>
+    <button id="branchChatBtn" style="padding:4px 8px;font-size:12px;">Branch</button>
+    <button id="parentChatBtn" style="padding:4px 8px;font-size:12px;display:none;">Parent</button>
     <span style="color:var(--border);">|</span>
     <button id="refresh" style="padding:4px 8px;font-size:12px;">Refresh</button>
     <button id="clear" style="padding:4px 8px;font-size:12px;">Clear</button>
     <button id="exportChat" style="padding:4px 8px;font-size:12px;">Export</button>
-    <button id="branchChatBtn" style="padding:4px 8px;font-size:12px;">Branch</button>
-    <button id="parentChatBtn" style="padding:4px 8px;font-size:12px;display:none;">Parent</button>
     <button id="aboutBtn" onclick="openAbout()" style="padding:4px 8px;font-size:12px;">About</button>
-    <input id="chatSearch" placeholder="Search..." style="width:120px;font-size:12px;padding:4px 8px;" />
+    <input id="chatSearch" placeholder="Search chats..." style="width:100px;font-size:12px;padding:4px 8px;" />
+  </div>
+  <div id="toolsDropdown" style="display:none;position:absolute;right:16px;top:60px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:200px;">
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <button id="modelsBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Models</button>
+      <button id="componentsBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Components</button>
+      <button id="instancesBtn" onclick="openInstances()" style="padding:4px 8px;font-size:12px;text-align:left;">Instances</button>
+      <button id="ragBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Docs (RAG)</button>
+      <button id="codeBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Code Preview</button>
+      <button id="reWorkspaceBtn" style="padding:4px 8px;font-size:12px;text-align:left;">RE Workspace</button>
+      <button id="browseReBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Browse RE</button>
+      <button id="memoryBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Memory</button>
+      <button id="skillsBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Skills</button>
+      <button id="statsBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Stats</button>
+      <button id="settingsBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Settings</button>
+      <button id="savePromptBtn" style="padding:4px 8px;font-size:12px;text-align:left;">Save Prompt</button>
+      <select id="langSelect" title="Language" style="font-size:12px;padding:4px 6px;">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+      </select>
+    </div>
+  </div>
+  <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
+    <span style="font-size:12px;color:var(--muted);">Project:</span>
+    <input id="projectRoot" style="flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;" placeholder="C:\path\to\project" />
+    <button id="setProject">Set</button>
   </div>
   <div style="width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;">
     <span style="font-size:12px;color:var(--muted);">Project:</span>
@@ -1681,6 +1690,20 @@
         const parentBtn = document.getElementById('parentChatBtn');
         if (parentBtn) parentBtn.style.display = 'inline-block';
       } catch (e) { status.textContent = 'Branch failed: ' + e.message; status.className = 'status err'; }
+    });
+  }
+  // Tools dropdown toggle
+  const toolsMenuBtn = document.getElementById('toolsMenuBtn');
+  const toolsDropdown = document.getElementById('toolsDropdown');
+  if (toolsMenuBtn && toolsDropdown) {
+    toolsMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolsDropdown.style.display = toolsDropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (!toolsDropdown.contains(e.target) && e.target !== toolsMenuBtn) {
+        toolsDropdown.style.display = 'none';
+      }
     });
   }
   const parentChatBtn = document.getElementById('parentChatBtn');
