@@ -102,6 +102,7 @@ OpenAI-compatible backend. Set the environment variables before starting:
 | `llamacpp` | llama.cpp server | OpenAI-compatible (`/v1/...`) |
 | `lmstudio` | LM Studio | OpenAI-compatible |
 | `strata` | Strata | OpenAI-compatible, broad hardware support (NVIDIA, AMD, Intel Arc, Apple Silicon) |
+| `robin` | Robin | OpenAI-compatible multi-provider router (round-robin across multiple LLM plans) |
 | `openai` | Any OpenAI-compatible endpoint | Generic |
 
 ### Voice backends (optional)

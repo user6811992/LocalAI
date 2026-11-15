@@ -1,6 +1,6 @@
 {
   "name": "aegisai",
-  "version": "2.2.33",
+  "version": "2.2.34",
   "description": "AegisAI - local AI web UI with Ollama backend",
   "scripts": {
     "start": "node server.js",

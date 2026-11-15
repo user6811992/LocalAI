@@ -66,7 +66,7 @@ async function detectBackend() {
     if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
     OLLAMA = BACKEND_URL;
     try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata' || BACKEND_TYPE === 'robin');
     console.log('Backend (explicit):', BACKEND_TYPE, 'at', BACKEND_URL);
     return;
   }
@@ -85,7 +85,7 @@ async function detectBackend() {
         BACKEND_URL = p.url;
         OLLAMA = p.url;
         try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-        IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
+        IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata' || BACKEND_TYPE === 'robin');
         console.log('Auto-detected backend:', p.type, 'at', p.url);
         return;
       }
@@ -97,7 +97,7 @@ async function detectBackend() {
     BACKEND_URL = BACKEND_URL || 'http://127.0.0.1:11434';
     OLLAMA = BACKEND_URL;
     try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata' || BACKEND_TYPE === 'robin');
     console.log('No backend detected; defaulting to Ollama at', BACKEND_URL);
   }
 }
@@ -110,7 +110,7 @@ if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
 if (!BACKEND_TYPE) BACKEND_TYPE = '';   // empty => auto-detect
 OLLAMA = BACKEND_URL;
 let OLLAMA_URL = new URL(OLLAMA);
-let IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
+let IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata' || BACKEND_TYPE === 'robin');
 
 // ---------- Multi-backend adapter ----------
 // Normalizes OpenAI-compatible backends (llama.cpp, LM Studio) to Ollama format
@@ -1757,6 +1757,18 @@ async function runAgent(model, messages, maxIter, opts) {
   const craftHint = (craftReady && includeRe) ? ' You also have CRAFT ANYTHING tools (craft_* prefixed) for deep reverse engineering analysis (320 tools covering native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files).' : '';
   const cleanRoomHint = cleanRoom ? ' CLEAN ROOM MODE: Do NOT read, view, or access any original source code, binaries, or files from the target. Work only from visible behavior: screenshots, UI layout, text content, and observable functionality. Refuse any tool that would read original code or files. If the user asks to read source, explain that clean room mode prevents this and suggest switching to Deep mode.' : '';
   const systemMsg = { role: 'system', content: 'You are a helpful local AI assistant with access to tools for coding, file operations, web search, and reverse engineering. When using tools, always explain what you are doing and why. If a tool call fails, try an alternative approach or ask the user for guidance. Be concise but thorough. Never fabricate tool results — always use the available tools to get real data.' + areHint + craftHint + cleanRoomHint };
+
+  // Agent audit trace (SkillFlow-inspired): immutable record of all agent steps
+  const auditTrace = [];
+  function auditLog(step, detail) {
+    const entry = { ts: new Date().toISOString(), iter: step, ...detail };
+    auditTrace.push(entry);
+    try {
+      const traceFile = path.join(DATA_DIR, 'agent-audit.jsonl');
+      fs.appendFileSync(traceFile, JSON.stringify(entry) + '\n');
+    } catch (_) {}
+  }
+  auditLog(0, { type: 'start', model, toolCount: tools.length, maxIter, cleanRoom, confirmTools });
   let finalThinking = '';
   let totalEvalCount = 0;
   let totalPromptEvalCount = 0;
@@ -1881,11 +1893,14 @@ async function runAgent(model, messages, maxIter, opts) {
           continue;
         }
       }
+      const toolStart = Date.now();
+      auditLog(iter, { type: 'tool_call', name, args: JSON.stringify(args || {}).slice(0, 500) });
       try {
         if (cleanRoom && isCleanRoomBlocked(name)) result = 'BLOCKED: this tool is disabled in clean room mode.';
         else if (codingToolNames.has(name)) result = await execCodingTool(name, args || {});
         else result = await callMcpTool(name, args);
       } catch (e) { result = 'ERROR: ' + (e.message || String(e)); }
+      auditLog(iter, { type: 'tool_result', name, duration_ms: Date.now() - toolStart, resultPreview: (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 200) });
       const resultStr = (typeof result === 'string' ? result : JSON.stringify(result));
       msgs.push({ role: 'tool', content: resultStr });
       const resultPreview = resultStr.slice(0, 300);
