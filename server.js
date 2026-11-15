@@ -16,6 +16,10 @@ let BACKEND_URL = process.env.BACKEND_URL || process.env.OLLAMA_URL || '';
 let OLLAMA = BACKEND_URL || 'http://127.0.0.1:11434';
 // API key for backends that require authentication (e.g., Strata uses sk-strata-...).
 let BACKEND_API_KEY = process.env.BACKEND_API_KEY || '';
+// Voice: STT (speech-to-text) and TTS (text-to-speech) backend URLs.
+// Defaults to the main backend URL; override with STT_URL / TTS_URL.
+let STT_URL = process.env.STT_URL || '';
+let TTS_URL = process.env.TTS_URL || '';
 const PUBLIC = path.join(__dirname, 'public');
 
 // Try to auto-detect Strata API key from its config files.
@@ -3173,6 +3177,79 @@ const server = http.createServer(async (req, res) => { try {
     } catch (e) {
       json(res, 503, { ok: false, backend: BACKEND_TYPE, url: BACKEND_URL, message: 'Backend not reachable: ' + (e.message || String(e)), hint: 'Start the backend server (llama-server, Ollama, or LM Studio) and click Refresh.' });
     }
+    return;
+  }
+
+  // ---------- Voice: Speech-to-Text (STT) ----------
+  if (req.url === '/api/transcribe' && req.method === 'POST') {
+    try {
+      const sttBase = STT_URL || BACKEND_URL || OLLAMA;
+      // Read the raw body (audio file as multipart or raw)
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      await new Promise((resolve, reject) => { req.on('end', resolve); req.on('error', reject); });
+      const body = Buffer.concat(chunks);
+      const contentType = req.headers['content-type'] || 'audio/webm';
+      // Forward to STT backend (OpenAI-compatible /v1/audio/transcriptions)
+      const sttHeaders = { 'Content-Type': contentType };
+      if (BACKEND_API_KEY) sttHeaders['Authorization'] = 'Bearer ' + BACKEND_API_KEY;
+      const r = await fetch(sttBase + '/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: sttHeaders,
+        body,
+      });
+      if (!r.ok) {
+        const errText = await r.text();
+        json(res, r.status, { error: 'STT failed: ' + r.status + ' ' + errText });
+        return;
+      }
+      const data = await r.json();
+      json(res, 200, { text: data.text || '', language: data.language || '', duration: data.duration || 0 });
+    } catch (e) {
+      json(res, 502, { error: 'STT backend not reachable: ' + (e.message || String(e)), hint: 'Set STT_URL to a speech-to-text server (e.g., G3_Whisper) and ensure it is running.' });
+    }
+    return;
+  }
+
+  // ---------- Voice: Text-to-Speech (TTS) ----------
+  if (req.url === '/api/speak' && req.method === 'POST') {
+    try {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      await new Promise((resolve, reject) => { req.on('end', resolve); req.on('error', reject); });
+      const args = JSON.parse(body || '{}');
+      const text = args.text || '';
+      const voice = args.voice || 'default';
+      const ttsBase = TTS_URL || BACKEND_URL || OLLAMA;
+      const ttsHeaders = { 'Content-Type': 'application/json' };
+      if (BACKEND_API_KEY) ttsHeaders['Authorization'] = 'Bearer ' + BACKEND_API_KEY;
+      const r = await fetch(ttsBase + '/v1/audio/speech', {
+        method: 'POST',
+        headers: ttsHeaders,
+        body: JSON.stringify({ input: text, voice, model: 'tts-1', response_format: 'wav' }),
+      });
+      if (!r.ok) {
+        const errText = await r.text();
+        json(res, r.status, { error: 'TTS failed: ' + r.status + ' ' + errText });
+        return;
+      }
+      const audioBuf = Buffer.from(await r.arrayBuffer());
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': audioBuf.length });
+      res.end(audioBuf);
+    } catch (e) {
+      json(res, 502, { error: 'TTS backend not reachable: ' + (e.message || String(e)), hint: 'Set TTS_URL to a text-to-speech server (e.g., G3_TADA) and ensure it is running.' });
+    }
+    return;
+  }
+
+  // ---------- Voice: capabilities check ----------
+  if (req.url === '/api/voice-caps' && req.method === 'GET') {
+    const sttBase = STT_URL || BACKEND_URL || '';
+    const ttsBase = TTS_URL || BACKEND_URL || '';
+    let sttOk = false, ttsOk = false;
+    try { const r = await fetch(sttBase + '/v1/models', { signal: AbortSignal.timeout(3000) }); sttOk = r.ok; } catch (_) {}
+    try { const r = await fetch(ttsBase + '/v1/models', { signal: AbortSignal.timeout(3000) }); ttsOk = r.ok; } catch (_) {}
+    json(res, 200, { stt: { url: sttBase, available: sttOk }, tts: { url: ttsBase, available: ttsOk } });
     return;
   }
 

@@ -7,7 +7,8 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 ## Features
 
 - **Chat UI** — clean, responsive web interface with thinking-block display, Markdown rendering, and code highlighting
-- **Model management** — pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
+- **Model management** - pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
+- **Voice (optional)** - speech-to-text input and text-to-speech output via OpenAI-compatible audio backends (G3_Whisper for STT, G3_TADA for TTS). Set `STT_URL` and `TTS_URL` env vars. Browser-based Web Speech API and speechSynthesis also supported.
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
 - **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
@@ -101,6 +102,20 @@ OpenAI-compatible backend. Set the environment variables before starting:
 | `lmstudio` | LM Studio | OpenAI-compatible |
 | `strata` | Strata | OpenAI-compatible, broad hardware support (NVIDIA, AMD, Intel Arc, Apple Silicon) |
 | `openai` | Any OpenAI-compatible endpoint | Generic |
+
+### Voice backends (optional)
+
+AegisAI supports optional speech-to-text (STT) and text-to-speech (TTS) via
+OpenAI-compatible audio backends. Set `STT_URL` and `TTS_URL` env vars:
+
+| Variable | Backend | API | Example |
+|---|---|---|---|
+| `STT_URL` | G3_Whisper | `POST /v1/audio/transcriptions` | `http://127.0.0.1:8001` |
+| `TTS_URL` | G3_TADA | `POST /v1/audio/speech` | `http://127.0.0.1:7878` |
+
+Browser-based Web Speech API (input) and speechSynthesis (output) are also
+supported without any backend. Set `BACKEND_API_KEY` if the audio backend
+requires authentication.
 
 ```bash
 # Example: llama.cpp
