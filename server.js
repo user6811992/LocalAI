@@ -14,7 +14,46 @@ const HOST = process.env.HOST || '127.0.0.1';
 let BACKEND_TYPE = (process.env.BACKEND_TYPE || '').toLowerCase();
 let BACKEND_URL = process.env.BACKEND_URL || process.env.OLLAMA_URL || '';
 let OLLAMA = BACKEND_URL || 'http://127.0.0.1:11434';
+// API key for backends that require authentication (e.g., Strata uses sk-strata-...).
+let BACKEND_API_KEY = process.env.BACKEND_API_KEY || '';
 const PUBLIC = path.join(__dirname, 'public');
+
+// Try to auto-detect Strata API key from its config files.
+function detectStrataApiKey() {
+  if (BACKEND_API_KEY) return; // already set
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, '.config', 'strata'),
+    path.join(home, '.strata'),
+  ];
+  for (const dir of candidates) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      // Search recursively for launch-presets or config files with api key
+      const walk = (d) => {
+        const entries = fs.readdirSync(d, { withFileTypes: true });
+        for (const e of entries) {
+          const full = path.join(d, e.name);
+          if (e.isDirectory()) { walk(full); continue; }
+          if (!e.name.endsWith('.json')) continue;
+          try {
+            const data = JSON.parse(fs.readFileSync(full, 'utf8'));
+            const key = data.api_key || data.apiKey || data.key || (data.server && (data.server.api_key || data.server.apiKey));
+            if (key && typeof key === 'string' && key.startsWith('sk-')) {
+              BACKEND_API_KEY = key;
+              return;
+            }
+          } catch (_) {}
+        }
+      };
+      walk(dir);
+      if (BACKEND_API_KEY) return;
+    } catch (_) {}
+  }
+}
 
 // Auto-detect backend if not explicitly configured. Probes common backend ports.
 async function detectBackend() {
@@ -80,7 +119,9 @@ async function backendListModels() {
     return r.json();
   }
   // OpenAI-compatible: GET /v1/models
-  const r = await fetch(OLLAMA + '/v1/models');
+  const headers = { 'Content-Type': 'application/json' };
+  if (BACKEND_API_KEY) headers['Authorization'] = 'Bearer ' + BACKEND_API_KEY;
+  const r = await fetch(OLLAMA + '/v1/models', { headers });
   if (!r.ok) throw new Error('Failed to list models: ' + r.status);
   const data = await r.json();
   const models = (data.data || []).map((m) => ({
@@ -123,9 +164,11 @@ async function backendChat(bodyObj, onChunk, signal) {
     oaiBody.tools = bodyObj.tools;
     oaiBody.tool_choice = 'auto';
   }
+  const chatHeaders = { 'Content-Type': 'application/json' };
+  if (BACKEND_API_KEY) chatHeaders['Authorization'] = 'Bearer ' + BACKEND_API_KEY;
   const r = await fetch(OLLAMA + '/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: chatHeaders,
     body: JSON.stringify(oaiBody),
     signal,
   });
@@ -4202,6 +4245,7 @@ const server = http.createServer(async (req, res) => { try {
 
 if (require.main === module) {
   (async () => {
+    detectStrataApiKey();
     await detectBackend();
     if (!getAuthToken() && HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
       if (process.env.AEGISAI_DOCKER === '1') {
