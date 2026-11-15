@@ -433,6 +433,7 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[linxuhao / Robin](https://github.com/linxuhao/robin-router)** - Multi-provider LLM router (MIT License)
 - **[havok2-htwo / G3_Whisper](https://github.com/havok2-htwo/G3_Whisper)** - Speech-to-text server
 - **[havok2-htwo / G3_TADA](https://github.com/havok2-htwo/G3_TADA)** - Text-to-speech server
+- **[Cloudflare / Cloudflare OS](https://github.com/cloudflare/cloudflare-os)** - Agent workspace (Apache-2.0). Capability-based security and human-in-the-loop via simulation concepts.
 
 ### Vendored frontend libraries
 
