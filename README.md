@@ -253,6 +253,8 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **jshook-reverse-tool** | AI-powered JavaScript reverse engineering tool (TypeScript). | [github.com/wuji66dde/jshook-reverse-tool](https://github.com/wuji66dde/jshook-reverse-tool) |
 | **reverser_ai** | Automated reverse engineering with local LLMs on consumer hardware. | [github.com/mrphrazer/reverser_ai](https://github.com/mrphrazer/reverser_ai) |
 | **android-reverse-engineering-skill** | Claude Code skill for Android APK reverse engineering (jadx, Kotlin name recovery, API extraction). | [github.com/SimoneAvogadro/android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill) |
+| **rizin / Cutter** | Free and open-source RE platform powered by rizin (radare2 fork). 20.2k stars. Alternative disassembler/debugger. | [github.com/rizinorg/cutter](https://github.com/rizinorg/cutter) |
+| **reverse-skills (P4nda0s)** | Reverse engineering skills for Claude Code. Complements reverse-skill. | [github.com/P4nda0s/reverse-skills](https://github.com/P4nda0s/reverse-skills) |
 
 ## Installer (Linux / macOS)
 
@@ -441,6 +443,8 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[wuji66dde / jshook-reverse-tool](https://github.com/wuji66dde/jshook-reverse-tool)** - JS reverse engineering tool (TypeScript)
 - **[SimoneAvogadro / android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill)** - Android RE skill (Apache-2.0)
 - **[mrphrazer / reverser_ai](https://github.com/mrphrazer/reverser_ai)** - Automated RE with local LLMs
+- **[rizinorg / rizin](https://github.com/rizinorg/rizin)** - Reverse engineering framework (LGPL-3.0)
+- **[P4nda0s / reverse-skills](https://github.com/P4nda0s/reverse-skills)** - RE skills for Claude Code
 - **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
 - **[LaurentZuijdwijk / llama.cpp (adaptive fork)](https://github.com/LaurentZuijdwijk/llama.cpp)** - Adaptive speculative decoding fork (MIT License)
 - **[syv-ai / HyperQwen](https://github.com/syv-ai/HyperQwen)** - High-throughput Qwen server (vLLM-based)
