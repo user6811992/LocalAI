@@ -261,9 +261,21 @@ Next
 If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
   Dim npmExe
   npmExe = "npm"
-  If fso.FileExists("C:\Program Files\nodejs\npm.cmd") Then npmExe = """C:\Program Files\nodejs\npm.cmd"""
+  If fso.FileExists(base & "\runtime\node\npm.cmd") Then
+    npmExe = """" & base & "\runtime\node\npm.cmd"""
+  ElseIf fso.FileExists("C:\Program Files\nodejs\npm.cmd") Then
+    npmExe = """C:\Program Files\nodejs\npm.cmd"""
+  End If
   wshShell.Run "cmd /c cd /d """ & base & """ && " & npmExe & " install", 1, True
   WScript.Sleep 2000
+  If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
+    MsgBox "Dependencies could not be installed." & vbCrLf & vbCrLf & _
+           "Please run manually:" & vbCrLf & _
+           "cd """ & base & """" & vbCrLf & _
+           "npm install" & vbCrLf & vbCrLf & _
+           "Then re-run launcher.vbs.", vbExclamation, "AegisAI Launcher"
+    WScript.Quit 1
+  End If
 End If
 
 If Not portOpen Then
@@ -280,11 +292,12 @@ If Not portOpen Then
   Else
     wshShell.Environment("Process")("HOST") = "127.0.0.1"
   End If
-  wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js", 0, False
-  ' Wait up to 20s for the server to become ready
+  ' Start server with output redirected to a log file for diagnostics
+  wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js > """ & base & "\server.log"" 2>&1", 0, False
+  ' Wait up to 30s for the server to become ready
   Dim serverReady, serverWait
   serverReady = False
-  For serverWait = 1 To 20
+  For serverWait = 1 To 30
     WScript.Sleep 1000
     On Error Resume Next
     If useServerXml Then
@@ -301,6 +314,12 @@ If Not portOpen Then
     Set http = Nothing
     If serverReady Then Exit For
   Next
+  If Not serverReady Then
+    MsgBox "AegisAI server did not start within 30 seconds." & vbCrLf & vbCrLf & _
+           "Check the log file for errors:" & vbCrLf & base & "\server.log" & vbCrLf & vbCrLf & _
+           "Common causes: Node.js not found, missing dependencies (run npm install), or port 8080 in use.", _
+           vbExclamation, "AegisAI Launcher"
+  End If
 End If
 
 ' Build the app URL, appending the auth token so the web UI auto-populates it.
