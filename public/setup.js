@@ -76,14 +76,19 @@ async function renderOllama() {
   setupData.backend = backend;
   setupData.backendUrl = backendUrl;
   if (backend !== 'ollama') {
-    // Non-Ollama backend: Ollama is not required.
-    setupData.ollamaOk = true;
+    // Non-Ollama backend: check if it's reachable
+    let backendOk = false;
+    try {
+      const tr = await fetch(backendUrl + '/v1/models');
+      backendOk = tr.ok;
+    } catch (e) { backendOk = false; }
+    setupData.ollamaOk = backendOk;
     stepContent.innerHTML = `
       <h2>Backend</h2>
       <p>AegisAI is configured to use a non-Ollama backend.</p>
-      <div class="check ok">
-        <span class="icon">&#10003;</span>
-        <span class="label">Backend: ${esc(backend)} at ${esc(backendUrl)}</span>
+      <div class="check ${backendOk ? 'ok' : 'fail'}">
+        <span class="icon">${backendOk ? '&#10003;' : '&#10007;'}</span>
+        <span class="label">Backend: ${esc(backend)} at ${esc(backendUrl)} ${backendOk ? '(reachable)' : '(not reachable)'}</span>
       </div>
       <p style="font-size:12px;color:var(--muted);">Make sure the backend server is running and reachable before continuing. Models are managed by the backend itself.</p>
     `;

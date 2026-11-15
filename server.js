@@ -2861,8 +2861,17 @@ const server = http.createServer(async (req, res) => { try {
     areReady = false; areError = null; areClient = null; areTools = [];
     ghidraReady = false; ghidraError = null; ghidraClient = null; ghidraTools = [];
     craftReady = false; craftError = null; craftClient = null; craftTools = [];
+    // Wait briefly for old processes to fully terminate
+    await new Promise((r) => setTimeout(r, 1000));
     const _t = (ms) => new Promise((r) => setTimeout(r, ms));
-    await Promise.race([initMcp(), _t(20000)]);
+    // Retry initMcp up to 2 times (old process may still be releasing port)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await Promise.race([initMcp(), _t(20000)]);
+        if (mcpReady) break;
+      } catch (e) { mcpError = e.message; }
+      if (!mcpReady && attempt < 1) await new Promise((r) => setTimeout(r, 2000));
+    }
     await Promise.race([initAwesomeReMcp(), _t(20000)]);
     await Promise.race([initGhidrAssistMcp(), _t(10000)]);
     await Promise.race([initCraftMcp(), _t(20000)]);
@@ -3136,7 +3145,11 @@ const server = http.createServer(async (req, res) => { try {
         const text = await r.text();
         let d = {};
         try { d = JSON.parse(text); } catch (e) { d = { message: text }; }
-        if (!r.ok) { json(res, r.status, { ok: false, message: d.error || d.message || ('HTTP ' + r.status) }); return; }
+        // Check for error indicators in body even on 200
+        if (!r.ok || (d.error && !d.success)) {
+          json(res, r.ok ? 400 : r.status, { ok: false, message: d.error || d.message || ('HTTP ' + r.status) });
+          return;
+        }
         json(res, 200, { ok: true, message: d.message || ('Loaded ' + modelPath) });
       } catch (e) {
         json(res, 502, { ok: false, message: 'Backend unreachable: ' + (e.message || e) });
@@ -4200,7 +4213,7 @@ const server = http.createServer(async (req, res) => { try {
         if (redirects > 5) { reject(new Error('Too many redirects')); return; }
         const lib = downloadUrl.startsWith('https') ? https : http;
         const file = fs.createWriteStream(destPath);
-        lib.get(downloadUrl, { headers: { 'User-Agent': 'AegisAI' } }, (r) => {
+        const req = lib.get(downloadUrl, { headers: { 'User-Agent': 'AegisAI' } }, (r) => {
           if (r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) {
             const loc = r.headers.location;
             r.resume();
@@ -4215,6 +4228,7 @@ const server = http.createServer(async (req, res) => { try {
           file.on('finish', () => { file.close(); resolve(destPath); });
           file.on('error', (e) => { fs.unlinkSync(destPath); reject(e); });
         }).on('error', (e) => { try { fs.unlinkSync(destPath); } catch (_) {} reject(e); });
+      req.setTimeout(600000, () => { req.destroy(new Error('Download timeout (10 min)')); });
       });
       const savedPath = await download(url.trim(), 0);
       json(res, 200, { ok: true, message: 'Downloaded ' + safeFilename, path: savedPath });
@@ -4441,11 +4455,14 @@ const server = http.createServer(async (req, res) => { try {
   }
   // Explicit /api/chat handler for OpenAI-compatible backends
   if (req.url === '/api/chat' && req.method === 'POST' && IS_OPENAI_COMPAT) {
+    const ac = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) ac.abort(); });
     try {
       const body = await readBody(req);
       const bodyObj = JSON.parse(body || '{}');
       // Stream Ollama-format JSON lines
-      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'Transfer-Encoding': 'chunked', 'X-Accel-Buffering': 'no' });
+      res.flushHeaders();
       const result = await backendChat(bodyObj, (chunk) => {
         if (chunk.type === 'token') {
           res.write(JSON.stringify({ message: { content: chunk.content }, done: false }) + '\\n');
@@ -4453,7 +4470,7 @@ const server = http.createServer(async (req, res) => { try {
         if (chunk.type === 'thinking') {
           res.write(JSON.stringify({ message: { thinking: chunk.content }, done: false }) + '\\n');
         }
-      }, null);
+      }, ac.signal);
       const msg = (result && result.data && result.data.message) || {};
       res.write(JSON.stringify({ message: { content: msg.content || '', thinking: msg.thinking || '' }, done: true, eval_count: (result && result.data && result.data.eval_count) || 0, prompt_eval_count: (result && result.data && result.data.prompt_eval_count) || 0 }) + '\\n');
       res.end();
