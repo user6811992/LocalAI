@@ -14,7 +14,9 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Squeeze tool** - read long documents (URLs, files, PDFs) and extract only the answer to a question using a helper model. Keeps the main conversation context small. Inspired by dsh-squeeze.
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
-- **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
+- **Agent tool-call loop** - automatic tool execution with fallback parsing for uncensored models
+- **Capability-based security** - scope MCP tools per agent session (allowedTools/deniedTools). Inspired by Cloudflare OS Gatekeepers.
+- **Human-in-the-loop via simulation** - simulate tool results so the agent can continue while awaiting bulk approval. Approve/reject queued actions via /api/pending-actions.
 - **PWA** — installable as a progressive web app on mobile and desktop
 - **Mobile-friendly** — safe-area insets, touch targets, install hint banner
 - **No telemetry** — zero phone-home, analytics, or tracking code

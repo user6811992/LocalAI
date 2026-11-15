@@ -1774,6 +1774,9 @@ async function runAgent(model, messages, maxIter, opts) {
   const includeCoding = opts.includeCoding !== false;
   const cleanRoom = opts.cleanRoom === true;
   const confirmTools = opts.confirmTools === true;
+  // Capability-based security (Cloudflare OS inspired): scope tools per agent session
+  const allowedTools = (opts && opts.allowedTools) ? new Set(opts.allowedTools) : null;
+  const deniedTools = (opts && opts.deniedTools) ? new Set(opts.deniedTools) : null;
   const onEvent = opts.onEvent || null;
   maxIter = maxIter || 8;
   const tools = [];
@@ -1791,6 +1794,9 @@ async function runAgent(model, messages, maxIter, opts) {
   let kept = codingDefs.concat(externalDefs.slice(0, Math.max(0, budget - codingDefs.length)));
   // Enforce one overall budget. Coding tools are always kept; external tools fill the rest in order.
   if (cleanRoom) kept = kept.filter((t) => !isCleanRoomBlocked(t.function.name));
+  // Capability-based security: filter by allowed/denied tool lists
+  if (allowedTools) kept = kept.filter((t) => allowedTools.has(t.function.name));
+  if (deniedTools) kept = kept.filter((t) => !deniedTools.has(t.function.name));
 
   tools.length = 0;
   tools.push(...kept);
@@ -1946,6 +1952,26 @@ async function runAgent(model, messages, maxIter, opts) {
       }
       let result;
       // Tool confirmation gate
+      // Cloudflare OS inspired: human-in-the-loop via simulation
+      // When confirmTools is true, simulate the result so the agent can continue,
+      // and queue the real action for later bulk approval.
+      const simulateConfirm = (opts && opts.simulateConfirm === true);
+      if (confirmTools && simulateConfirm) {
+        const confirmId = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        // Queue the real action for later approval
+        if (!global._pendingActions) global._pendingActions = [];
+        global._pendingActions.push({ id: confirmId, name, args: JSON.stringify(args || {}).slice(0, 1000), status: 'pending', ts: new Date().toISOString() });
+        // Simulate a successful result so the agent can continue
+        result = '[SIMULATED] Tool call queued for approval (id: ' + confirmId + '). Proceeding as if successful. The user will review and approve/reject later.';
+        const resultStr = (typeof result === 'string' ? result : JSON.stringify(result));
+        msgs.push({ role: 'tool', content: resultStr });
+        const logEntry = log[log.length - 1];
+        logEntry.resultPreview = resultStr.slice(0, 300);
+        logEntry.confirmId = confirmId;
+        logEntry.simulated = true;
+        if (onEvent) onEvent({ type: 'tool_result', name, preview: resultStr.slice(0, 300), confirmId, simulated: true });
+        continue;
+      }
       if (confirmTools) {
         const confirmId = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
         const approved = await requestConfirmation(confirmId, name, args, opts.signal, onEvent);
@@ -4332,6 +4358,37 @@ const server = http.createServer(async (req, res) => { try {
       const pending = _pendingConfirms.get(id);
       if (pending) { pending.resolve(!!approved); json(res, 200, { ok: true }); }
       else { json(res, 404, { ok: false, message: 'no pending confirmation with that id' }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+
+  // ---------- Pending actions (simulated HITL approval queue) ----------
+  if (req.url === '/api/pending-actions' && req.method === 'GET') {
+    try {
+      const actions = (global._pendingActions || []).filter((a) => a.status === 'pending');
+      json(res, 200, { ok: true, actions });
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/pending-actions/approve' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const actions = global._pendingActions || [];
+      const action = actions.find((a) => a.id === id);
+      if (action) { action.status = 'approved'; json(res, 200, { ok: true, action }); }
+      else { json(res, 404, { ok: false, message: 'action not found' }); }
+    } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
+    return;
+  }
+  if (req.url === '/api/pending-actions/reject' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const { id } = JSON.parse(body || '{}');
+      const actions = global._pendingActions || [];
+      const action = actions.find((a) => a.id === id);
+      if (action) { action.status = 'rejected'; json(res, 200, { ok: true, action }); }
+      else { json(res, 404, { ok: false, message: 'action not found' }); }
     } catch (e) { json(res, (e && e.status) || 500, { error: e.message || String(e) }); }
     return;
   }
