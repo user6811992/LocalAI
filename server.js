@@ -1796,6 +1796,10 @@ async function runAgent(model, messages, maxIter, opts) {
   tools.push(...kept);
   const log = [];
   const webCitations = [];
+  // ReAct safety: track tool calls to prevent infinite loops (cortex-flow inspired)
+  const toolCallHistory = new Set();
+  let consecutiveSameTool = 0;
+  let lastToolName = '';
   const memBlock = '';
   const areHint = (areReady && includeRe) ? ' You also have REVERSE-ENGINEERING PROJECT SEARCH tools (are_search_reverse_engineered, are_get_reverse_engineered_project, are_list_reverse_engineered_categories) backed by 17,000+ indexed open-source RE projects.' : '';
   const craftHint = (craftReady && includeRe) ? ' You also have CRAFT ANYTHING tools (craft_* prefixed) for deep reverse engineering analysis (320 tools covering native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files).' : '';
@@ -1922,6 +1926,24 @@ async function runAgent(model, messages, maxIter, opts) {
       if (typeof args === 'string') { try { args = JSON.parse(args); } catch (e) { args = {}; } }
       log.push({ name, args });
       if (onEvent) onEvent({ type: 'tool', name, args });
+      // ReAct safety: prevent infinite tool loops (cortex-flow inspired)
+      const callKey = name + '::' + JSON.stringify(args || {});
+      if (toolCallHistory.has(callKey)) {
+        const result = 'SKIPPED: identical tool call already made this run. Try a different approach.';
+        msgs.push({ role: 'tool', content: result });
+        if (onEvent) onEvent({ type: 'tool_result', name, preview: result.slice(0, 300) });
+        continue;
+      }
+      toolCallHistory.add(callKey);
+      if (name === lastToolName) { consecutiveSameTool++; } else { consecutiveSameTool = 1; lastToolName = name; }
+      if (consecutiveSameTool >= 4) {
+        const result = 'STOPPED: same tool called 4+ times consecutively. Breaking loop to prevent infinite repetition.';
+        msgs.push({ role: 'tool', content: result });
+        if (onEvent) onEvent({ type: 'tool_result', name, preview: result.slice(0, 300) });
+        // Force end of agent loop
+        iter = maxIter;
+        break;
+      }
       let result;
       // Tool confirmation gate
       if (confirmTools) {
