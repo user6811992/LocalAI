@@ -699,7 +699,7 @@ function mcpToolAsOllama(t, prefix, suffix) {
 // Clean-room mode must never reach tools that read original code, files, binaries,
 // or arbitrary code. Matched by exact name or by substring for RE tool families.
 const CLEAN_ROOM_EXACT = new Set([
-  'read_file', 'write_file', 'replace_in_file', 'list_files', 'run_command', 'run_python',
+  'read_file', 'write_file', 'replace_in_file', 'list_files', 'run_command', 'run_python', 'squeeze',
   'skill_run', 'skill_save', 'skill_get', 'git_status', 'git_diff', 'read_pdf', 'analyze_image',
   'speech_to_text', 'fetch_url', 'web_search',
 ]);
@@ -1362,6 +1362,49 @@ return skills.length ? skills.map((s) => s.name + ' � ' + s.description).join(
       return out.trim() || '(no text)';
     } catch (e) { return 'ERROR: ' + (e.stderr || e.message); }
   }
+  if (name === 'squeeze') {
+    const src = args.source || '';
+    const question = args.question || '';
+    const helperModel = args.model || model;
+    // Read the source content
+    let content = '';
+    if (/^https?:\/\//i.test(src)) {
+      try {
+        const http = require('http');
+        const https = require('https');
+        const lib = src.startsWith('https') ? https : http;
+        content = await new Promise((resolve, reject) => {
+          lib.get(src, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+            let data = '';
+            res.on('data', (c) => { data += c; });
+            res.on('end', () => resolve(data));
+          }).on('error', reject);
+        });
+      } catch (e) { return 'ERROR reading URL: ' + (e.message || String(e)); }
+    } else {
+      try {
+        const fp = safePath(src);
+        content = fs.readFileSync(fp, 'utf8');
+      } catch (e) { return 'ERROR reading file: ' + (e.message || String(e)); }
+    }
+    if (!content || content.length < 50) return 'Source too short or empty (' + (content || '').length + ' chars).';
+    // Truncate if too large
+    const maxChars = 100000;
+    if (content.length > maxChars) content = content.slice(0, maxChars) + '\n... (truncated)';
+    // Use helper model to extract answer
+    try {
+      const r = await ollamaRequest('/api/chat', {
+        model: helperModel,
+        messages: [
+          { role: 'system', content: 'You are a precise information extractor. Answer the question based ONLY on the provided text. Be concise. If the answer is not in the text, say "Not found in source."' },
+          { role: 'user', content: 'Question: ' + question + '\n\nSource material:\n' + content },
+        ],
+        stream: false,
+      });
+      const answer = (r && r.data && r.data.message && r.data.message.content) || 'No answer returned.';
+      return answer + '\n\nsqueeze: ok | source ' + (args.source || '').length + ' chars | helper: ' + helperModel;
+    } catch (e) { return 'ERROR: helper model failed: ' + (e.message || String(e)); }
+  }
   if (name === 'analyze_image') {
     const fs = require('fs');
     const fp = safePath(args.path);
@@ -1523,6 +1566,7 @@ const extraToolsDef = [
   { name: 'text_to_speech', description: 'Convert text to speech and save as WAV in project root (Windows SAPI). Optional voice param for voice selection. Optionally speak on server speakers.', parameters: { type: 'object', properties: { text: { type: 'string' }, filename: { type: 'string' }, speak: { type: 'boolean' }, voice: { type: 'string', description: 'Voice name (e.g. Microsoft Zira Desktop)' } }, required: ['text'] } },
   { name: 'speech_to_text', description: 'Transcribe a WAV audio file to text (Windows Speech Recognition). Optional language param (e.g. en-US, fr-FR).', parameters: { type: 'object', properties: { path: { type: 'string' }, language: { type: 'string', description: 'Language code (default: en-US)' } }, required: ['path'] } },
   { name: 'analyze_image', description: 'Analyze an image file (screenshot etc.) using a vision model and answer a question about it.', parameters: { type: 'object', properties: { path: { type: 'string' }, question: { type: 'string' }, model: { type: 'string' } }, required: ['path'] } },
+  { name: 'squeeze', description: 'Read a long document (URL, file, or PDF) and extract only the answer to a specific question using a helper model. Keeps the main conversation context small. Returns only the answer, not the full document.', parameters: { type: 'object', properties: { source: { type: 'string', description: 'URL, file path, or PDF path to read' }, question: { type: 'string', description: 'Question to answer about the source material' }, model: { type: 'string', description: 'Helper model to use (optional, defaults to current model)' } }, required: ['source', 'question'] } },
 ];
 
 // merge into codingToolsDef

@@ -11,6 +11,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Voice (optional)** - speech-to-text input and text-to-speech output via OpenAI-compatible audio backends (G3_Whisper for STT, G3_TADA for TTS). Set `STT_URL` and `TTS_URL` env vars. Browser-based Web Speech API and speechSynthesis also supported.
 - **Conversation branching** - fork any chat at any message point to explore different approaches. Branches are tracked with parent/child relationships. Navigate between branches with the Parent button. Inspired by context-management patterns from Private_Context_COW.
 - **Default skills** - ships with built-in skills: search-before-re, design-review, pr-review, doc-discipline (inspired by agent skill patterns from the community).
+- **Squeeze tool** - read long documents (URLs, files, PDFs) and extract only the answer to a question using a helper model. Keeps the main conversation context small. Inspired by dsh-squeeze.
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
 - **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
