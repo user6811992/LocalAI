@@ -475,6 +475,13 @@ the files themselves and listed here:
 
 No third-party logos, trademarks, or branding assets are included in this repository. All references are by name only for factual attribution.
 
+## Special Thanks
+
+A special thank you to **[AiGoesBurr](https://github.com/AiGoesBurr)** for reporting critical issues,
+contributing to the llama.cpp backend integration, and providing detailed feedback on
+Intel Arc support and Ollama compatibility. Your thorough bug reports and testing
+have significantly improved AegisAI's stability and cross-platform support.
+
 ## Contributing
 
 Contributions welcome! Please open an issue or pull request.
