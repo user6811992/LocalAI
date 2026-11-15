@@ -4524,6 +4524,16 @@ const DEFAULT_SKILLS = [
     description: 'Documentation discipline: what to write, where to put it, when to remove it. Ensures docs stay accurate and minimal.',
     code: "print('Doc rules: 1) Write docs next to code. 2) Remove stale docs. 3) Keep README as source of truth. 4) Update docs in same commit as code changes.')",
   },
+  {
+    name: 're-methodology',
+    description: 'Reverse engineering methodology router: APK/Android (jadx, apktool), binary (IDA/radare2/Ghidra), .NET (dnSpy), JS (deobfuscation), firmware (binwalk), malware (YARA). Inspired by reverse-skill routing matrix.',
+    code: "print('RE methodology: 1) Identify binary type. 2) Select appropriate tool (IDA/Ghidra/radare2). 3) Static analysis first, then dynamic. 4) Document findings. 5) Use MCP tools for automated analysis.')",
+  },
+  {
+    name: 're-convention',
+    description: 'RE naming conventions: Hungarian notation for variables, PascalCase for functions, descriptive names. Inspired by ghidra-mcp convention enforcement.',
+    code: "print('RE conventions: Functions=PascalCase with verb (ProcessData). Variables=camelCase with type prefix (dwCount, pszName). Structs=PascalCase. Constants=UPPER_SNAKE. Always document plate comments.')",
+  },
 ];
 function ensureDefaultSkills() {
   try {

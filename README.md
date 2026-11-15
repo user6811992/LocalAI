@@ -245,7 +245,9 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **IDAssist** | AI-powered reverse engineering plugin for IDA Pro | [github.com/symgraph/IDAssist](https://github.com/symgraph/IDAssist) |
 | **BinAssist** | LLM assistance plugin for Binary Ninja | [github.com/symgraph/BinAssist](https://github.com/symgraph/BinAssist) |
 | **REA** | Agentic RE toolset (229 tools) — bundled via MCP | [github.com/morluto/rea](https://github.com/morluto/rea) |
-| **Craft Anything** | 320 RE tools (native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files) — optional MCP via craft-anything-cli | [github.com/storytold/craft-anything](https://github.com/storytold/craft-anything) |
+| **Craft Anything** | 320 RE tools (native, .NET, Java, Android, Apple, Electron/JS, websites, firmware, packet captures, databases, game files) - optional MCP via craft-anything-cli | [github.com/storytold/craft-anything](https://github.com/storytold/craft-anything) |
+| **Ghidra MCP (bethington)** | 219 MCP tools for Ghidra (function analysis, data flow, P-code emulation, debugger integration). Alternative to GhidrAssistMCP. | [github.com/bethington/ghidra-mcp](https://github.com/bethington/ghidra-mcp) |
+| **IDA Pro MCP (mrexodia)** | AI-powered RE assistant for IDA Pro via MCP (decompilation, disassembly, xrefs, patching, debugging). Requires IDA Pro license. | [github.com/mrexodia/ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp) |
 
 ## Installer (Linux / macOS)
 
@@ -426,6 +428,9 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[Alex Gao / awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered)** — Curated RE index (MIT code, CC0 data)
 - **[symgraph / GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP)** — Ghidra MCP extension (MIT)
 - **[storytold / Craft Anything](https://github.com/storytold/craft-anything)** - RE engine (MIT/Apache-2.0). ArtCraft name/logos are trademarks of the ArtCraft Team.
+- **[bethington / ghidra-mcp](https://github.com/bethington/ghidra-mcp)** - Ghidra MCP server with 219 tools (Apache-2.0). Alternative to GhidrAssistMCP.
+- **[mrexodia / ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp)** - IDA Pro MCP server (MIT). For users with IDA Pro licenses.
+- **[zhaoxuya520 / reverse-skill](https://github.com/zhaoxuya520/reverse-skill)** - RE skill router pack (MIT). 44+ RE methodology skills.
 - **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
 - **[LaurentZuijdwijk / llama.cpp (adaptive fork)](https://github.com/LaurentZuijdwijk/llama.cpp)** - Adaptive speculative decoding fork (MIT License)
 - **[syv-ai / HyperQwen](https://github.com/syv-ai/HyperQwen)** - High-throughput Qwen server (vLLM-based)
