@@ -4534,6 +4534,11 @@ const DEFAULT_SKILLS = [
     description: 'RE naming conventions: Hungarian notation for variables, PascalCase for functions, descriptive names. Inspired by ghidra-mcp convention enforcement.',
     code: "print('RE conventions: Functions=PascalCase with verb (ProcessData). Variables=camelCase with type prefix (dwCount, pszName). Structs=PascalCase. Constants=UPPER_SNAKE. Always document plate comments.')",
   },
+  {
+    name: 'android-re',
+    description: 'Android reverse engineering methodology: APK/XAPK decompilation with jadx, API extraction (Retrofit, OkHttp, Ktor, Apollo), Kotlin name recovery from R8 obfuscation, call flow tracing. Inspired by android-reverse-engineering-skill.',
+    code: "print('Android RE: 1) Fingerprint APK (framework, HTTP stack, obfuscation). 2) Decompile with jadx. 3) Recover Kotlin names from metadata. 4) Extract API calls (Retrofit/OkHttp/Ktor/Apollo). 5) Trace call flows. 6) Analyze structure.')",
+  },
 ];
 function ensureDefaultSkills() {
   try {

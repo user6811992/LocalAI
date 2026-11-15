@@ -251,6 +251,8 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **Open ReverseLab** | AI RE workspace with desktop app, red/blue/both analysis, parallel goals, knowledge base, MCP tools for Ghidra/Frida/x64dbg/Rizin. | [github.com/LING71671/open-reverselab](https://github.com/LING71671/open-reverselab) |
 | **Integuru** | AI agent that builds permissionless integrations by reverse engineering platforms' internal APIs. | [github.com/Integuru-AI/Integuru](https://github.com/Integuru-AI/Integuru) |
 | **jshook-reverse-tool** | AI-powered JavaScript reverse engineering tool (TypeScript). | [github.com/wuji66dde/jshook-reverse-tool](https://github.com/wuji66dde/jshook-reverse-tool) |
+| **reverser_ai** | Automated reverse engineering with local LLMs on consumer hardware. | [github.com/mrphrazer/reverser_ai](https://github.com/mrphrazer/reverser_ai) |
+| **android-reverse-engineering-skill** | Claude Code skill for Android APK reverse engineering (jadx, Kotlin name recovery, API extraction). | [github.com/SimoneAvogadro/android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill) |
 
 ## Installer (Linux / macOS)
 
@@ -437,6 +439,8 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[LING71671 / open-reverselab](https://github.com/LING71671/open-reverselab)** - AI RE workspace (Apache-2.0)
 - **[Integuru-AI / Integuru](https://github.com/Integuru-AI/Integuru)** - API reverse engineering agent
 - **[wuji66dde / jshook-reverse-tool](https://github.com/wuji66dde/jshook-reverse-tool)** - JS reverse engineering tool (TypeScript)
+- **[SimoneAvogadro / android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill)** - Android RE skill (Apache-2.0)
+- **[mrphrazer / reverser_ai](https://github.com/mrphrazer/reverser_ai)** - Automated RE with local LLMs
 - **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
 - **[LaurentZuijdwijk / llama.cpp (adaptive fork)](https://github.com/LaurentZuijdwijk/llama.cpp)** - Adaptive speculative decoding fork (MIT License)
 - **[syv-ai / HyperQwen](https://github.com/syv-ai/HyperQwen)** - High-throughput Qwen server (vLLM-based)
