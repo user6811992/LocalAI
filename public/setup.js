@@ -58,7 +58,7 @@ function renderWelcome() {
   stepContent.innerHTML = `
     <h2>Welcome to AegisAI</h2>
     <p>This wizard will help you get started. It takes about a minute.</p>
-    <div class="check"><span class="icon">✓</span><span class="label">AegisAI web UI is running.</span></div>
+    <div class="check"><span class="icon">&#10003;</span><span class="label">AegisAI web UI is running.</span></div>
     <p style="font-size:12px;color:var(--muted);">You can re-run this wizard anytime from Settings.</p>
   `;
   setButtons(false, () => { currentStep = 1; renderStep(); }, 'Get started');
@@ -82,7 +82,7 @@ async function renderOllama() {
       <h2>Backend</h2>
       <p>AegisAI is configured to use a non-Ollama backend.</p>
       <div class="check ok">
-        <span class="icon">✓</span>
+        <span class="icon">&#10003;</span>
         <span class="label">Backend: ${esc(backend)} at ${esc(backendUrl)}</span>
       </div>
       <p style="font-size:12px;color:var(--muted);">Make sure the backend server is running and reachable before continuing. Models are managed by the backend itself.</p>
@@ -102,7 +102,7 @@ async function renderOllama() {
     <h2>Ollama backend</h2>
     <p>Ollama is the local LLM runtime that powers AegisAI.</p>
     <div class="check ${ok ? 'ok' : 'fail'}">
-      <span class="icon">${ok ? '✓' : '✗'}</span>
+      <span class="icon">${ok ? '&#10003;' : '&#10007;'}</span>
       <span class="label">${ok ? 'Ollama is running (' + ver + ').' : 'Ollama is not running.'}</span>
     </div>
     ${ok ? '' : `<p>Start Ollama and click Retry:</p>
@@ -140,7 +140,7 @@ async function renderModels() {
     stepContent.innerHTML = `
       <h2>Models</h2>
       <p>Models are managed by the ${esc(backend)} backend. Pull or load models using the backend's own tools.</p>
-      <div class="check ok"><span class="icon">✓</span><span class="label">Skipping Ollama model pull (backend: ${esc(backend)}).</span></div>
+      <div class="check ok"><span class="icon">&#10003;</span><span class="label">Skipping Ollama model pull (backend: ${esc(backend)}).</span></div>
     `;
     setButtons(true, () => { currentStep = 3; renderStep(); }, 'Next');
     return;

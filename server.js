@@ -4473,6 +4473,13 @@ const server = http.createServer(async (req, res) => { try {
 });
 
 if (require.main === module) {
+  // Startup check: ensure node_modules is present
+  const mcpSdkPath = path.join(__dirname, 'node_modules', '@modelcontextprotocol', 'sdk');
+  if (!fs.existsSync(mcpSdkPath)) {
+    console.error('ERROR: node_modules is missing. Run "npm install" in the app folder first.');
+    console.error('  cd ' + __dirname + ' && npm install');
+    process.exit(1);
+  }
   (async () => {
     detectStrataApiKey();
     await detectBackend();

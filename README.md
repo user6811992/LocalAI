@@ -135,6 +135,10 @@ ports at startup (Ollama 11434, LM Studio 1234, llama.cpp 8081, Strata 8082, Ope
 and auto-selects the first reachable one. Set `BACKEND_TYPE` explicitly to
 disable auto-detection.
 
+**Note:** When using llama.cpp backend, only use proper GGUF files from HuggingFace.
+Do not point llama-server at Ollama's internal blob files (sha256-*) as they may
+have incompatible metadata or tensor layouts.
+
 The adapter normalizes model listing, chat (streaming + tool calls), and model
 info to the Ollama shape the UI expects. Note: the UI's model dropdown is
 proxied to Ollama's `/api/tags`, so for OpenAI-compatible backends the list may
