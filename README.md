@@ -423,7 +423,14 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[morluto/rea](https://github.com/morluto/rea)** — Reverse engineering toolset
 - **[Alex Gao / awesome-reverse-engineered](https://github.com/alexgaoth/awesome-reverse-engineered)** — Curated RE index (MIT code, CC0 data)
 - **[symgraph / GhidrAssistMCP](https://github.com/symgraph/GhidrAssistMCP)** — Ghidra MCP extension (MIT)
-- **[storytold / Craft Anything](https://github.com/storytold/craft-anything)** — RE engine (MIT/Apache-2.0). ArtCraft name/logos are trademarks of the ArtCraft Team.
+- **[storytold / Craft Anything](https://github.com/storytold/craft-anything)** - RE engine (MIT/Apache-2.0). ArtCraft name/logos are trademarks of the ArtCraft Team.
+- **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
+- **[LaurentZuijdwijk / llama.cpp (adaptive fork)](https://github.com/LaurentZuijdwijk/llama.cpp)** - Adaptive speculative decoding fork (MIT License)
+- **[syv-ai / HyperQwen](https://github.com/syv-ai/HyperQwen)** - High-throughput Qwen server (vLLM-based)
+- **[turboderp-org / ExLlamaV3](https://github.com/turboderp-org/exllamav3)** - Optimized inference for consumer GPUs
+- **[linxuhao / Robin](https://github.com/linxuhao/robin-router)** - Multi-provider LLM router (MIT License)
+- **[havok2-htwo / G3_Whisper](https://github.com/havok2-htwo/G3_Whisper)** - Speech-to-text server
+- **[havok2-htwo / G3_TADA](https://github.com/havok2-htwo/G3_TADA)** - Text-to-speech server
 
 ### Vendored frontend libraries
 
