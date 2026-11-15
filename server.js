@@ -3104,6 +3104,21 @@ const server = http.createServer(async (req, res) => { try {
     return;
   }
 
+  if (req.url === '/api/backend-health' && req.method === 'GET') {
+    try {
+      const healthPath = IS_OPENAI_COMPAT ? '/v1/models' : '/api/version';
+      const r = await fetch(OLLAMA + healthPath, { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        json(res, 200, { ok: true, backend: BACKEND_TYPE, url: BACKEND_URL, status: r.status });
+      } else {
+        json(res, 503, { ok: false, backend: BACKEND_TYPE, url: BACKEND_URL, status: r.status, message: 'Backend returned HTTP ' + r.status });
+      }
+    } catch (e) {
+      json(res, 503, { ok: false, backend: BACKEND_TYPE, url: BACKEND_URL, message: 'Backend not reachable: ' + (e.message || String(e)), hint: 'Start the backend server (llama-server, Ollama, or LM Studio) and click Refresh.' });
+    }
+    return;
+  }
+
   // ---------- Error log endpoints ----------
   if (req.url === '/api/error-log' && req.method === 'GET') {
     try {

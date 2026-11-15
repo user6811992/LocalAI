@@ -146,11 +146,18 @@ Dim backendRunning
 backendRunning = False
 
 If LCase(backendType) = "llamacpp" Then
-  ' Discover llama-server binary
+  ' Discover llama-server binary (check more locations)
   Dim llamaDir
   llamaDir = ""
-  If fso.FileExists("C:\Program Files\llama.cpp\llama-server.exe") Then llamaDir = "C:\Program Files\llama.cpp"
-  If llamaDir = "" And fso.FileExists(wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\llama.cpp\llama-server.exe") Then llamaDir = wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\llama.cpp"
+  Dim llamaCandidates
+  llamaCandidates = Array("C:\Program Files\llama.cpp", "C:\Program Files (x86)\llama.cpp", _
+    wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Programs\llama.cpp", _
+    wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\llama.cpp", _
+    "C:\llama.cpp", "C:\tools\llama.cpp", "C:\llama-cpp")
+  Dim lc
+  For Each lc In llamaCandidates
+    If llamaDir = "" And fso.FileExists(lc & "\llama-server.exe") Then llamaDir = lc
+  Next
   If llamaDir = "" Then
     ' Try PATH
     Dim lexec, lout
@@ -158,7 +165,7 @@ If LCase(backendType) = "llamacpp" Then
     lout = lexec.StdOut.ReadAll()
     If Len(Trim(lout)) > 0 Then llamaDir = fso.GetParentFolderName(Trim(Split(lout, vbCrLf)(0)))
   End If
-  ' Check if backend port is already open
+  ' Check if backend port is already open (try /health, then /v1/models)
   Dim backendPort
   backendPort = "8081"
   Dim urlParts
@@ -170,28 +177,62 @@ If LCase(backendType) = "llamacpp" Then
   On Error Resume Next
   bhttp.Open "GET", backendUrl & "/health", False
   bhttp.Send
-  If Err.Number = 0 And bhttp.Status = 200 Then backendRunning = True
+  If Err.Number <> 0 Or bhttp.Status <> 200 Then
+    ' Try /v1/models as fallback health check
+    Err.Clear
+    bhttp.Open "GET", backendUrl & "/v1/models", False
+    bhttp.Send
+  End If
+  If Err.Number = 0 And (bhttp.Status = 200 Or bhttp.Status = 404) Then backendRunning = True
   Err.Clear
   On Error GoTo 0
   Set bhttp = Nothing
-  If Not backendRunning And llamaDir <> "" And backendModel <> "" Then
-    If fso.FileExists(llamaDir & "\llama-server.exe") And fso.FileExists(backendModel) Then
-      wshShell.Run """" & llamaDir & "\llama-server.exe"" -m """ & backendModel & """ --port " & backendPort, 0, False
-      ' Wait up to 15s for llama-server to be ready
+  ' Start llama-server if not running and model path is configured
+  If Not backendRunning Then
+    If llamaDir <> "" And backendModel <> "" And fso.FileExists(llamaDir & "\llama-server.exe") And fso.FileExists(backendModel) Then
+      ' Log to file for diagnostics
+      wshShell.Run "cmd /c """ & llamaDir & "\llama-server.exe"" -m """ & backendModel & """ --port " & backendPort & " > """ & base & "\llama-server.log"" 2>&1", 0, False
+      ' Wait up to 30s for llama-server to be ready
       Dim llamaReady, llamaWait
       llamaReady = False
-      For llamaWait = 1 To 15
+      For llamaWait = 1 To 30
         WScript.Sleep 1000
         Set bhttp = CreateObject("MSXML2.XMLHTTP")
         On Error Resume Next
         bhttp.Open "GET", backendUrl & "/health", False
         bhttp.Send
-        If Err.Number = 0 And bhttp.Status = 200 Then llamaReady = True
+        If Err.Number <> 0 Or bhttp.Status <> 200 Then
+          Err.Clear
+          bhttp.Open "GET", backendUrl & "/v1/models", False
+          bhttp.Send
+        End If
+        If Err.Number = 0 And (bhttp.Status = 200 Or bhttp.Status = 404) Then llamaReady = True
         Err.Clear
         On Error GoTo 0
         Set bhttp = Nothing
         If llamaReady Then Exit For
       Next
+      If Not llamaReady Then
+        MsgBox "llama-server did not start within 30 seconds." & vbCrLf & vbCrLf & _
+               "Model: " & backendModel & vbCrLf & _
+               "Port: " & backendPort & vbCrLf & vbCrLf & _
+               "Check the log: " & base & "\llama-server.log" & vbCrLf & vbCrLf & _
+               "You can also start it manually:" & vbCrLf & _
+               """" & llamaDir & "\llama-server.exe"" -m """ & backendModel & """ --port " & backendPort, _
+               vbExclamation, "AegisAI Launcher"
+      End If
+    ElseIf llamaDir = "" Then
+      MsgBox "llama-server.exe not found." & vbCrLf & vbCrLf & _
+             "Install llama.cpp from https://github.com/ggerganov/llama.cpp/releases" & vbCrLf & _
+             "and place it in C:\Program Files\llama.cpp\ or add to PATH." & vbCrLf & vbCrLf & _
+             "Then set BACKEND_MODEL in backend.txt to your .gguf file path.", _
+             vbExclamation, "AegisAI Launcher"
+    ElseIf backendModel = "" Then
+      MsgBox "No model path configured for llama.cpp." & vbCrLf & vbCrLf & _
+             "Edit backend.txt and add:" & vbCrLf & _
+             "BACKEND_MODEL=C:\path\to\your-model.gguf" & vbCrLf & vbCrLf & _
+             "Or re-run the installer to configure it.", _
+             vbExclamation, "AegisAI Launcher"
     End If
   End If
 End If
@@ -200,9 +241,12 @@ If LCase(backendType) = "lmstudio" Then
   ' Try to start LM Studio server via lms CLI
   Dim lmsPath
   lmsPath = ""
-  Set lexec = wshShell.Exec("cmd /c where lms 2>nul")
-  lout = lexec.StdOut.ReadAll()
-  If Len(Trim(lout)) > 0 Then lmsPath = Trim(Split(lout, vbCrLf)(0))
+  On Error Resume Next
+  Dim lexec2, lout2
+  Set lexec2 = wshShell.Exec("cmd /c where lms 2>nul")
+  lout2 = lexec2.StdOut.ReadAll()
+  If Len(Trim(lout2)) > 0 Then lmsPath = Trim(Split(lout2, vbCrLf)(0))
+  On Error GoTo 0
   ' Check if backend is already running
   Set bhttp = CreateObject("MSXML2.XMLHTTP")
   On Error Resume Next
@@ -213,8 +257,13 @@ If LCase(backendType) = "lmstudio" Then
   On Error GoTo 0
   Set bhttp = Nothing
   If Not backendRunning And lmsPath <> "" Then
-    wshShell.Run """" & lmsPath & """ server start", 0, False
+    wshShell.Run """" & lmsPath & """ server start", 0, True
     WScript.Sleep 5000
+  ElseIf Not backendRunning And lmsPath = "" Then
+    MsgBox "LM Studio CLI (lms) not found." & vbCrLf & vbCrLf & _
+           "Start LM Studio manually and enable the local server," & vbCrLf & _
+           "or install LM Studio from https://lmstudio.ai", _
+           vbExclamation, "AegisAI Launcher"
   End If
 End If
 
