@@ -140,7 +140,7 @@
     <span id="host" class="status"></span>
   </div>
   <div class="controls">
-    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.32</span>
+    <span id="versionBadge" style="font-size:11px;color:var(--muted);margin-right:6px;align-self:center;">v2.2.33</span>
     <button id="themeBtn" title="Toggle theme" style="padding:4px 8px;font-size:12px;">Theme</button>
     <span style="color:var(--border);">|</span>
     <select id="model" title="Model" style="max-width:200px;"></select>
@@ -185,6 +185,7 @@
     <button id="clear" style="padding:4px 8px;font-size:12px;">Clear</button>
     <button id="exportChat" style="padding:4px 8px;font-size:12px;">Export</button>
     <button id="branchChatBtn" style="padding:4px 8px;font-size:12px;">Branch</button>
+    <button id="parentChatBtn" style="padding:4px 8px;font-size:12px;display:none;">Parent</button>
     <button id="aboutBtn" onclick="openAbout()" style="padding:4px 8px;font-size:12px;">About</button>
     <input id="chatSearch" placeholder="Search..." style="width:120px;font-size:12px;padding:4px 8px;" />
   </div>
@@ -1676,7 +1677,31 @@
         currentChatId = d.id;
         status.textContent = 'Branched chat: ' + d.id;
         status.className = 'status';
+        // Show parent button
+        const parentBtn = document.getElementById('parentChatBtn');
+        if (parentBtn) parentBtn.style.display = 'inline-block';
       } catch (e) { status.textContent = 'Branch failed: ' + e.message; status.className = 'status err'; }
+    });
+  }
+  const parentChatBtn = document.getElementById('parentChatBtn');
+  if (parentChatBtn) {
+    parentChatBtn.addEventListener('click', async () => {
+      if (!currentChatId) return;
+      try {
+        const r = await fetch('/api/chats/' + currentChatId);
+        const d = await r.json();
+        if (d.parent_id) {
+          const pr = await fetch('/api/chats/' + d.parent_id);
+          const pd = await pr.json();
+          messages = pd.messages || [];
+          chat.innerHTML = '';
+          messages.forEach(m => addMsg(m.role, m.content));
+          currentChatId = pd.id;
+          status.textContent = 'Loaded parent: ' + pd.title;
+          status.className = 'status';
+          if (!pd.parent_id) parentChatBtn.style.display = 'none';
+        }
+      } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
     });
   }
 
@@ -3204,6 +3229,10 @@
             document.getElementById('chatsBackdrop').classList.remove('open');
             status.textContent = 'Loaded: ' + dd.title;
             status.className = 'status';
+            currentChatId = dd.id;
+            // Show parent button if this is a branch
+            const parentBtn = document.getElementById('parentChatBtn');
+            if (parentBtn) parentBtn.style.display = dd.parent_id ? 'inline-block' : 'none';
           } catch (e) { status.textContent = 'Error: ' + e.message; status.className = 'status err'; }
         });
         row.appendChild(title);

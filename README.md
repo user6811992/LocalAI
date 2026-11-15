@@ -9,6 +9,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Chat UI** — clean, responsive web interface with thinking-block display, Markdown rendering, and code highlighting
 - **Model management** - pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
 - **Voice (optional)** - speech-to-text input and text-to-speech output via OpenAI-compatible audio backends (G3_Whisper for STT, G3_TADA for TTS). Set `STT_URL` and `TTS_URL` env vars. Browser-based Web Speech API and speechSynthesis also supported.
+- **Conversation branching** - fork any chat at any message point to explore different approaches. Branches are tracked with parent/child relationships. Navigate between branches with the Parent button. Inspired by context-management patterns from Private_Context_COW.
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
 - **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
