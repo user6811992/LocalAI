@@ -36,6 +36,7 @@ Tested with:
 - **One** AI backend:
   - [Ollama](https://ollama.com/download) (default, recommended) — installed and running, **or**
   - [llama.cpp](https://github.com/ggerganov/llama.cpp) server, **or**
+  - [llama.cpp (adaptive fork)](https://github.com/LaurentZuijdwijk/llama.cpp) — adaptive speculative decoding, 4.7x on structured output (AMD Strix Halo), **or**
   - [LM Studio](https://lmstudio.ai), **or**
   - [Strata](https://github.com/Niko1221/Strata), **or**
   - any OpenAI-compatible endpoint

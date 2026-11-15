@@ -918,13 +918,25 @@ async function execCodingTool(name, args) {
     } finally { fs.closeSync(fd); }
     let text = slice.toString('utf8');
     if (total > max) text += '\n... (truncated, ' + total + ' bytes total)';
+    // Read dedup: if file unchanged since last read, return cached indicator
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256').update(text).digest('hex').slice(0, 12);
+    if (!global._fileReadCache) global._fileReadCache = new Map();
+    const prev = global._fileReadCache.get(fp);
+    if (prev && prev.hash === hash) {
+      return '(unchanged since last read — ' + args.path + ', ' + total + ' bytes, hash ' + hash + ')';
+    }
+    global._fileReadCache.set(fp, { hash, ts: Date.now() });
     return text;
   }
   if (name === 'write_file') {
     const fp = safePath(args.path);
     const dir = path.dirname(fp);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(fp, args.content, 'utf8');
+    // Atomic write: temp file + rename (prevents half-written files on interrupt)
+    const tmp = fp + '.tmp.' + process.pid;
+    fs.writeFileSync(tmp, args.content, 'utf8');
+    fs.renameSync(tmp, fp);
     return 'Wrote ' + fs.statSync(fp).size + ' bytes to ' + args.path;
   }
   if (name === 'run_command') {
@@ -952,7 +964,9 @@ async function execCodingTool(name, args) {
     const text = fs.readFileSync(fp, 'utf8');
     if (!text.includes(args.old_text)) return 'old_text not found in file.';
     const updated = text.replace(args.old_text, args.new_text);
-    fs.writeFileSync(fp, updated, 'utf8');
+    const tmp = fp + '.tmp.' + process.pid;
+    fs.writeFileSync(tmp, updated, 'utf8');
+    fs.renameSync(tmp, fp);
     return 'Replaced one occurrence in ' + args.path;
   }
   if (name === 'fetch_url') {
