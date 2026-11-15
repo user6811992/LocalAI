@@ -10,6 +10,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Model management** - pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
 - **Voice (optional)** - speech-to-text input and text-to-speech output via OpenAI-compatible audio backends (G3_Whisper for STT, G3_TADA for TTS). Set `STT_URL` and `TTS_URL` env vars. Browser-based Web Speech API and speechSynthesis also supported.
 - **Conversation branching** - fork any chat at any message point to explore different approaches. Branches are tracked with parent/child relationships. Navigate between branches with the Parent button. Inspired by context-management patterns from Private_Context_COW.
+- **Default skills** - ships with built-in skills: search-before-re, design-review, pr-review, doc-discipline (inspired by agent skill patterns from the community).
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
 - **Agent tool-call loop** — automatic tool execution with fallback parsing for uncensored models
@@ -103,6 +104,8 @@ OpenAI-compatible backend. Set the environment variables before starting:
 | `lmstudio` | LM Studio | OpenAI-compatible |
 | `strata` | Strata | OpenAI-compatible, broad hardware support (NVIDIA, AMD, Intel Arc, Apple Silicon) |
 | `robin` | Robin | OpenAI-compatible multi-provider router (round-robin across multiple LLM plans) |
+| `hyperqwen` | HyperQwen | vLLM-based high-throughput Qwen server (127 tok/s single, ~1035 tok/s at 64 concurrent) |
+| `exllamav3` | ExLlamaV3 | OpenAI-compatible, optimized for RTX 20xx (Turing) GPUs |
 | `openai` | Any OpenAI-compatible endpoint | Generic |
 
 ### Voice backends (optional)

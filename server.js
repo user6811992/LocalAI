@@ -4379,28 +4379,48 @@ if (require.main === module) {
   })().catch((e) => { console.error('Startup error:', e && e.message || e); process.exit(1); });
 }
 
-// ---------- Default skill: search before RE ----------
-const DEFAULT_SKILL_NAME = 'search-before-re';
-function ensureDefaultSkill() {
+// ---------- Default skills ----------
+const DEFAULT_SKILLS = [
+  {
+    name: 'search-before-re',
+    description: 'Search the awesome-reverse-engineered index (17,000+ projects) before starting any reverse engineering work. Avoids duplicating existing efforts.',
+    code: "print('Use are_search_reverse_engineered to find existing RE projects before starting new work.')",
+  },
+  {
+    name: 'design-review',
+    description: 'Review code design for abstraction quality, fallback patterns, external dependencies, and change impact. Checks: unnecessary abstraction, silent fallbacks, tight coupling, breaking changes.',
+    code: "print('Review checklist: 1) Is abstraction justified? 2) Are fallbacks explicit? 3) Are external deps minimized? 4) What is the blast radius of this change?')",
+  },
+  {
+    name: 'pr-review',
+    description: 'Simulate a PR review: check if code changes can be cleanly merged, identify conflicts, assess test coverage, and flag potential regressions.',
+    code: "print('PR review: 1) Does it merge cleanly? 2) Are tests added/updated? 3) Any regressions? 4) Is the change minimal and focused?')",
+  },
+  {
+    name: 'doc-discipline',
+    description: 'Documentation discipline: what to write, where to put it, when to remove it. Ensures docs stay accurate and minimal.',
+    code: "print('Doc rules: 1) Write docs next to code. 2) Remove stale docs. 3) Keep README as source of truth. 4) Update docs in same commit as code changes.')",
+  },
+];
+function ensureDefaultSkills() {
   try {
-    const fs = require('fs');
     const skills = loadSkills();
-    if (skills.find((s) => s.name === DEFAULT_SKILL_NAME)) return; // already exists
-    const skill = {
-      name: DEFAULT_SKILL_NAME,
-      description: 'Search the awesome-reverse-engineered index (17,000+ projects) before starting any reverse engineering work. Avoids duplicating existing efforts.',
-      code: "print('Use are_search_reverse_engineered to find existing RE projects before starting new work.')",
-      created: new Date().toISOString(),
-    };
-    skills.push(skill);
-    saveSkills(skills);
-    console.log('Default skill saved:', DEFAULT_SKILL_NAME);
+    let added = 0;
+    for (const ds of DEFAULT_SKILLS) {
+      if (skills.find((s) => s.name === ds.name)) continue;
+      skills.push({ name: ds.name, description: ds.description, code: ds.code, created: new Date().toISOString() });
+      added++;
+    }
+    if (added > 0) {
+      saveSkills(skills);
+      console.log('Default skills saved:', added, 'new');
+    }
   } catch (e) {
-    console.error('Failed to save default skill:', e.message);
+    console.error('Failed to save default skills:', e.message);
   }
 }
-// Save default skill after a short delay (let MCP init finish)
-if (require.main === module) setTimeout(ensureDefaultSkill, 5000);
+// Save default skills after a short delay (let MCP init finish)
+if (require.main === module) setTimeout(ensureDefaultSkills, 5000);
 
 // ---------- Nightly auto-refresh for ARE data ----------
 // Check every hour if data is older than 24 hours and refresh
