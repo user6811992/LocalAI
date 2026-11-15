@@ -23,15 +23,15 @@ async function detectBackend() {
     if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
     OLLAMA = BACKEND_URL;
     try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
     console.log('Backend (explicit):', BACKEND_TYPE, 'at', BACKEND_URL);
     return;
   }
   const probes = [
     { type: 'ollama', url: 'http://127.0.0.1:11434', path: '/api/version' },
     { type: 'lmstudio', url: 'http://127.0.0.1:1234', path: '/v1/models' },
-    { type: 'llamacpp', url: 'http://127.0.0.1:8080', path: '/v1/models' },
     { type: 'llamacpp', url: 'http://127.0.0.1:8081', path: '/v1/models' },
+    { type: 'strata', url: 'http://127.0.0.1:8082', path: '/v1/models' },
     { type: 'openai', url: 'http://127.0.0.1:8000', path: '/v1/models' },
   ];
   for (const p of probes) {
@@ -42,7 +42,7 @@ async function detectBackend() {
         BACKEND_URL = p.url;
         OLLAMA = p.url;
         try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-        IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+        IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
         console.log('Auto-detected backend:', p.type, 'at', p.url);
         return;
       }
@@ -54,7 +54,7 @@ async function detectBackend() {
     BACKEND_URL = BACKEND_URL || 'http://127.0.0.1:11434';
     OLLAMA = BACKEND_URL;
     try { OLLAMA_URL = new URL(OLLAMA); } catch (e) {}
-    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+    IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
     console.log('No backend detected; defaulting to Ollama at', BACKEND_URL);
   }
 }
@@ -67,7 +67,7 @@ if (!BACKEND_URL) BACKEND_URL = 'http://127.0.0.1:11434';
 if (!BACKEND_TYPE) BACKEND_TYPE = '';   // empty => auto-detect
 OLLAMA = BACKEND_URL;
 let OLLAMA_URL = new URL(OLLAMA);
-let IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai');
+let IS_OPENAI_COMPAT = (BACKEND_TYPE === 'llamacpp' || BACKEND_TYPE === 'lmstudio' || BACKEND_TYPE === 'openai' || BACKEND_TYPE === 'strata');
 
 // ---------- Multi-backend adapter ----------
 // Normalizes OpenAI-compatible backends (llama.cpp, LM Studio) to Ollama format

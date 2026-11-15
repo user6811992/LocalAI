@@ -165,12 +165,14 @@ if [ -t 0 ] || [ -r /dev/tty ]; then
   echo "  1) Ollama (default, recommended)"
   echo "  2) llama.cpp"
   echo "  3) LM Studio"
-  echo "  4) OpenAI-compatible"
+  echo "  4) Strata"
+  echo "  5) OpenAI-compatible"
   if [ -t 0 ]; then read -r -p "Choice [1]: " bchoice; else read -r -p "Choice [1]: " bchoice < /dev/tty; fi
   case "${bchoice:-1}" in
     2) BACKEND_TYPE="llamacpp"; BACKEND_URL="http://127.0.0.1:8081" ;;
     3) BACKEND_TYPE="lmstudio"; BACKEND_URL="http://127.0.0.1:1234" ;;
-    4) BACKEND_TYPE="openai"; BACKEND_URL="http://127.0.0.1:8000" ;;
+    4) BACKEND_TYPE="strata"; BACKEND_URL="http://127.0.0.1:8082" ;;
+    5) BACKEND_TYPE="openai"; BACKEND_URL="http://127.0.0.1:8000" ;;
     *) BACKEND_TYPE="ollama"; BACKEND_URL="http://127.0.0.1:11434" ;;
   esac
 fi

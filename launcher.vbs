@@ -267,6 +267,62 @@ If LCase(backendType) = "lmstudio" Then
   End If
 End If
 
+' ---------- Auto-start Strata backend ----------
+If LCase(backendType) = "strata" Then
+  ' Check if Strata is already running
+  Dim strataRunning
+  strataRunning = False
+  Set bhttp = CreateObject("MSXML2.XMLHTTP")
+  On Error Resume Next
+  bhttp.Open "GET", backendUrl & "/v1/models", False
+  bhttp.Send
+  If Err.Number = 0 And bhttp.Status = 200 Then strataRunning = True
+  Err.Clear
+  On Error GoTo 0
+  Set bhttp = Nothing
+  If Not strataRunning Then
+    ' Try to find strata CLI
+    Dim strataPath
+    strataPath = ""
+    On Error Resume Next
+    Dim lexec3, lout3
+    Set lexec3 = wshShell.Exec("cmd /c where strata 2>nul")
+    lout3 = lexec3.StdOut.ReadAll()
+    If Len(Trim(lout3)) > 0 Then strataPath = Trim(Split(lout3, vbCrLf)(0))
+    On Error GoTo 0
+    If strataPath <> "" Then
+      wshShell.Run """" & strataPath & """ launch --no-tui", 0, False
+      ' Wait up to 30s for Strata to be ready
+      Dim strataReady, strataWait
+      strataReady = False
+      For strataWait = 1 To 30
+        WScript.Sleep 1000
+        Set bhttp = CreateObject("MSXML2.XMLHTTP")
+        On Error Resume Next
+        bhttp.Open "GET", backendUrl & "/v1/models", False
+        bhttp.Send
+        If Err.Number = 0 And bhttp.Status = 200 Then strataReady = True
+        Err.Clear
+        On Error GoTo 0
+        Set bhttp = Nothing
+        If strataReady Then Exit For
+      Next
+      If Not strataReady Then
+        MsgBox "Strata did not start within 30 seconds." & vbCrLf & vbCrLf & _
+               "Port: " & backendPort & vbCrLf & vbCrLf & _
+               "Start it manually: strata launch" & vbCrLf & _
+               "Or install from https://github.com/Niko1221/Strata", _
+               vbExclamation, "AegisAI Launcher"
+      End If
+    Else
+      MsgBox "Strata CLI not found." & vbCrLf & vbCrLf & _
+             "Install Strata from https://github.com/Niko1221/Strata" & vbCrLf & _
+             "Then ensure 'strata' is on your PATH.", _
+             vbExclamation, "AegisAI Launcher"
+    End If
+  End If
+End If
+
 ' Start web UI if port closed (retry up to 3 times with timeout)
 Dim portOpen
 portOpen = False

@@ -37,6 +37,7 @@ Tested with:
   - [Ollama](https://ollama.com/download) (default, recommended) — installed and running, **or**
   - [llama.cpp](https://github.com/ggerganov/llama.cpp) server, **or**
   - [LM Studio](https://lmstudio.ai), **or**
+  - [Strata](https://github.com/Niko1221/Strata), **or**
   - any OpenAI-compatible endpoint
 
 Ollama is only required if you use the default `ollama` backend. Other backends are selected during installation (or via `BACKEND_TYPE`/`BACKEND_URL` env vars) and do not need Ollama.
@@ -97,6 +98,7 @@ OpenAI-compatible backend. Set the environment variables before starting:
 | `ollama` (default) | Ollama | Native API |
 | `llamacpp` | llama.cpp server | OpenAI-compatible (`/v1/...`) |
 | `lmstudio` | LM Studio | OpenAI-compatible |
+| `strata` | Strata | OpenAI-compatible, broad hardware support (NVIDIA, AMD, Intel Arc, Apple Silicon) |
 | `openai` | Any OpenAI-compatible endpoint | Generic |
 
 ```bash
@@ -105,7 +107,7 @@ BACKEND_TYPE=llamacpp BACKEND_URL=http://127.0.0.1:8081 node server.js
 ```
 
 **Auto-detection:** if `BACKEND_TYPE` is not set, AegisAI probes common backend
-ports at startup (Ollama 11434, LM Studio 1234, llama.cpp 8080/8081, OpenAI 8000)
+ports at startup (Ollama 11434, LM Studio 1234, llama.cpp 8081, Strata 8082, OpenAI 8000)
 and auto-selects the first reachable one. Set `BACKEND_TYPE` explicitly to
 disable auto-detection.
 
