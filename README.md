@@ -261,6 +261,9 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **binwalk** | Firmware analysis tool. Extracts and analyzes embedded files, entropy analysis. 14.7k stars. MIT License. | [github.com/ReFirmLabs/binwalk](https://github.com/ReFirmLabs/binwalk) |
 | **unblob** | Extract files from any container format (firmware images, archives, etc.). 2.7k stars. MIT License. | [github.com/onekey-sec/unblob](https://github.com/onekey-sec/unblob) |
 | **ubi_reader** | Extract data from UBI/UBIFS images. 649 stars. GPL-3.0. | [github.com/onekey-sec/ubi_reader](https://github.com/onekey-sec/ubi_reader) |
+| **qiling** | Cross-platform multi-architecture binary emulator. 6.2k stars. GPL-2.0. | [github.com/qilingframework/qiling](https://github.com/qilingframework/qiling) |
+| **FirmAE** | Large-scale IoT firmware emulation for dynamic analysis. 970 stars. | [github.com/pr0v3rbs/FirmAE](https://github.com/pr0v3rbs/FirmAE) |
+| **EMBA** | Firmware security analyzer. 3.8k stars. GPL-3.0. | [github.com/e-m-b-a/emba](https://github.com/e-m-b-a/emba) |
 | **reverse-skills (P4nda0s)** | Reverse engineering skills for Claude Code. Complements reverse-skill. | [github.com/P4nda0s/reverse-skills](https://github.com/P4nda0s/reverse-skills) |
 | **LLM4Decompile** | LLM-based binary decompilation (C source from assembly). 7.3k stars. MIT + DeepSeek License. | [github.com/albertan017/LLM4Decompile](https://github.com/albertan017/LLM4Decompile) |
 | **APKLab** | Android RE workbench for VS Code (APK decompilation, smali, manifest analysis). 4.1k stars. | [github.com/APKLab/APKLab](https://github.com/APKLab/APKLab) |
@@ -457,6 +460,9 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[ReFirmLabs / binwalk](https://github.com/ReFirmLabs/binwalk)** - Firmware analysis tool (MIT License)
 - **[onekey-sec / unblob](https://github.com/onekey-sec/unblob)** - Container format extractor (MIT License)
 - **[onekey-sec / ubi_reader](https://github.com/onekey-sec/ubi_reader)** - UBI/UBIFS extractor (GPL-3.0)
+- **[qilingframework / qiling](https://github.com/qilingframework/qiling)** - Binary emulator (GPL-2.0)
+- **[pr0v3rbs / FirmAE](https://github.com/pr0v3rbs/FirmAE)** - IoT firmware emulation
+- **[e-m-b-a / EMBA](https://github.com/e-m-b-a/emba)** - Firmware security analyzer (GPL-3.0)
 - **[albertan017 / LLM4Decompile](https://github.com/albertan017/LLM4Decompile)** - LLM-based decompilation (MIT + DeepSeek License)
 - **[APKLab / APKLab](https://github.com/APKLab/APKLab)** - Android RE workbench (MIT)
 - **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
