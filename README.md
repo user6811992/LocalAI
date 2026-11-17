@@ -259,6 +259,8 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **android-reverse-engineering-skill** | Claude Code skill for Android APK reverse engineering (jadx, Kotlin name recovery, API extraction). | [github.com/SimoneAvogadro/android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill) |
 | **rizin / Cutter** | Free and open-source RE platform powered by rizin (radare2 fork). 20.2k stars. Alternative disassembler/debugger. | [github.com/rizinorg/cutter](https://github.com/rizinorg/cutter) |
 | **binwalk** | Firmware analysis tool. Extracts and analyzes embedded files, entropy analysis. 14.7k stars. MIT License. | [github.com/ReFirmLabs/binwalk](https://github.com/ReFirmLabs/binwalk) |
+| **unblob** | Extract files from any container format (firmware images, archives, etc.). 2.7k stars. MIT License. | [github.com/onekey-sec/unblob](https://github.com/onekey-sec/unblob) |
+| **ubi_reader** | Extract data from UBI/UBIFS images. 649 stars. GPL-3.0. | [github.com/onekey-sec/ubi_reader](https://github.com/onekey-sec/ubi_reader) |
 | **reverse-skills (P4nda0s)** | Reverse engineering skills for Claude Code. Complements reverse-skill. | [github.com/P4nda0s/reverse-skills](https://github.com/P4nda0s/reverse-skills) |
 | **LLM4Decompile** | LLM-based binary decompilation (C source from assembly). 7.3k stars. MIT + DeepSeek License. | [github.com/albertan017/LLM4Decompile](https://github.com/albertan017/LLM4Decompile) |
 | **APKLab** | Android RE workbench for VS Code (APK decompilation, smali, manifest analysis). 4.1k stars. | [github.com/APKLab/APKLab](https://github.com/APKLab/APKLab) |
@@ -453,6 +455,8 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[rizinorg / rizin](https://github.com/rizinorg/rizin)** - Reverse engineering framework (LGPL-3.0)
 - **[P4nda0s / reverse-skills](https://github.com/P4nda0s/reverse-skills)** - RE skills for Claude Code
 - **[ReFirmLabs / binwalk](https://github.com/ReFirmLabs/binwalk)** - Firmware analysis tool (MIT License)
+- **[onekey-sec / unblob](https://github.com/onekey-sec/unblob)** - Container format extractor (MIT License)
+- **[onekey-sec / ubi_reader](https://github.com/onekey-sec/ubi_reader)** - UBI/UBIFS extractor (GPL-3.0)
 - **[albertan017 / LLM4Decompile](https://github.com/albertan017/LLM4Decompile)** - LLM-based decompilation (MIT + DeepSeek License)
 - **[APKLab / APKLab](https://github.com/APKLab/APKLab)** - Android RE workbench (MIT)
 - **[Niko1221 / Strata](https://github.com/Niko1221/Strata)** - Local inference engine (MIT License)
