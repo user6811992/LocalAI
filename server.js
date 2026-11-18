@@ -4563,6 +4563,11 @@ const DEFAULT_SKILLS = [
     description: 'Android reverse engineering methodology: APK/XAPK decompilation with jadx, API extraction (Retrofit, OkHttp, Ktor, Apollo), Kotlin name recovery from R8 obfuscation, call flow tracing. Inspired by android-reverse-engineering-skill.',
     code: "print('Android RE: 1) Fingerprint APK (framework, HTTP stack, obfuscation). 2) Decompile with jadx. 3) Recover Kotlin names from metadata. 4) Extract API calls (Retrofit/OkHttp/Ktor/Apollo). 5) Trace call flows. 6) Analyze structure.')",
   },
+  {
+    name: 'ui-review',
+    description: 'Review UI/UX for AI-generated patterns: purple gradients, nested cards, emoji icons, invented stats, unvirtualized lists, hamburger menus in mobile apps, missing back buttons, keyboard covering inputs. Inspired by unslopovich.',
+    code: "print('UI review checklist: 1) No purple/blue gradients unless brand. 2) No nested cards. 3) No emoji as icons. 4) No invented stats. 5) Virtualized lists. 6) Native navigation patterns. 7) No hover in touch apps. 8) Keyboard does not cover inputs. 9) Empty states have messages. 10) Error messages are specific.')",
+  },
 ];
 function ensureDefaultSkills() {
   try {
