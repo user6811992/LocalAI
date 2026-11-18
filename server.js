@@ -4568,6 +4568,11 @@ const DEFAULT_SKILLS = [
     description: 'Review UI/UX for AI-generated patterns: purple gradients, nested cards, emoji icons, invented stats, unvirtualized lists, hamburger menus in mobile apps, missing back buttons, keyboard covering inputs. Inspired by unslopovich.',
     code: "print('UI review checklist: 1) No purple/blue gradients unless brand. 2) No nested cards. 3) No emoji as icons. 4) No invented stats. 5) Virtualized lists. 6) Native navigation patterns. 7) No hover in touch apps. 8) Keyboard does not cover inputs. 9) Empty states have messages. 10) Error messages are specific.')",
   },
+  {
+    name: 'context-compress',
+    description: 'Compress tool outputs, logs, files, and RAG chunks before they reach the LLM to reduce token usage. Inspired by headroom (headroomlabs-ai/headroom).',
+    code: "print('Context compression: 1) Truncate large tool outputs to key findings. 2) Summarize file contents before injection. 3) Use squeeze tool for long documents. 4) Remove redundant context. 5) Keep only relevant code snippets.')",
+  },
 ];
 function ensureDefaultSkills() {
   try {

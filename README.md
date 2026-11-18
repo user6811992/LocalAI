@@ -10,7 +10,7 @@ A local AI web UI powered by [Ollama](https://ollama.com), with a built-in chat 
 - **Model management** - pull models from Ollama or HuggingFace, one-click quick-pull for recommended models, installed-models list, scan drives for GGUF files and Ollama/LM Studio model stores
 - **Voice (optional)** - speech-to-text input and text-to-speech output via OpenAI-compatible audio backends (G3_Whisper for STT, G3_TADA for TTS). Set `STT_URL` and `TTS_URL` env vars. Browser-based Web Speech API and speechSynthesis also supported.
 - **Conversation branching** - fork any chat at any message point to explore different approaches. Branches are tracked with parent/child relationships. Navigate between branches with the Parent button. Inspired by context-management patterns from Private_Context_COW.
-- **Default skills** - ships with built-in skills: search-before-re, design-review, pr-review, doc-discipline, android-re, ui-review (inspired by agent skill patterns from the community).
+- **Default skills** - ships with built-in skills: search-before-re, design-review, pr-review, doc-discipline, android-re, ui-review, context-compress (inspired by agent skill patterns from the community).
 - **Squeeze tool** - read long documents (URLs, files, PDFs) and extract only the answer to a question using a helper model. Keeps the main conversation context small. Inspired by dsh-squeeze.
 - **Search integration** — 9 keyless search engines (DuckDuckGo, Bing, Google, etc.) + optional LangSearch API
 - **Reverse engineering** — 229 RE tools via REA MCP (binaries, JS/Electron, Android, firmware, etc.)
@@ -455,6 +455,10 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[wuji66dde / jshook-reverse-tool](https://github.com/wuji66dde/jshook-reverse-tool)** - JS reverse engineering tool (TypeScript)
 - **[SimoneAvogadro / android-reverse-engineering-skill](https://github.com/SimoneAvogadro/android-reverse-engineering-skill)** - Android RE skill (Apache-2.0)
 - **[erkamyaman / unslopovich](https://github.com/erkamyaman/unslopovich)** - UI/UX review agent skill (MIT License)
+- **[headroomlabs-ai / headroom](https://github.com/headroomlabs-ai/headroom)** - Context compression for LLM tool outputs
+- **[thedotmack / claude-mem](https://github.com/thedotmack/claude-mem)** - Persistent context across sessions for agents
+- **[tigerless-labs / agent-memory](https://github.com/tigerless-labs/agent-memory)** - Long-term memory runtime for AI agents
+- **[opensandbox-group / OpenSandbox](https://github.com/opensandbox-group/OpenSandbox)** - Secure sandbox runtime for AI agents
 - **[mrphrazer / reverser_ai](https://github.com/mrphrazer/reverser_ai)** - Automated RE with local LLMs
 - **[rizinorg / rizin](https://github.com/rizinorg/rizin)** - Reverse engineering framework (LGPL-3.0)
 - **[P4nda0s / reverse-skills](https://github.com/P4nda0s/reverse-skills)** - RE skills for Claude Code
