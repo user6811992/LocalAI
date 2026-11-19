@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    "opencode-mem",
+    "opencode-usage-monitor",
+    "envsitter-guard",
+    "opencode-gemini-auth",
+    "opencode-antigravity-auth",
+    "oh-my-opencode",
+    "opencode-swarm",
+    "opencode-dcp",
+    "@cortexkit/opencode-magic-context",
+    "@honcho-ai/opencode-honcho",
+    "cc-safety-net",
+    "@heretek-ai/opencode-rea"
+  ],
+  "mcp": {
+    "rea": {
+      "command": "rea",
+      "args": ["--mcp"]
+    },
+    "netvein": {
+      "command": "netvein",
+      "args": ["serve", "--mcp"]
+    }
+  }
+}

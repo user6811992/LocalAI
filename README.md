@@ -478,6 +478,14 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[havok2-htwo / G3_Whisper](https://github.com/havok2-htwo/G3_Whisper)** - Speech-to-text server
 - **[havok2-htwo / G3_TADA](https://github.com/havok2-htwo/G3_TADA)** - Text-to-speech server
 - **[Cloudflare / Cloudflare OS](https://github.com/cloudflare/cloudflare-os)** - Agent workspace (Apache-2.0). Capability-based security and human-in-the-loop via simulation concepts.
+- **[abduallahJamal / argus](https://github.com/abduallahJamal/argus)** - Zero-dependency RE routing CLI + skill (MIT License)
+- **[dongp06 / netvein](https://github.com/donyst/netvein)** - Web RE MCP server, 123 tools (MIT License)
+- **[xxmisaoxx / T-REX](https://github.com/xxmisaoxx/t-rex)** - RE skill for coding agents (GPL-3.0)
+- **[KelpHect / re-expertise](https://github.com/KelpHect/re-expertise)** - 7 RE skills: workflow, tooling, Ghidra MCP, rea, hooking, runtime introspection, verification (MIT License)
+- **[iemsoft / web-reverse-clone](https://github.com/iemsoft/web-reverse-clone)** - Web RE + UI cloning skill (license per repo)
+- **[rotteng749-lgtm / tech-core](https://github.com/rotteng749-lgtm/tech-core)** - RE/cracking playbook skill (license per repo)
+- **[moiz-73 / glassbox](https://github.com/moiz-73/glassbox)** - 12 RE methodology skills (MIT License)
+- **[Heretek-AI / opencode-rea](https://github.com/Heretek-AI/opencode-rea)** - OpenCode v2 REA plugin (license per repo)
 
 ### Vendored frontend libraries
 

@@ -6,6 +6,10 @@
       "env": {
         "PATH": "%PATH%"
       }
+    },
+    "netvein": {
+      "command": "netvein",
+      "args": ["serve", "--mcp"]
     }
   }
 }
