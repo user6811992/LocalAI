@@ -4465,14 +4465,14 @@ const server = http.createServer(async (req, res) => { try {
       res.flushHeaders();
       const result = await backendChat(bodyObj, (chunk) => {
         if (chunk.type === 'token') {
-          res.write(JSON.stringify({ message: { content: chunk.content }, done: false }) + '\\n');
+          res.write(JSON.stringify({ message: { content: chunk.content }, done: false }) + '\n');
         }
         if (chunk.type === 'thinking') {
-          res.write(JSON.stringify({ message: { thinking: chunk.content }, done: false }) + '\\n');
+          res.write(JSON.stringify({ message: { thinking: chunk.content }, done: false }) + '\n');
         }
       }, ac.signal);
       const msg = (result && result.data && result.data.message) || {};
-      res.write(JSON.stringify({ message: { content: msg.content || '', thinking: msg.thinking || '' }, done: true, eval_count: (result && result.data && result.data.eval_count) || 0, prompt_eval_count: (result && result.data && result.data.prompt_eval_count) || 0 }) + '\\n');
+      res.write(JSON.stringify({ message: { content: msg.content || '', thinking: msg.thinking || '' }, done: true, eval_count: (result && result.data && result.data.eval_count) || 0, prompt_eval_count: (result && result.data && result.data.prompt_eval_count) || 0 }) + '\n');
       res.end();
     } catch (e) {
       if (!res.headersSent) json(res, 500, { error: e.message || String(e) });

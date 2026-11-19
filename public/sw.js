@@ -1,8 +1,6 @@
 // AegisAI Service Worker - offline cache
-const CACHE_NAME = 'aegisai-v2';
+const CACHE_NAME = 'aegisai-v3';
 const APP_SHELL = [
-  '/',
-  '/index.html',
   '/clear-cache.html',
 ];
 
