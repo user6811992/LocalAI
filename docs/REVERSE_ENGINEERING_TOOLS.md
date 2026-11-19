@@ -48,3 +48,30 @@ Installed under `~/.agents/skills/` and `~/.config/opencode/skills/`:
 OpenCode auto-loads `.opencode/opencode.jsonc` plugins and MCP servers. Agent Skills are discovered from
 `~/.agents/skills/` and `~/.config/opencode/skills/`. Run `argus doctor` to check which local RE tools are
 available on your host.
+
+## Local AI / MCP Tools
+
+AegisAI also bundles a local-AI and MCP toolset for Ollama-backed workflows, semantic code search,
+cross-machine sync, and telemetry. Configured in `.opencode/opencode.jsonc` and `mcp-config.json`.
+
+### Plugins
+
+| Plugin | Purpose |
+|---|---|
+| `opencode-llm-proxy` | Expose OpenCode-configured models as OpenAI/Anthropic/Gemini endpoints (reusable by the web UI) |
+| `opencode-synced` | Sync global OpenCode configs across machines (mobile access) |
+| `basemind-opencode` | AI context layer: tree-sitter code-map (300+ langs), document RAG, agent memory, git history |
+| `opencode-rag-plugin` | Local-first RAG with Ollama embeddings; AST-aware chunking; watch mode |
+| `opencode-telemetry` | Local SQLite session telemetry, cost rollups, forensic inspection |
+
+### MCP Servers
+
+| Server | Purpose |
+|---|---|
+| `lemma` | Local zero-dependency memory via MCP (no cloud, no API keys) |
+
+### Notes
+
+- `opencode-rag-plugin` auto-generates `.opencode/skills/opencode-rag`, slash commands, and `AGENTS.md`
+  on first run.
+- All processing stays local by default; no data leaves the machine.

@@ -268,6 +268,22 @@ AegisAI works with several external reverse-engineering tools. These are **not b
 | **LLM4Decompile** | LLM-based binary decompilation (C source from assembly). 7.3k stars. MIT + DeepSeek License. | [github.com/albertan017/LLM4Decompile](https://github.com/albertan017/LLM4Decompile) |
 | **APKLab** | Android RE workbench for VS Code (APK decompilation, smali, manifest analysis). 4.1k stars. | [github.com/APKLab/APKLab](https://github.com/APKLab/APKLab) |
 
+## Local AI / MCP Tools
+
+AegisAI bundles a local-AI and MCP toolset for Ollama-backed workflows, semantic code search, cross-machine sync, and telemetry. Configured in `.opencode/opencode.jsonc` and `mcp-config.json`.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `opencode-llm-proxy` | Plugin | Expose OpenCode-configured models as OpenAI/Anthropic/Gemini endpoints (reusable by the web UI) |
+| `opencode-synced` | Plugin | Sync global OpenCode configs across machines (mobile access) |
+| `basemind-opencode` | Plugin | AI context layer: tree-sitter code-map (300+ langs), document RAG, agent memory, git history |
+| `opencode-rag-plugin` | Plugin | Local-first RAG with Ollama embeddings; AST-aware chunking; watch mode |
+| `opencode-telemetry` | Plugin | Local SQLite session telemetry, cost rollups, forensic inspection |
+| `lemma` | MCP | Local zero-dependency memory via MCP (no cloud, no API keys) |
+| `netvein` | MCP | Chrome CDP web reverse engineering: 123 tools (traffic capture, AST scoring, crypto fingerprinting) |
+
+See [docs/REVERSE_ENGINEERING_TOOLS.md](docs/REVERSE_ENGINEERING_TOOLS.md) for full usage.
+
 ## Installer (Linux / macOS)
 
 A bash installer is included: **`install.sh`**. Works on Linux and macOS.
