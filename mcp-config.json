@@ -10,6 +10,10 @@
     "netvein": {
       "command": "netvein",
       "args": ["serve", "--mcp"]
+    },
+    "lemma": {
+      "command": "npx",
+      "args": ["-y", "lemma"]
     }
   }
 }

@@ -12,7 +12,12 @@
     "@cortexkit/opencode-magic-context",
     "@honcho-ai/opencode-honcho",
     "cc-safety-net",
-    "@heretek-ai/opencode-rea"
+    "@heretek-ai/opencode-rea",
+    "opencode-llm-proxy",
+    "opencode-synced",
+    "basemind-opencode",
+    "opencode-rag-plugin",
+    "opencode-telemetry"
   ],
   "mcp": {
     "rea": {
@@ -22,6 +27,10 @@
     "netvein": {
       "command": "netvein",
       "args": ["serve", "--mcp"]
+    },
+    "lemma": {
+      "command": "npx",
+      "args": ["-y", "lemma"]
     }
   }
 }

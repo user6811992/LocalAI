@@ -486,6 +486,12 @@ AegisAI references and integrates with several third-party projects. Their names
 - **[rotteng749-lgtm / tech-core](https://github.com/rotteng749-lgtm/tech-core)** - RE/cracking playbook skill (license per repo)
 - **[moiz-73 / glassbox](https://github.com/moiz-73/glassbox)** - 12 RE methodology skills (MIT License)
 - **[Heretek-AI / opencode-rea](https://github.com/Heretek-AI/opencode-rea)** - OpenCode v2 REA plugin (license per repo)
+- **[KochC / opencode-llm-proxy](https://github.com/KochC/opencode-llm-proxy)** - OpenCode-backed API gateway (license per repo)
+- **[iHildy / opencode-synced](https://github.com/iHildy/opencode-synced)** - Sync configs across machines (license per repo)
+- **[Goldziher / basemind](https://github.com/Goldziher/basemind)** - AI context layer over MCP (license per repo)
+- **[MrDoe / OpenCodeRAG](https://github.com/MrDoe/OpenCodeRAG)** - Local-first RAG with Ollama embeddings (license per repo)
+- **[xenitV1 / lemma](https://github.com/xenitV1/lemma)** - Local memory via MCP (MIT License)
+- **[agostinilabsrl / opencode-telemetry](https://github.com/agostinilabsrl/opencode-telemetry)** - Local SQLite telemetry (license per repo)
 
 ### Vendored frontend libraries
 
