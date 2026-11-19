@@ -323,6 +323,25 @@ If LCase(backendType) = "strata" Then
   End If
 End If
 
+' ---------- Pre-flight: verify Node.js is available ----------
+Dim nodeExeCheck
+nodeExeCheck = ""
+If fso.FileExists(base & "\runtime\node\node.exe") Then
+  nodeExeCheck = base & "\runtime\node\node.exe"
+ElseIf fso.FileExists("C:\Program Files\nodejs\node.exe") Then
+  nodeExeCheck = "C:\Program Files\nodejs\node.exe"
+ElseIf fso.FileExists("C:\Program Files (x86)\nodejs\node.exe") Then
+  nodeExeCheck = "C:\Program Files (x86)\nodejs\node.exe"
+End If
+If nodeExeCheck = "" Then
+  MsgBox "Node.js was not found on this system." & vbCrLf & vbCrLf & _
+         "AegisAI requires Node.js 18+ to run." & vbCrLf & vbCrLf & _
+         "Please install Node.js from https://nodejs.org/ and re-run this launcher." & vbCrLf & vbCrLf & _
+         "Or re-run the installer and select the 'Bundled Node.js' component.", _
+         vbCritical, "AegisAI Launcher - Node.js Missing"
+  WScript.Quit 1
+End If
+
 ' Start web UI if port closed (retry up to 3 times with timeout)
 Dim portOpen
 portOpen = False
@@ -365,20 +384,35 @@ Next
 ' Ensure dependencies are installed
 If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
   Dim npmExe
-  npmExe = "npm"
+  npmExe = ""
   If fso.FileExists(base & "\runtime\node\npm.cmd") Then
     npmExe = """" & base & "\runtime\node\npm.cmd"""
   ElseIf fso.FileExists("C:\Program Files\nodejs\npm.cmd") Then
     npmExe = """C:\Program Files\nodejs\npm.cmd"""
+  ElseIf fso.FileExists("C:\Program Files (x86)\nodejs\npm.cmd") Then
+    npmExe = """C:\Program Files (x86)\nodejs\npm.cmd"""
   End If
-  wshShell.Run "cmd /c cd /d """ & base & """ && " & npmExe & " install", 1, True
+  If npmExe = "" Then
+    MsgBox "npm was not found on this system." & vbCrLf & vbCrLf & _
+           "Node.js is installed but npm is missing." & vbCrLf & vbCrLf & _
+           "Please reinstall Node.js from https://nodejs.org/ (includes npm)." & vbCrLf & vbCrLf & _
+           "Or run: npm install manually in the app folder.", _
+           vbCritical, "AegisAI Launcher - npm Missing"
+    WScript.Quit 1
+  End If
+  ' Run npm install and capture exit code
+  Dim npmExitCode
+  npmExitCode = wshShell.Run("cmd /c cd /d """ & base & """ && " & npmExe & " install", 1, True)
   WScript.Sleep 2000
   If Not fso.FolderExists(base & "\node_modules\@modelcontextprotocol\sdk") Then
-    MsgBox "Dependencies could not be installed." & vbCrLf & vbCrLf & _
+    ' Read npm error from server.log or show generic message
+    MsgBox "Dependencies could not be installed (exit code: " & npmExitCode & ")." & vbCrLf & vbCrLf & _
            "Please run manually:" & vbCrLf & _
            "cd """ & base & """" & vbCrLf & _
            "npm install" & vbCrLf & vbCrLf & _
-           "Then re-run launcher.vbs.", vbExclamation, "AegisAI Launcher"
+           "Then re-run launcher.vbs." & vbCrLf & vbCrLf & _
+           "If offline, install dependencies on another machine and copy node_modules.", _
+           vbExclamation, "AegisAI Launcher - npm Install Failed"
     WScript.Quit 1
   End If
 End If
@@ -420,10 +454,34 @@ If Not portOpen Then
     If serverReady Then Exit For
   Next
   If Not serverReady Then
+    ' Read the last 15 lines of server.log for diagnostics
+    Dim logTail
+    logTail = ""
+    If fso.FileExists(base & "\server.log") Then
+      On Error Resume Next
+      Dim logFile, logLines, logArr, li
+      Set logFile = fso.OpenTextFile(base & "\server.log", 1)
+      logLines = logFile.ReadAll
+      logFile.Close
+      logArr = Split(logLines, vbCrLf)
+      For li = UBound(logArr) - 14 To UBound(logArr)
+        If li >= 0 And li <= UBound(logArr) Then
+          If Trim(logArr(li)) <> "" Then logTail = logTail & logArr(li) & vbCrLf
+        End If
+      Next
+      On Error GoTo 0
+    End If
+    If logTail = "" Then logTail = "(no log output - server may not have started at all)"
     MsgBox "AegisAI server did not start within 30 seconds." & vbCrLf & vbCrLf & _
-           "Check the log file for errors:" & vbCrLf & base & "\server.log" & vbCrLf & vbCrLf & _
-           "Common causes: Node.js not found, missing dependencies (run npm install), or port 8080 in use.", _
-           vbExclamation, "AegisAI Launcher"
+           "Last log output:" & vbCrLf & "----------------" & vbCrLf & _
+           logTail & vbCrLf & "----------------" & vbCrLf & vbCrLf & _
+           "Common causes:" & vbCrLf & _
+           "  1. Node.js not installed (install from https://nodejs.org/)" & vbCrLf & _
+           "  2. Missing dependencies (run: npm install in the app folder)" & vbCrLf & _
+           "  3. Port 8080 already in use (close other apps)" & vbCrLf & _
+           "  4. Windows Defender blocking the server" & vbCrLf & vbCrLf & _
+           "Full log: " & base & "\server.log", _
+           vbCritical, "AegisAI Launcher - Server Failed to Start"
   End If
 End If
 
