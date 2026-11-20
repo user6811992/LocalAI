@@ -480,8 +480,19 @@ If Not portOpen Then
            "  2. Missing dependencies (run: npm install in the app folder)" & vbCrLf & _
            "  3. Port 8080 already in use (close other apps)" & vbCrLf & _
            "  4. Windows Defender blocking the server" & vbCrLf & vbCrLf & _
-           "Full log: " & base & "\server.log", _
+           "Troubleshooting:" & vbCrLf & _
+           "  - Run diagnose.bat in the app folder for detailed checks" & vbCrLf & _
+           "  - Run start.bat to see server output in a visible window" & vbCrLf & _
+           "  - Full log: " & base & "\server.log", _
            vbCritical, "AegisAI Launcher - Server Failed to Start"
+    ' Offer to run in visible mode
+    Dim visibleAns
+    visibleAns = MsgBox("Would you like to try running the server in a visible window?" & vbCrLf & vbCrLf & _
+                        "This will show any error messages directly.", vbYesNo + vbQuestion, "AegisAI Launcher")
+    If visibleAns = vbYes Then
+      wshShell.Run "cmd /c cd /d """ & base & """ && " & nodeExe & " server.js", 1, False
+      WScript.Sleep 5000
+    End If
   End If
 End If
 
